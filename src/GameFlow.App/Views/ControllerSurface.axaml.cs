@@ -156,6 +156,7 @@ public partial class ControllerSurface : UserControl
         // RefreshActiveTheme(); we just need to push the result.
         surface.ActiveTheme    = vm.ActiveTheme;
         surface.IsPhysicalView = vm.IsPhysicalView;
+        surface.UpdateLightColor(vm.LightColor);
         surface.UpdateState(vm.RawSnapshot);
 
         if (noThemeMessage is not null)

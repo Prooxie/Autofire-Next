@@ -14,6 +14,22 @@
       "height": 783
     },
     {
+      "type": "lightbar",
+      "x": 553,
+      "y": 120,
+      "image": "\\ds4\\Theme Assets\\DS4 V2 Active Button\\DS4_Lightbar_Rear.png",
+      "width": 360,
+      "height": 21
+    },
+    {
+      "type": "lightbar",
+      "x": 515,
+      "y": 111,
+      "image": "\\ds4\\Theme Assets\\DS4 V2 Active Button\\DS4_Lightbar_Front.png",
+      "width": 437,
+      "height": 4
+    },
+    {
       "type": "image",
       "x": 217,
       "y": 0,

@@ -27,66 +27,67 @@
   <Style Selector="TextBlock.display">
     <Setter Property="FontSize" Value="{DynamicResource Text.Display.Size}" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="LineHeight" Value="38" />
   </Style>
 
   <Style Selector="TextBlock.title">
     <Setter Property="FontSize" Value="{DynamicResource Text.Title.Size}" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="LineHeight" Value="26" />
   </Style>
 
   <Style Selector="TextBlock.heading">
     <Setter Property="FontSize" Value="{DynamicResource Text.Heading.Size}" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="LineHeight" Value="22" />
   </Style>
 
   <Style Selector="TextBlock.body">
     <Setter Property="FontSize" Value="{DynamicResource Text.Body.Size}" />
     <Setter Property="FontWeight" Value="Normal" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Primary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="LineHeight" Value="19" />
   </Style>
 
   <Style Selector="TextBlock.secondary">
     <Setter Property="FontSize" Value="{DynamicResource Text.Body.Size}" />
     <Setter Property="FontWeight" Value="Normal" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
     <Setter Property="LineHeight" Value="19" />
   </Style>
 
   <Style Selector="TextBlock.caption">
     <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
     <Setter Property="FontWeight" Value="Normal" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
     <Setter Property="LineHeight" Value="16" />
   </Style>
 
   <Style Selector="TextBlock.label">
     <Setter Property="FontSize" Value="{DynamicResource Text.Label.Size}" />
     <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Tertiary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
     <Setter Property="LineHeight" Value="14" />
   </Style>
 
   <Style Selector="TextBlock.mono">
     <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
     <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
-    <Setter Property="Foreground" Value="{DynamicResource Text.Secondary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
   </Style>
 
   <!-- ── MODIFIERS — combine with any of the above ──────────────────── -->
 
   <Style Selector="TextBlock.muted">
-    <Setter Property="Foreground" Value="{DynamicResource Text.Tertiary}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
   </Style>
 
   <Style Selector="TextBlock.subtle">
-    <Setter Property="Foreground" Value="{DynamicResource Text.Disabled}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+    <Setter Property="Opacity" Value="0.55" />
   </Style>
 
   <Style Selector="TextBlock.strong">
@@ -94,15 +95,15 @@
   </Style>
 
   <Style Selector="TextBlock.success">
-    <Setter Property="Foreground" Value="{DynamicResource Semantic.Success}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppSuccess}" />
   </Style>
 
   <Style Selector="TextBlock.warning">
-    <Setter Property="Foreground" Value="{DynamicResource Semantic.Warning}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppWarning}" />
   </Style>
 
   <Style Selector="TextBlock.danger">
-    <Setter Property="Foreground" Value="{DynamicResource Semantic.Danger}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppDanger}" />
   </Style>
 
 </Styles>

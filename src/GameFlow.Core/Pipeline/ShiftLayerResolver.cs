@@ -161,7 +161,14 @@ public sealed class ShiftLayerResolver
             var forwardWas = wasPressed.GetValueOrDefault(forwardKey);
             if (forwardPressed && !forwardWas)
             {
-                var idx = StepForward(cycleIndex.GetValueOrDefault(layer.Id, -1), stops.Count, layer.CycleWrapAround);
+                // Starting index: when Base is in the rotation we are
+                // ALREADY sitting on stops[0], so the first press must
+                // advance to stops[1]. Defaulting to -1 there made the
+                // first press "move" to where you already were, which
+                // looked like the cycle button doing nothing at all.
+                // Without Base, -1 is correct: first press lands on stops[0].
+                var restingIndex = layer.CycleIncludeBase ? 0 : -1;
+                var idx = StepForward(cycleIndex.GetValueOrDefault(layer.Id, restingIndex), stops.Count, layer.CycleWrapAround);
                 cycleIndex[layer.Id] = idx;
                 candidate = stops[idx];
             }
@@ -171,7 +178,8 @@ public sealed class ShiftLayerResolver
             var backWas = wasPressed.GetValueOrDefault(backKey);
             if (backPressed && !backWas)
             {
-                var idx = StepBackward(cycleIndex.GetValueOrDefault(layer.Id, 0), stops.Count, layer.CycleWrapAround);
+                var backRestingIndex = layer.CycleIncludeBase ? 0 : -1;
+                var idx = StepBackward(cycleIndex.GetValueOrDefault(layer.Id, backRestingIndex), stops.Count, layer.CycleWrapAround);
                 cycleIndex[layer.Id] = idx;
                 candidate = stops[idx];
             }

@@ -20,6 +20,8 @@ namespace GameFlow.Infrastructure.Runtime.Web;
 /// </summary>
 public static class WebControllerProtocol
 {
+    private const int MaxTouchContacts = 5;
+
     /// <summary>Bit index → button. Index IS the wire bit position.</summary>
     private static readonly ButtonId[] BitOrder =
     [
@@ -68,7 +70,7 @@ public static class WebControllerProtocol
                 }
             }
 
-            return new ControllerSnapshot
+            var snapshot = new ControllerSnapshot
             {
                 DeviceName = $"Web Controller #{padIndex + 1}",
                 Buttons = buttons,
@@ -76,8 +78,28 @@ public static class WebControllerProtocol
                 RightStick = new StickVector(ReadAxis(root, "rx"), ReadAxis(root, "ry")),
                 LeftTrigger = ReadUnit(root, "lt"),
                 RightTrigger = ReadUnit(root, "rt"),
+
+                // Phone motion. The browser reports rotation in degrees/s
+                // and the page converts to radians/s before sending, so
+                // these arrive already in SDL's units — meaning a phone
+                // drives GyroMapRule (reference frames, smoothing, Aim
+                // Engage) exactly like a DualSense, with no phone-specific
+                // path anywhere downstream.
+                HasGyro = ReadInt(root, "gyro") != 0,
+                GyroPitch = ReadSigned(root, "gp"),
+                GyroYaw = ReadSigned(root, "gy"),
+                GyroRoll = ReadSigned(root, "gr"),
+                AccelX = ReadSigned(root, "ax"),
+                AccelY = ReadSigned(root, "ay"),
+                AccelZ = ReadSigned(root, "az"),
+
                 Timestamp = DateTimeOffset.UtcNow
             };
+
+            var touchContacts = ReadTouchContacts(root);
+            return touchContacts.Count == 0
+                ? snapshot
+                : snapshot.WithTouchContacts(touchContacts);
         }
         catch (JsonException)
         {
@@ -101,8 +123,20 @@ public static class WebControllerProtocol
             }
         });
 
+    // The ValueKind check is load-bearing, not belt-and-braces: JsonElement's
+    // TryGet* methods THROW on a wrong-typed element rather than returning
+    // false, so {"b":"7"} from a hostile phone would escape TryParseInput's
+    // JsonException catch and kill the receive loop.
     private static int ReadInt(JsonElement root, string name) =>
-        root.TryGetProperty(name, out var value) && value.TryGetInt32(out var parsed) ? parsed : 0;
+        TryReadInt(root, name, out var value) ? value : 0;
+
+    private static bool TryReadInt(JsonElement root, string name, out int value)
+    {
+        value = 0;
+        return root.TryGetProperty(name, out var element)
+            && element.ValueKind == JsonValueKind.Number
+            && element.TryGetInt32(out value);
+    }
 
     /// <summary>Signed stick axis, clamped — a phone could send anything, including NaN.</summary>
     private static float ReadAxis(JsonElement root, string name) => ClampFinite(ReadFloat(root, name), -1f, 1f);
@@ -110,8 +144,102 @@ public static class WebControllerProtocol
     /// <summary>Unsigned trigger, clamped.</summary>
     private static float ReadUnit(JsonElement root, string name) => ClampFinite(ReadFloat(root, name), 0f, 1f);
 
+    /// <summary>Non-Number elements read as 0 — see the note on <see cref="ReadInt"/>.</summary>
     private static float ReadFloat(JsonElement root, string name) =>
-        root.TryGetProperty(name, out var value) && value.TryGetDouble(out var parsed) ? (float)parsed : 0f;
+        TryReadFloat(root, name, out var value) ? value : 0f;
+
+    private static bool TryReadFloat(JsonElement root, string name, out float value)
+    {
+        value = 0f;
+        if (!root.TryGetProperty(name, out var element)
+            || element.ValueKind != JsonValueKind.Number
+            || !element.TryGetDouble(out var parsed))
+        {
+            return false;
+        }
+
+        value = (float)parsed;
+        return float.IsFinite(value);
+    }
+
+    /// <summary>
+    /// Reads the browser touchpad's live contacts. Five is both the
+    /// product limit and an important network-input bound: a hostile
+    /// client cannot make one 60 Hz frame allocate an arbitrary list.
+    /// Malformed contacts are skipped individually so one bad finger
+    /// does not discard the rest of the frame.
+    /// </summary>
+    private static IReadOnlyList<TouchContact> ReadTouchContacts(JsonElement root)
+    {
+        if (!root.TryGetProperty("touch", out var touch)
+            || touch.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var contacts = new List<TouchContact>(Math.Min(touch.GetArrayLength(), MaxTouchContacts));
+        foreach (var item in touch.EnumerateArray())
+        {
+            if (contacts.Count == MaxTouchContacts)
+            {
+                break;
+            }
+
+            if (item.ValueKind != JsonValueKind.Object
+                || !TryReadInt(item, "i", out var fingerIndex)
+                || fingerIndex < 0
+                || ContainsFinger(contacts, fingerIndex)
+                || !TryReadFloat(item, "x", out var x)
+                || !TryReadFloat(item, "y", out var y))
+            {
+                continue;
+            }
+
+            var pressure = TryReadFloat(item, "p", out var reportedPressure)
+                ? ClampFinite(reportedPressure, 0f, 1f)
+                : 1f;
+            contacts.Add(new TouchContact(
+                fingerIndex,
+                ClampFinite(x, 0f, 1f),
+                ClampFinite(y, 0f, 1f),
+                pressure));
+        }
+
+        return contacts;
+    }
+
+    private static bool ContainsFinger(List<TouchContact> contacts, int fingerIndex)
+    {
+        for (var i = 0; i < contacts.Count; i++)
+        {
+            if (contacts[i].FingerIndex == fingerIndex)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Signed, UNBOUNDED value for motion (rad/s, m/s²). Unlike sticks
+    /// and triggers these have no natural clamp range — a fast flick
+    /// legitimately exceeds any fixed bound, and clamping would silently
+    /// cap it. Still rejects NaN/infinity, which would otherwise poison
+    /// every downstream calculation.
+    /// </summary>
+    private static float ReadSigned(JsonElement root, string name)
+    {
+        var value = ReadFloat(root, name);
+        if (float.IsNaN(value) || float.IsInfinity(value))
+        {
+            return 0f;
+        }
+        // Sanity ceiling only — far beyond any real hand movement, so it
+        // never truncates genuine input, but stops a hostile client
+        // sending 1e30 and overflowing the maths downstream.
+        return Math.Clamp(value, -1000f, 1000f);
+    }
 
     private static float ClampFinite(float value, float min, float max)
     {

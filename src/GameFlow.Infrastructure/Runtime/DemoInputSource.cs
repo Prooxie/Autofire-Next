@@ -92,6 +92,25 @@ public sealed class DemoInputSource : IInputSource
             _ => 0
         };
 
+        // Move demo fingers through smooth, independent paths. A fresh
+        // random point every frame reads as input noise; phase-shifted
+        // curves exercise the whole touch surface while remaining easy to
+        // follow visually and deterministic in tests.
+        var primaryTouch = new TouchContact(
+            0,
+            (float)(0.5d + Math.Sin(elapsed * 1.37d) * 0.38d),
+            (float)(0.5d + Math.Cos(elapsed * 0.91d) * 0.32d));
+        var secondaryTouch = new TouchContact(
+            1,
+            (float)(0.5d + Math.Cos(elapsed * 1.11d + 1.7d) * 0.34d),
+            (float)(0.5d + Math.Sin(elapsed * 1.53d + 0.8d) * 0.30d));
+        IReadOnlyList<TouchContact> touchContacts = touchContactCount switch
+        {
+            1 => [primaryTouch],
+            2 => [primaryTouch, secondaryTouch],
+            _ => []
+        };
+
         buttons[ButtonId.Touchpad] = touchContactCount > 0;
         buttons[ButtonId.LeftTriggerButton] = leftTrigger > 0.92f;
         buttons[ButtonId.RightTriggerButton] = rightTrigger > 0.92f;
@@ -103,10 +122,9 @@ public sealed class DemoInputSource : IInputSource
             RightStick = rightStick,
             LeftTrigger = leftTrigger,
             RightTrigger = rightTrigger,
-            TouchContactCount = touchContactCount,
             Buttons = buttons,
             Timestamp = DateTimeOffset.UtcNow
-        };
+        }.WithTouchContacts(touchContacts);
     }
 
     public ValueTask DisposeAsync()

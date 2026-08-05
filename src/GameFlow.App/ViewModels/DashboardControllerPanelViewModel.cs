@@ -36,6 +36,7 @@ public sealed class DashboardControllerPanelViewModel : ViewModelBase
         {
             if (SetProperty(ref lightColor, value))
             {
+                VirtualVisual.LightColor = value;
                 OnPropertyChanged(nameof(HasLightColor));
             }
         }
@@ -132,6 +133,7 @@ public sealed class DashboardControllerPanelViewModel : ViewModelBase
             if (SetProperty(ref outputStatus, value ?? string.Empty))
             {
                 OnPropertyChanged(nameof(HasOutputWarning));
+                OnPropertyChanged(nameof(OutputWarningText));
             }
         }
     }
@@ -141,6 +143,35 @@ public sealed class DashboardControllerPanelViewModel : ViewModelBase
         outputStatus.Contains("unavailable", StringComparison.OrdinalIgnoreCase)
         || outputStatus.Contains("no output", StringComparison.OrdinalIgnoreCase)
         || outputStatus.Contains("failed", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Concise dashboard copy for a non-working output. The complete sink
+    /// diagnostic remains available through <see cref="OutputStatus"/> as a
+    /// tooltip, but paths and setup details should never cover controller art.
+    /// </summary>
+    public string OutputWarningText
+    {
+        get
+        {
+            if (outputStatus.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                && outputStatus.Contains("HIDMaestro", StringComparison.OrdinalIgnoreCase))
+            {
+                return "HIDMaestro isn't installed, so virtual output is unavailable.";
+            }
+
+            if (outputStatus.Contains("administrator", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Administrator access is required for virtual output.";
+            }
+
+            if (outputStatus.Contains("failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Virtual output failed to start.";
+            }
+
+            return "Virtual output is unavailable.";
+        }
+    }
 
     /// <summary>Width of the virtual column: collapses for pinned layout-only panels.</summary>
     public Avalonia.Controls.GridLength VirtualColumnWidth =>

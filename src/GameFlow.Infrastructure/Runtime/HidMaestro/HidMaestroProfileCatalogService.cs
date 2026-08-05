@@ -18,6 +18,13 @@ namespace GameFlow.Infrastructure.Runtime.HidMaestro;
 /// </summary>
 public sealed class HidMaestroProfileCatalogService(ILogger<HidMaestroProfileCatalogService> logger)
 {
+    private static readonly string[] SpecializedControlTerms =
+    [
+        "wheel", "steering", "racing", "pedal", "shifter", "handbrake",
+        "hotas", "flight", "joystick", "throttle", "rudder", "yoke",
+        "t16000", "t.16000", "warthog", "airbus", "boeing", "virpil", "winwing"
+    ];
+
     private readonly ILogger<HidMaestroProfileCatalogService> logger = logger;
     private readonly object gate = new();
     private Task<IReadOnlyList<HidMaestroCatalogProfile>>? enumeration;
@@ -64,6 +71,19 @@ public sealed class HidMaestroProfileCatalogService(ILogger<HidMaestroProfileCat
     /// </summary>
     public VirtualControllerKind ClassifyFamily(string? profileId, string? profileName = null) =>
         HidMaestroProfiles.ClassifyFamily(profileId, profileName);
+
+    /// <summary>
+    /// True for regular handheld and arcade-style game controllers. The
+    /// underlying SDK catalog remains intact; specialized simulation rigs
+    /// are only hidden from GameFlow's picker until their extra axes and
+    /// feedback semantics have dedicated UI support.
+    /// </summary>
+    public static bool IsGameControllerProfile(HidMaestroCatalogProfile profile)
+    {
+        var searchableText = $"{profile.Id} {profile.Name} {profile.Vendor}";
+        return !SpecializedControlTerms.Any(term =>
+            searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// The curated defaults shown when the live catalog isn't available:

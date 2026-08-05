@@ -1041,7 +1041,7 @@ msgid "TemplateOutputProfileLabel"
 msgstr "HIDMaestro profile"
 
 msgid "TemplateOutputProfileTooltip"
-msgstr "Exactly which controller this slot presents to games. \"Default\" uses the standard profile for the output device above; picking a specific profile can emit any controller HIDMaestro supports — wheels, HOTAS, flight sticks, arcade pads and more."
+msgstr "Exactly which controller this slot presents to games. \"Default\" uses the standard profile for the output device above; the list covers HIDMaestro's broad gamepad and arcade-controller catalog. Wheel and flight-simulation profiles are hidden for now."
 
 msgid "TemplateOutputProfileDefaultOption"
 msgstr "Default for the selected output device"
@@ -1066,3 +1066,197 @@ msgstr "No controller assigned"
 
 msgid "SidebarAddController"
 msgstr "Add controller"
+
+# ── Touchpad tab: joystick / D-pad / mouse mapping + gestures ──
+
+msgid "DevicesTouchpadTab"
+msgstr "Touchpad"
+
+msgid "DevicesSlotSettingsTab"
+msgstr "Settings"
+
+msgid "SlotsNoSelection"
+msgstr "Select a virtual controller to edit its settings."
+
+msgid "TouchpadJoystickSection"
+msgstr "Joystick"
+
+msgid "TouchpadJoystickHint"
+msgstr "The stick centres wherever your finger lands, like a phone game's virtual stick."
+
+msgid "TouchpadStickEnabled"
+msgstr "Map touch to a stick"
+
+msgid "TouchpadTargetStick"
+msgstr "Target stick"
+
+msgid "TouchpadStickSensitivity"
+msgstr "Sensitivity"
+
+msgid "TouchpadStickLeft"
+msgstr "Left stick"
+
+msgid "TouchpadStickRight"
+msgstr "Right stick"
+
+msgid "TouchpadDpadSection"
+msgstr "D-pad"
+
+msgid "TouchpadDpadEnabled"
+msgstr "Map touch to the D-pad"
+
+msgid "TouchpadDpadEightWay"
+msgstr "8-way (diagonals)"
+
+msgid "TouchpadDpadDeadzone"
+msgstr "Deadzone radius"
+
+msgid "TouchpadMouseSection"
+msgstr "Mouse"
+
+msgid "TouchpadMouseHint"
+msgstr "Moves the cursor from frame to frame, the way a laptop touchpad does."
+
+msgid "TouchpadMouseEnabled"
+msgstr "Map touch to the mouse"
+
+msgid "TouchpadMouseSensitivityX"
+msgstr "Sensitivity X"
+
+msgid "TouchpadMouseSensitivityY"
+msgstr "Sensitivity Y"
+
+msgid "TouchpadInvertMouseX"
+msgstr "Invert X"
+
+msgid "TouchpadInvertMouseY"
+msgstr "Invert Y"
+
+msgid "TouchpadGesturesSection"
+msgstr "Gestures"
+
+msgid "TouchpadGesturesEnabled"
+msgstr "Enable gestures"
+
+msgid "TouchpadAddGesture"
+msgstr "Add gesture"
+
+msgid "TouchpadRemove"
+msgstr "Remove"
+
+msgid "TouchpadNoGestures"
+msgstr "No gestures yet."
+
+msgid "TouchpadGestureTarget"
+msgstr "Press"
+
+msgid "TouchpadGestureHold"
+msgstr "Hold (ms)"
+
+msgid "TouchpadGestureFingers"
+msgstr "Fingers"
+
+msgid "TouchpadGestureEightWay"
+msgstr "8-way"
+
+msgid "TouchpadGestureTapCount"
+msgstr "Taps"
+
+msgid "TouchpadTuningSection"
+msgstr "Recognition"
+
+msgid "TouchpadSwipeMinDistance"
+msgstr "Swipe distance"
+
+msgid "TouchpadTapMax"
+msgstr "Tap max (ms)"
+
+msgid "TouchpadMultiTapWindow"
+msgstr "Multi-tap window (ms)"
+
+msgid "TouchpadLongPress"
+msgstr "Long press (ms)"
+
+msgid "TouchpadPinchThreshold"
+msgstr "Pinch threshold"
+
+msgid "TouchpadRotateThreshold"
+msgstr "Rotate threshold (deg)"
+
+msgid "TouchpadShapeThreshold"
+msgstr "Shape match"
+
+msgid "TouchGestureSwipe"
+msgstr "Swipe"
+
+msgid "TouchGestureTap"
+msgstr "Tap"
+
+msgid "TouchGestureLongPress"
+msgstr "Long press"
+
+msgid "TouchGesturePinch"
+msgstr "Pinch"
+
+msgid "TouchGestureRotate"
+msgstr "Rotate"
+
+msgid "TouchGestureShape"
+msgstr "Shape"
+
+msgid "TouchDirUp"
+msgstr "Up"
+
+msgid "TouchDirUpRight"
+msgstr "Up-right"
+
+msgid "TouchDirRight"
+msgstr "Right"
+
+msgid "TouchDirDownRight"
+msgstr "Down-right"
+
+msgid "TouchDirDown"
+msgstr "Down"
+
+msgid "TouchDirDownLeft"
+msgstr "Down-left"
+
+msgid "TouchDirLeft"
+msgstr "Left"
+
+msgid "TouchDirUpLeft"
+msgstr "Up-left"
+
+msgid "TouchPinchIn"
+msgstr "In"
+
+msgid "TouchPinchOut"
+msgstr "Out"
+
+msgid "TouchRotateCw"
+msgstr "Clockwise"
+
+msgid "TouchRotateCcw"
+msgstr "Counter-clockwise"
+
+msgid "TouchShapeCircleCw"
+msgstr "Circle (clockwise)"
+
+msgid "TouchShapeCircleCcw"
+msgstr "Circle (counter-clockwise)"
+
+msgid "TouchShapeSquare"
+msgstr "Square"
+
+msgid "TouchShapeTriangle"
+msgstr "Triangle"
+
+msgid "TouchShapeZ"
+msgstr "Z"
+
+msgid "TouchShapeCheckmark"
+msgstr "Checkmark"
+
+msgid "TouchButtonNone"
+msgstr "— none —"

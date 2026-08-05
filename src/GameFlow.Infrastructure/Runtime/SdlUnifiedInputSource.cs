@@ -34,6 +34,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// only its live mapping changes.
     /// </summary>
     private readonly Dictionary<string, uint> liveInstanceIdByStableId = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DevicePowerInfo> powerByDeviceId = new(StringComparer.OrdinalIgnoreCase);
     private IntPtr rawInspectionHandle = IntPtr.Zero;
     private string? rawInspectionHandleId;
 
@@ -52,6 +53,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     private long lastLoopTimestampTicks = DateTime.UtcNow.Ticks;
     private System.Threading.Timer? stallWatchdog;
     private DateTime nextCatalogRefreshUtc = DateTime.MinValue;
+    private DateTime nextPowerRefreshUtc = DateTime.MinValue;
     private readonly object primaryGate = new();
     private ControllerSnapshot latestPrimary = ControllerSnapshot.Empty("SDL3 unified input");
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ControllerSnapshot> slotSnapshotsById =
@@ -175,6 +177,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                             slotSnapshotsById[deviceId] = snapshot;
                         }
                     }
+
+                    RefreshPowerStateCache(utcNow);
 
                     currentOperation = "idle";
                 }
@@ -873,12 +877,12 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         buttons[ButtonId.RightTriggerButton] = rightTrigger >= 0.65f;
 
         ReadBreadcrumb("gamepad: reading TOUCHPAD (DualSense-specific)");
-        var touchState = ReadTouchState(device.Handle);
+        var touchContacts = ReadTouchState(device.Handle);
         ReadBreadcrumb("gamepad: touchpad read returned OK");
 
         var motion = ReadMotionState(device.Handle);
         ReadBreadcrumb("gamepad: motion read returned OK");
-        if (touchState.ContactCount > 0)
+        if (touchContacts.Count > 0)
         {
             buttons[ButtonId.Touchpad] = true;
         }
@@ -913,10 +917,6 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             RightStick = rightStick,
             LeftTrigger = leftTrigger,
             RightTrigger = rightTrigger,
-            TouchContactCount = touchState.ContactCount,
-            TouchDown = touchState.PrimaryDown,
-            TouchX = touchState.PrimaryX,
-            TouchY = touchState.PrimaryY,
             HasGyro = motion.HasGyro,
             GyroPitch = motion.Pitch,
             GyroYaw = motion.Yaw,
@@ -926,7 +926,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             AccelZ = motion.AccelZ,
             Buttons = buttons,
             Timestamp = DateTimeOffset.UtcNow
-        };
+        }.WithTouchContacts(touchContacts);
     }
 
     private ControllerSnapshot ReadJoystickSnapshot(OpenedDevice device)
@@ -1040,20 +1040,25 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
     /// <summary>
     /// Reads every touchpad/finger slot the hardware reports and returns
-    /// the total contact count plus the FIRST currently-down finger's
-    /// position — the "primary" finger for single-finger interactions
-    /// (mouse/stick-anchor/D-pad mapping). SDL_GetGamepadTouchpadFinger
-    /// already returns x/y/pressure; this used to discard all three
-    /// (`out _, out _, out _`) and keep only the down flag.
+    /// one <see cref="TouchContact"/> per finger currently down.
+    /// SDL_GetGamepadTouchpadFinger already returns x/y/pressure; this
+    /// used to discard all three (`out _, out _, out _`) and keep only
+    /// the down flag, then later kept just the first finger's position.
+    ///
+    /// <para>
+    /// Finger slots are numbered ACROSS touchpads, not per touchpad, so
+    /// a pad with two surfaces can't collide two different fingers onto
+    /// the same <see cref="TouchContact.FingerIndex"/> — the recognizer
+    /// tracks fingers by that index, and a collision would read as one
+    /// finger teleporting between surfaces.
+    /// </para>
     /// </summary>
-    private (int ContactCount, bool PrimaryDown, float PrimaryX, float PrimaryY) ReadTouchState(IntPtr gamepad)
+    private List<TouchContact> ReadTouchState(IntPtr gamepad)
     {
         ReadBreadcrumb("touchpad: GetNumGamepadTouchpads");
         var touchpads = Math.Max(0, SdlInterop.GetNumGamepadTouchpads(gamepad));
-        var activeContacts = 0;
-        var primaryDown = false;
-        var primaryX = 0f;
-        var primaryY = 0f;
+        var contacts = new List<TouchContact>(2);
+        var slotBase = 0;
 
         for (var touchpadIndex = 0; touchpadIndex < touchpads; touchpadIndex++)
         {
@@ -1062,25 +1067,21 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             for (var fingerIndex = 0; fingerIndex < fingers; fingerIndex++)
             {
                 ReadBreadcrumb($"touchpad: GetGamepadTouchpadFinger (tp {touchpadIndex}, finger {fingerIndex})");
-                if (!SdlInterop.GetGamepadTouchpadFinger(gamepad, touchpadIndex, fingerIndex, out var down, out var x, out var y, out _))
+                if (!SdlInterop.GetGamepadTouchpadFinger(gamepad, touchpadIndex, fingerIndex, out var down, out var x, out var y, out var pressure))
                 {
                     continue;
                 }
 
                 if (down != 0)
                 {
-                    activeContacts++;
-                    if (!primaryDown)
-                    {
-                        primaryDown = true;
-                        primaryX = x;
-                        primaryY = y;
-                    }
+                    contacts.Add(new TouchContact(slotBase + fingerIndex, x, y, pressure));
                 }
             }
+
+            slotBase += fingers;
         }
 
-        return (activeContacts, primaryDown, primaryX, primaryY);
+        return contacts;
     }
 
     private void RefreshDeviceCatalog()
@@ -1119,6 +1120,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 var pid = SdlInterop.GetGamepadProductForId(instanceId);
                 var gamepadId = BuildStableId("gamepad", vid, pid, name);
                 liveMap[gamepadId] = instanceId;
+                var power = GetCachedPower(gamepadId);
 
                 devices.Add(new InputDeviceInfo(
                     gamepadId,
@@ -1128,7 +1130,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                     vid,
                     pid,
                     true,
-                    DeviceCategory.Gamepad));
+                    DeviceCategory.Gamepad,
+                    power.Percentage,
+                    power.State));
             }
         }
         finally
@@ -1160,6 +1164,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 var pid = SdlInterop.GetJoystickProductForId(instanceId);
                 var joystickId = BuildStableId("joystick", vid, pid, name);
                 liveMap[joystickId] = instanceId;
+                var power = GetCachedPower(joystickId);
 
                 devices.Add(new InputDeviceInfo(
                     joystickId,
@@ -1169,7 +1174,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                     vid,
                     pid,
                     false,
-                    DeviceCategory.Joystick));
+                    DeviceCategory.Joystick,
+                    power.Percentage,
+                    power.State));
             }
         }
         finally
@@ -1200,6 +1207,15 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             }
         }
 
+        if (powerByDeviceId.Count > 0)
+        {
+            var liveIds = devices.Select(d => d.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var staleId in powerByDeviceId.Keys.Where(id => !liveIds.Contains(id)).ToList())
+            {
+                powerByDeviceId.Remove(staleId);
+            }
+        }
+
         inputDeviceCatalog.ReplaceDevices("sdl", devices);
 
         if (devices.Count == 0)
@@ -1211,6 +1227,69 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         // ProviderStatus_SdlActive's translation is "SDL3 unified input active — {0} gamepad(s) detected"
         inputDeviceCatalog.SetProviderStatus("ProviderStatus_SdlActive", devices.Count);
     }
+
+    /// <summary>
+    /// Samples battery state from devices the worker already has open. It
+    /// deliberately does not open every unassigned controller just to read
+    /// charge: Bluetooth opens are the most failure-prone SDL operation in
+    /// this process. Selected and slot-assigned controllers already have a
+    /// safe worker-owned handle, which covers the devices users are actively
+    /// working with without adding a new freeze path.
+    /// </summary>
+    private void RefreshPowerStateCache(DateTime utcNow)
+    {
+        if (utcNow < nextPowerRefreshUtc)
+        {
+            return;
+        }
+
+        nextPowerRefreshUtc = utcNow.AddSeconds(5);
+
+        var opened = new Dictionary<string, OpenedDevice>(StringComparer.OrdinalIgnoreCase);
+        if (openedDevice is not null)
+        {
+            opened[openedDevice.DeviceId] = openedDevice;
+        }
+        foreach (var device in slotHandles.Values)
+        {
+            opened[device.DeviceId] = device;
+        }
+
+        foreach (var device in opened.Values)
+        {
+            try
+            {
+                int percent;
+                var nativeState = device.Kind == DeviceKind.Gamepad
+                    ? SdlInterop.GetGamepadPowerInfo(device.Handle, out percent)
+                    : SdlInterop.GetJoystickPowerInfo(device.Handle, out percent);
+
+                var state = nativeState switch
+                {
+                    SdlInterop.PowerState.OnBattery => DeviceBatteryState.OnBattery,
+                    SdlInterop.PowerState.Charging => DeviceBatteryState.Charging,
+                    SdlInterop.PowerState.Charged => DeviceBatteryState.Charged,
+                    SdlInterop.PowerState.NoBattery => DeviceBatteryState.NoBattery,
+                    _ => DeviceBatteryState.Unknown,
+                };
+
+                int? percentage = percent is >= 0 and <= 100
+                    ? percent
+                    : state == DeviceBatteryState.Charged ? 100 : null;
+
+                powerByDeviceId[device.DeviceId] = new DevicePowerInfo(percentage, state);
+            }
+            catch (Exception exception)
+            {
+                logger.LogDebug(exception, "SDL battery query failed for {DeviceId}.", device.DeviceId);
+            }
+        }
+    }
+
+    private DevicePowerInfo GetCachedPower(string deviceId) =>
+        powerByDeviceId.TryGetValue(deviceId, out var power)
+            ? power
+            : DevicePowerInfo.Unknown;
 
     /// <summary>
     /// Returns a stable display name for a device id: the first non-empty
@@ -1501,4 +1580,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     }
 
     private sealed record OpenedDevice(string DeviceId, string DisplayName, uint InstanceId, DeviceKind Kind, IntPtr Handle);
+
+    private readonly record struct DevicePowerInfo(int? Percentage, DeviceBatteryState State)
+    {
+        public static DevicePowerInfo Unknown { get; } = new(null, DeviceBatteryState.Unknown);
+    }
 }

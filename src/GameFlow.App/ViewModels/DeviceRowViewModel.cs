@@ -20,6 +20,16 @@ public sealed class DeviceRowViewModel(InputDeviceInfo info) : ViewModelBase
     public bool IsSelected => info.IsSelected;
     public bool IsGamepad => info.IsGamepad;
     public DeviceCategory Category => info.Category;
+    public bool HasBattery => info.HasBattery;
+    public string BatteryText => info.HasBattery ? $"{info.BatteryPercentage}%" : string.Empty;
+    public string BatteryStatusText => info.BatteryState switch
+    {
+        DeviceBatteryState.Charging => $"Charging · {info.BatteryPercentage}%",
+        DeviceBatteryState.Charged => "Fully charged",
+        DeviceBatteryState.OnBattery => $"Battery · {info.BatteryPercentage}%",
+        _ => string.Empty,
+    };
+    public string BatteryIcon => info.BatteryState == DeviceBatteryState.Charging ? "⚡" : "▰";
 
     /// <summary>Human-readable device type for the row tag.</summary>
     public string KindLabel => info.Category switch
@@ -61,6 +71,10 @@ public sealed class DeviceRowViewModel(InputDeviceInfo info) : ViewModelBase
         OnPropertyChanged(nameof(IsSelected));
         OnPropertyChanged(nameof(IsGamepad));
         OnPropertyChanged(nameof(Category));
+        OnPropertyChanged(nameof(HasBattery));
+        OnPropertyChanged(nameof(BatteryText));
+        OnPropertyChanged(nameof(BatteryStatusText));
+        OnPropertyChanged(nameof(BatteryIcon));
         OnPropertyChanged(nameof(KindLabel));
         OnPropertyChanged(nameof(KindBrush));
         OnPropertyChanged(nameof(VendorIdHex));

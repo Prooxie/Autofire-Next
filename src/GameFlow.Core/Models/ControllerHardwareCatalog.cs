@@ -75,4 +75,26 @@ public static class ControllerHardwareCatalog
             _ => ControllerVisualStyle.Auto,
         };
     }
+
+    /// <summary>
+    /// True when this hardware carries a finger-tracking touch surface
+    /// that SDL reports through <c>SDL_GetGamepadTouchpadFinger</c> —
+    /// the DualShock 4 and DualSense families, plus Valve's trackpad
+    /// hardware.
+    ///
+    /// <para>
+    /// Answered from VID/PID rather than by asking SDL, deliberately:
+    /// <c>SDL_GetNumGamepadTouchpads</c> needs an OPEN gamepad handle,
+    /// and the device catalog enumerates pads it has not opened (opening
+    /// each one just to probe would claim hardware the user hasn't
+    /// assigned to a slot yet). Unknown hardware answers false, so the
+    /// Touchpad tab stays hidden rather than appearing on a pad that
+    /// would report nothing.
+    /// </para>
+    /// </summary>
+    public static bool HasTouchpadSurface(ushort vendorId, ushort productId) =>
+        Resolve(vendorId, productId) is ControllerVisualStyle.PlayStation4
+            or ControllerVisualStyle.PlayStation5
+            or ControllerVisualStyle.SteamController
+            or ControllerVisualStyle.SteamDeck;
 }

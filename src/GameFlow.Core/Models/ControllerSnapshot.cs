@@ -68,6 +68,23 @@ public sealed record ControllerSnapshot
     public float TouchX { get; init; }
     public float TouchY { get; init; }
     public bool TouchDown { get; init; }
+
+    /// <summary>
+    /// Every finger currently on the surface, ascending by
+    /// <see cref="TouchContact.FingerIndex"/>. Empty on sources that
+    /// report only a primary contact (or none at all), which is why
+    /// <see cref="TouchContactCount"/> stays the authority on "how many
+    /// fingers" — a source can know the count without being able to
+    /// place each finger, and single-finger mapping (anchor stick, wedge
+    /// D-pad, mouse) only ever needed <see cref="TouchX"/>/<see cref="TouchY"/>.
+    ///
+    /// <para>
+    /// Multi-finger gestures — pinch, rotate, and anything counting two
+    /// to five fingers — need real per-finger positions and are simply
+    /// inert when this is empty, rather than guessing from the count.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<TouchContact> TouchContacts { get; init; } = [];
     public IReadOnlyDictionary<ButtonId, bool> Buttons { get; init; } = ButtonState.CreateEmptyMap();
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 
@@ -120,6 +137,45 @@ public sealed record ControllerSnapshot
     public ControllerSnapshot WithTouch(bool down, float x, float y)
     {
         return this with { TouchDown = down, TouchX = Math.Clamp(x, 0f, 1f), TouchY = Math.Clamp(y, 0f, 1f) };
+    }
+
+    /// <summary>
+    /// Sets the full contact list and derives every legacy touch field
+    /// from it — count, and the primary finger's down/X/Y. Deriving
+    /// rather than asking callers to set both keeps the two views from
+    /// ever disagreeing (a snapshot claiming three contacts while
+    /// <see cref="TouchDown"/> is false would be nonsense that the
+    /// mapping pipeline has no way to resolve).
+    ///
+    /// <para>The "primary" finger is the lowest
+    /// <see cref="TouchContact.FingerIndex"/>, matching the recognizer's
+    /// own choice — see <c>TouchGestureEngine</c>.</para>
+    /// </summary>
+    public ControllerSnapshot WithTouchContacts(IReadOnlyList<TouchContact>? contacts)
+    {
+        if (contacts is null || contacts.Count == 0)
+        {
+            return this with
+            {
+                TouchContacts = [],
+                TouchContactCount = 0,
+                TouchDown = false
+            };
+        }
+
+        var ordered = contacts.Count == 1
+            ? contacts
+            : [.. contacts.OrderBy(c => c.FingerIndex)];
+        var primary = ordered[0];
+
+        return this with
+        {
+            TouchContacts = ordered,
+            TouchContactCount = ordered.Count,
+            TouchDown = true,
+            TouchX = Math.Clamp(primary.X, 0f, 1f),
+            TouchY = Math.Clamp(primary.Y, 0f, 1f)
+        };
     }
 
     /// <summary>Sets the raw motion values. Deliberately unclamped — angular velocity has no natural bound, and clamping here would quietly cap fast flicks.</summary>

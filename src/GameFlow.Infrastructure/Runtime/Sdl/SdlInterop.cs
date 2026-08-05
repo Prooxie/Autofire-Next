@@ -58,6 +58,17 @@ internal static partial class SdlInterop
         Touchpad = 20
     }
 
+    /// <summary>SDL_PowerState from SDL3/SDL_power.h.</summary>
+    internal enum PowerState
+    {
+        Error = -1,
+        Unknown = 0,
+        OnBattery = 1,
+        NoBattery = 2,
+        Charging = 3,
+        Charged = 4,
+    }
+
     [LibraryImport("SDL3", EntryPoint = "SDL_SetMainReady")]
     internal static partial void SetMainReady();
 
@@ -127,6 +138,9 @@ internal static partial class SdlInterop
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadButton")]
     [return: MarshalAs(UnmanagedType.I1)]
     internal static partial bool GetGamepadButton(IntPtr gamepad, GamepadButton button);
+
+    [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadPowerInfo")]
+    internal static partial PowerState GetGamepadPowerInfo(IntPtr gamepad, out int percent);
 
     /// <summary>
     /// SDL_SensorType — values verified against upstream
@@ -216,6 +230,9 @@ internal static partial class SdlInterop
 
     [LibraryImport("SDL3", EntryPoint = "SDL_GetJoystickProductForID")]
     internal static partial ushort GetJoystickProductForId(uint instanceId);
+
+    [LibraryImport("SDL3", EntryPoint = "SDL_GetJoystickPowerInfo")]
+    internal static partial PowerState GetJoystickPowerInfo(IntPtr joystick, out int percent);
 
     [LibraryImport("SDL3", EntryPoint = "SDL_GetNumJoystickAxes")]
     internal static partial int GetNumJoystickAxes(IntPtr joystick);

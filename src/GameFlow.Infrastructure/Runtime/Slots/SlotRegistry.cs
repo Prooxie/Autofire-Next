@@ -190,6 +190,14 @@ public sealed class SlotRegistry
             }
         });
 
+    /// <summary>
+    /// Replaces the slot's touchpad configuration. Null clears it, so the
+    /// slot stops contributing a touchpad rule entirely rather than
+    /// contributing an all-off one.
+    /// </summary>
+    public void UpdateTouchpad(string id, GameFlow.Core.Models.Rules.TouchpadMapRule? touchpad) =>
+        Mutate(id, s => s.Touchpad = touchpad);
+
     /// <summary>Replaces the slot's layered profile id list (in order).</summary>
     public void SetProfiles(string id, IEnumerable<string> profileIds) =>
         Mutate(id, s => s.ProfileIds = profileIds

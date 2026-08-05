@@ -8,20 +8,8 @@
        resolve immediately on first paint (before AppThemeService is called). -->
   <Application.Resources>
     <ResourceDictionary>
-      <!--
-          Themes/DesignTokens.axaml and Themes/Typography.axaml were built
-          (see the "Design System v2" banner at the top of AppTheme.axaml)
-          but never actually merged in here — every DynamicResource lookup
-          against a token defined only in those files (Semantic.Danger and
-          Semantic.DangerSoft among them) has been silently failing since
-          they were written. That's the real reason "danger"-styled
-          buttons (delete/remove actions) rendered without their intended
-          red border and foreground: the resource they pointed at was
-          simply never reachable. Nothing in the app currently uses
-          Typography.axaml's semantic TextBlock classes yet, so merging it
-          has zero visible effect beyond making those classes usable —
-          merging both here just finishes wiring up what was already built.
-      -->
+      <!-- DesignTokens supplies the shared spacing, radius and typography
+           scales consumed by Typography.axaml and the reusable app styles. -->
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://GameFlow.App/Themes/DesignTokens.axaml" />
       </ResourceDictionary.MergedDictionaries>
@@ -36,8 +24,23 @@
       <SolidColorBrush x:Key="AppBorder0"      Color="#0F2035" />
       <SolidColorBrush x:Key="AppBorder1"      Color="#1E3A5A" />
       <SolidColorBrush x:Key="AppForeground"   Color="#E2E8F0" />
-      <SolidColorBrush x:Key="AppForegroundDim" Color="#64748B" />
+      <SolidColorBrush x:Key="AppForegroundDim" Color="#7D8BA3" />
       <SolidColorBrush x:Key="AppPrimaryBtn"   Color="#040C16" />
+      <SolidColorBrush x:Key="AppBadgeForeground" Color="#040C16" />
+
+      <!-- Theme-aware semantic roles. AppThemeService swaps these alongside
+           the selected palette so status and destructive-action colors keep
+           their contrast in both dark and light themes. -->
+      <SolidColorBrush x:Key="AppSuccess"       Color="#34D399" />
+      <SolidColorBrush x:Key="AppSuccessSoft"   Color="#0C2A21" />
+      <SolidColorBrush x:Key="AppWarning"       Color="#FBBF24" />
+      <SolidColorBrush x:Key="AppWarningSoft"   Color="#33250A" />
+      <SolidColorBrush x:Key="AppDanger"        Color="#FB7185" />
+      <SolidColorBrush x:Key="AppDangerSoft"    Color="#35121A" />
+      <SolidColorBrush x:Key="AppInfo"          Color="#60A5FA" />
+      <SolidColorBrush x:Key="AppInfoSoft"      Color="#102440" />
+      <SolidColorBrush x:Key="AppFeature"       Color="#C4B5FD" />
+      <SolidColorBrush x:Key="AppFeatureSoft"   Color="#25193D" />
     </ResourceDictionary>
   </Application.Resources>
 

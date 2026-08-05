@@ -35,6 +35,29 @@ public partial class ShellWindow : Window
         AvaloniaXamlLoader.Load(this);
     }
 
+    /// <summary>
+    /// Keeps the first frame inside the primary monitor's usable area,
+    /// including DPI scaling and the taskbar. This runs before
+    /// <see cref="Window.Show()"/> so an oversized window never flashes.
+    /// </summary>
+    public void FitToWorkingArea()
+    {
+        var screen = Screens.Primary;
+        if (screen is null)
+        {
+            return;
+        }
+
+        var scaling = screen.Scaling > 0 ? screen.Scaling : 1d;
+        var maximumWidth = screen.WorkingArea.Width / scaling * 0.92d;
+        var maximumHeight = screen.WorkingArea.Height / scaling * 0.92d;
+
+        MinWidth = Math.Min(MinWidth, maximumWidth);
+        MinHeight = Math.Min(MinHeight, maximumHeight);
+        Width = Math.Min(Width, maximumWidth);
+        Height = Math.Min(Height, maximumHeight);
+    }
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         // Explicit null checks rather than `shellViewModel?.Event -= handler`:

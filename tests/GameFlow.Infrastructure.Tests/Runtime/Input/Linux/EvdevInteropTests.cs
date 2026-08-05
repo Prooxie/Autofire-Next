@@ -79,13 +79,34 @@ public sealed class EvdevKeyCodeMapTests
     }
 
     [Fact]
-    public void EvdevToVirtualKey_HasNoDuplicateVirtualKeyTargets()
+    public void EvdevToVirtualKey_HasNoUnintendedDuplicateVirtualKeyTargets()
     {
-        // Two different evdev codes both translating to the same VK would
-        // make them indistinguishable downstream — a real correctness bug,
-        // not just untidy data.
-        var values = EvdevKeyCodeMap.EvdevToVirtualKey.Values.ToList();
-        Assert.Equal(values.Count, values.Distinct().Count());
+        // Two evdev codes mapping to the same VK makes them
+        // indistinguishable downstream — a real bug, with ONE deliberate
+        // exception: KEY_ENTER (28) and KEY_KPENTER (96) both map to
+        // VK_RETURN because Windows itself reports both Enter keys that
+        // way (they differ only by the extended-key flag, which this
+        // contract doesn't carry). That collision is intentional and
+        // documented in EvdevKeyCodeMap; anything else is not.
+        const int VkReturn = 0x0D;
+
+        var offenders = EvdevKeyCodeMap.EvdevToVirtualKey
+            .Where(pair => pair.Value != VkReturn)
+            .GroupBy(pair => pair.Value)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"VK 0x{group.Key:X2} <- evdev {string.Join(", ", group.Select(p => p.Key))}")
+            .ToList();
+
+        Assert.True(offenders.Count == 0, "unintended duplicate VK targets: " + string.Join("; ", offenders));
+
+        // And the intended pair is genuinely present, so this fails loudly
+        // if either Enter mapping is ever silently dropped.
+        var enterCodes = EvdevKeyCodeMap.EvdevToVirtualKey
+            .Where(pair => pair.Value == VkReturn)
+            .Select(pair => (int)pair.Key)
+            .OrderBy(code => code)
+            .ToList();
+        Assert.Equal(new List<int> { 28, 96 }, enterCodes);
     }
 }
 

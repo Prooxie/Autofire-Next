@@ -124,11 +124,19 @@ public sealed class ControllerStateSymbols : IFleeSymbols
         {
             return ResolveStick(rest, Snapshot.RightStick, ButtonId.RightStick);
         }
-        if (head.Equals("touch_center", StringComparison.Ordinal) ||
-            head.Equals("touch_left",   StringComparison.Ordinal) ||
-            head.Equals("touch_right",  StringComparison.Ordinal))
+        if (head.Equals("touch_center", StringComparison.Ordinal))
         {
             return ResolveTouch(rest);
+        }
+        if (head.Equals("touch_left", StringComparison.Ordinal) ||
+            head.Equals("touch_right", StringComparison.Ordinal))
+        {
+            // VSCView exposes separate left/right touch surfaces for a
+            // handful of older devices. GameFlow has one unified touchpad,
+            // represented by touch_center; resolving the aliases as well
+            // would make the compatibility terms in DS4/DualSense themes
+            // count the same finger twice and displace its marker.
+            return 0;
         }
         if (head.Equals("grip", StringComparison.Ordinal))
         {
@@ -244,13 +252,37 @@ public sealed class ControllerStateSymbols : IFleeSymbols
 
         if (!int.TryParse(index, out var fingerIndex)) { return 0; }
 
-        // The snapshot only tracks contact-count today (not per-finger
-        // coordinates), so we report touch state for finger #0 and zero
-        // for the rest. When the snapshot grows real touch fields this
-        // is the only place that needs to learn about them.
+        // VSCView exposes ordinal display slots (first/second contact),
+        // while browser touch identifiers can be arbitrary values such as
+        // 2 and 7. The snapshot list is already stable-sorted, so indexing
+        // it by ordinal renders every source without changing the original
+        // identifiers used by gesture recognition.
+        TouchContact? contact = fingerIndex >= 0 && fingerIndex < Snapshot.TouchContacts.Count
+            ? Snapshot.TouchContacts[fingerIndex]
+            : null;
+
         if (axis.Equals("touch", StringComparison.Ordinal))
         {
-            return Snapshot.TouchContactCount > fingerIndex ? 1 : 0;
+            // Some sources can report only a contact count. Preserve that
+            // useful fallback when no per-finger list is available.
+            return Snapshot.TouchContacts.Count > 0
+                ? contact.HasValue ? 1 : 0
+                : Snapshot.TouchContactCount > fingerIndex ? 1 : 0;
+        }
+
+        if (axis.Equals("x", StringComparison.Ordinal) || axis.Equals("y", StringComparison.Ordinal))
+        {
+            float? coordinate = contact.HasValue
+                ? axis.Equals("x", StringComparison.Ordinal) ? contact.Value.X : contact.Value.Y
+                : fingerIndex == 0 && Snapshot.TouchDown
+                    ? axis.Equals("x", StringComparison.Ordinal) ? Snapshot.TouchX : Snapshot.TouchY
+                    : null;
+
+            // Snapshot coordinates follow SDL (0..1); VSCView themes
+            // position touch markers around their centre (-1..1).
+            return coordinate.HasValue
+                ? Math.Clamp(coordinate.Value, 0f, 1f) * 2d - 1d
+                : 0;
         }
         return 0;
     }

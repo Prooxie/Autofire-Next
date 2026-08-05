@@ -12,10 +12,10 @@ namespace GameFlow.App.ViewModels;
 /// <summary>Row in the slots list (display only).</summary>
 public sealed class SlotRowViewModel : ViewModelBase
 {
-    public SlotRowViewModel(ControllerSlot slot)
+    public SlotRowViewModel(ControllerSlot slot, IReadOnlyList<InputDeviceInfo>? devices = null)
     {
         Id = slot.Id;
-        Apply(slot);
+        Apply(slot, devices);
     }
 
     public string Id { get; }
@@ -35,16 +35,68 @@ public sealed class SlotRowViewModel : ViewModelBase
     private string deviceSummary = string.Empty;
     public string DeviceSummary { get => deviceSummary; private set => SetProperty(ref deviceSummary, value); }
 
-    public void Apply(ControllerSlot slot)
+    private string statusLabel = string.Empty;
+    public string StatusLabel { get => statusLabel; private set => SetProperty(ref statusLabel, value); }
+
+    private string statusBrush = "#64748B";
+    public string StatusBrush { get => statusBrush; private set => SetProperty(ref statusBrush, value); }
+
+    private string outputIcon = "HID";
+    public string OutputIcon { get => outputIcon; private set => SetProperty(ref outputIcon, value); }
+
+    private string profileSummary = string.Empty;
+    public string ProfileSummary { get => profileSummary; private set => SetProperty(ref profileSummary, value); }
+
+    public string SlotLabel => $"SLOT {Index}";
+
+    public void Apply(ControllerSlot slot, IReadOnlyList<InputDeviceInfo>? devices = null)
     {
         Name = slot.Name;
         Index = slot.Index;
         KindLabel = SlotsViewModel.KindLabelFor(slot.OutputTemplate);
         Enabled = slot.Enabled;
-        int count = slot.InputDeviceIds.Count;
+        OnPropertyChanged(nameof(SlotLabel));
+
+        OutputIcon = slot.OutputTemplate.OutputKind switch
+        {
+            VirtualControllerKind.Xbox360 or VirtualControllerKind.XboxOne or VirtualControllerKind.XboxSeries => "X",
+            VirtualControllerKind.DualShock4 or VirtualControllerKind.DualSense => "PS",
+            VirtualControllerKind.SwitchPro => "N",
+            VirtualControllerKind.SteamController => "S",
+            _ => "HID",
+        };
+
+        var assigned = slot.InputDeviceIds
+            .Select(id => devices?.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        var connected = assigned.Where(device => device?.IsConnected == true).Cast<InputDeviceInfo>().ToArray();
+
         DeviceSummary = slot.OutputTemplate.DemoPreview
-            ? "Demo preview"
-            : count == 0 ? "No devices assigned" : count == 1 ? "1 device" : $"{count} devices";
+            ? "Animated demo input"
+            : slot.InputDeviceIds.Count == 0
+                ? "No physical device assigned"
+                : connected.Length == 0
+                    ? "Assigned device is offline"
+                    : connected.Length == 1
+                        ? connected[0].DisplayName
+                        : $"{connected[0].DisplayName} +{connected.Length - 1}";
+
+        ProfileSummary = slot.ProfileIds.Count switch
+        {
+            0 => "Pass-through mapping",
+            1 => "1 profile layer",
+            _ => $"{slot.ProfileIds.Count} profile layers",
+        };
+
+        (StatusLabel, StatusBrush) = !slot.Enabled
+            ? ("Disabled", "#64748B")
+            : slot.OutputTemplate.DemoPreview
+                ? ("Demo", "#38BDF8")
+                : slot.InputDeviceIds.Count == 0
+                    ? ("Needs input", "#F59E0B")
+                    : connected.Length == 0
+                        ? ("Offline", "#F87171")
+                        : ("Ready", "#4ADE80");
     }
 }
 
@@ -74,6 +126,7 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
             templateStore ?? throw new ArgumentNullException(nameof(templateStore)),
             localization,
             hidMaestroCatalog ?? throw new ArgumentNullException(nameof(hidMaestroCatalog)));
+        TouchpadEditor = new TouchpadEditorViewModel(localization);
 
         // Demo preview and assigned devices are mutually exclusive — the
         // slot reads EITHER the waveform OR its devices, never both.
@@ -116,6 +169,12 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(SlotDuplicateLabel));
             OnPropertyChanged(nameof(SlotSaveLabel));
             OnPropertyChanged(nameof(SlotDeleteLabel));
+            OnPropertyChanged(nameof(TouchpadTabHeader));
+            OnPropertyChanged(nameof(SlotSettingsTabHeader));
+            OnPropertyChanged(nameof(NoSlotSelectedLabel));
+            OnPropertyChanged(nameof(PreviewTabHeader));
+            OnPropertyChanged(nameof(OutputTabHeader));
+            OnPropertyChanged(nameof(MappingsTabHeader));
         };
 
         Rebuild();
@@ -154,6 +213,36 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
 
     public IReadOnlyList<OutputKindOption> OutputKindOptions { get; }
     public DeviceTemplateEditorViewModel TemplateEditor { get; }
+
+    /// <summary>Backs the Touchpad tab; only meaningful while <see cref="SelectedSlotHasTouchpad"/> is true.</summary>
+    public TouchpadEditorViewModel TouchpadEditor { get; }
+
+    private bool selectedSlotHasTouchpad;
+
+    /// <summary>
+    /// True when at least one device assigned to the selected slot
+    /// carries a touch surface. Drives the Touchpad tab's visibility, so
+    /// the tab appears on a DualSense or DualShock 4 slot and stays
+    /// hidden on an Xbox pad — where every control on it would be inert.
+    /// </summary>
+    public bool SelectedSlotHasTouchpad
+    {
+        get => selectedSlotHasTouchpad;
+        private set => SetProperty(ref selectedSlotHasTouchpad, value);
+    }
+
+    public string TouchpadTabHeader => Loc("DevicesTouchpadTab", "Touchpad");
+    public string SlotSettingsTabHeader => Loc("DevicesSlotSetupTab", "Setup");
+
+    /// <summary>
+    /// Shown in place of the slot detail pane while no slot is selected.
+    /// The pane is otherwise simply blank, which on this page occupies
+    /// most of the width and reads as a failed load rather than as
+    /// "nothing picked yet" — the Devices and mapping-rule pages both
+    /// already answer that question in the same spot.
+    /// </summary>
+    public string NoSlotSelectedLabel =>
+        Loc("SlotsNoSelection", "Select a virtual controller to edit its settings.");
 
     public ICommand CreateSlotCommand { get; }
     public ICommand DuplicateSlotCommand { get; }
@@ -205,6 +294,17 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
     }
 
     public bool HasSelectedSlot => SelectedSlot is not null;
+    public bool HasAssignedDevices => AssignedDevices.Count > 0;
+    public bool HasAvailableDevices => AvailableDevices.Count > 0;
+    public string SelectedSlotLabel => SelectedSlot?.SlotLabel ?? string.Empty;
+    public string SelectedSlotStatus => SelectedSlot?.StatusLabel ?? string.Empty;
+    public string SelectedSlotStatusBrush => SelectedSlot?.StatusBrush ?? "#64748B";
+    public string SelectedSlotOutput => SelectedSlot?.KindLabel ?? string.Empty;
+    public string SelectedSlotInput => SelectedSlot?.DeviceSummary ?? string.Empty;
+    public string SelectedSlotProfiles => SelectedSlot?.ProfileSummary ?? string.Empty;
+    public string PreviewTabHeader => Loc("DevicesSlotPreviewTab", "Preview");
+    public string OutputTabHeader => Loc("DevicesSlotOutputTab", "Output");
+    public string MappingsTabHeader => Loc("DevicesSlotMappingsTab", "Mappings");
 
     private string slotName = string.Empty;
     public string SlotName
@@ -431,11 +531,11 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
             var existing = Slots.FirstOrDefault(r => r.Id == slot.Id);
             if (existing is null)
             {
-                Slots.Insert(Math.Min(idx, Slots.Count), new SlotRowViewModel(slot));
+                Slots.Insert(Math.Min(idx, Slots.Count), new SlotRowViewModel(slot, catalog.Devices));
             }
             else
             {
-                existing.Apply(slot);
+                existing.Apply(slot, catalog.Devices);
                 int currentIdx = Slots.IndexOf(existing);
                 if (currentIdx != idx && idx < Slots.Count)
                 {
@@ -479,6 +579,9 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
                 SlotName = string.Empty;
                 SlotEnabled = false;
                 TemplateEditor.Clear();
+                TouchpadEditor.Clear();
+                SelectedSlotHasTouchpad = false;
+                RaiseSelectedSlotSummary();
                 return;
             }
 
@@ -512,11 +615,43 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
                 var name = AvailableProfiles.FirstOrDefault(p => p.Id == pid)?.Name ?? pid;
                 AssignedProfiles.Add(new ProfileSummary(pid, name));
             }
+
+            // The Touchpad tab follows the hardware: it shows as soon as
+            // any assigned device reports a touch surface. Settings are
+            // kept even while the tab is hidden — unplugging a DualSense
+            // shouldn't discard its touchpad configuration, and
+            // reassigning it brings the tab straight back.
+            SelectedSlotHasTouchpad = slot.InputDeviceIds
+                .Select(id => devices.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase)))
+                .Any(info => info?.HasTouchpad == true);
+
+            if (SelectedSlotHasTouchpad)
+            {
+                TouchpadEditor.Load(slot.Touchpad, rule => registry.UpdateTouchpad(slotId, rule));
+            }
+            else
+            {
+                TouchpadEditor.Clear();
+            }
+
+            RaiseSelectedSlotSummary();
         }
         finally
         {
             loadingDetail = false;
         }
+    }
+
+    private void RaiseSelectedSlotSummary()
+    {
+        OnPropertyChanged(nameof(HasAssignedDevices));
+        OnPropertyChanged(nameof(HasAvailableDevices));
+        OnPropertyChanged(nameof(SelectedSlotLabel));
+        OnPropertyChanged(nameof(SelectedSlotStatus));
+        OnPropertyChanged(nameof(SelectedSlotStatusBrush));
+        OnPropertyChanged(nameof(SelectedSlotOutput));
+        OnPropertyChanged(nameof(SelectedSlotInput));
+        OnPropertyChanged(nameof(SelectedSlotProfiles));
     }
 
     public void Dispose()

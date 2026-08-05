@@ -17,19 +17,35 @@
         (the "Theme default" preset) lets the themed base show through, so
         switching the app theme recolours the panel immediately.
     -->
-    <Border CornerRadius="14"
-            Background="{DynamicResource AppSurface1}"
-            BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1">
+    <Border Classes="panel">
       <Border Padding="18,14" CornerRadius="14"
               Background="{Binding PanelOverlayBrush}">
-        <Grid RowDefinitions="Auto,Auto,*,Auto" MinHeight="260">
+        <!--
+            EVERY row except the artwork is a FIXED height, and that is
+            load-bearing rather than tidiness.
+
+            ThemeSurface has no intrinsic size — its MeasureOverride
+            returns whatever the parent offers — so the artwork is sized
+            entirely by what the star row has left over. Any neighbouring
+            row that grows steals from it. The pressed-buttons readout
+            below updates on every input frame and its text length
+            changes with it, so while it was Auto-height a single wrap to
+            a second line resized the star row and rescaled the whole
+            controller image, mid-press. Reserving the space up front
+            means live text can change freely without the artwork moving
+            a pixel.
+        -->
+        <Grid RowDefinitions="22,Auto,*,20" MinHeight="260">
 
             <!-- Title row -->
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,0,0,8">
                 <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource AppForeground}" />
                 <TextBlock Grid.Column="1" Text="{Binding ConnectionLabel}"
                            FontSize="10" Foreground="{Binding ConnectionBrush}"
+                           VerticalAlignment="Center"
                            FontWeight="SemiBold" LetterSpacing="1" />
             </Grid>
 
@@ -41,12 +57,12 @@
             -->
             <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="0,0,0,8"
                   IsVisible="{Binding HasThemeVariants}">
-                <TextBlock Text="Skin:" VerticalAlignment="Center" Margin="0,0,8,0"
-                           FontSize="11" Foreground="#94A3B8" />
+                <TextBlock Text="Skin" VerticalAlignment="Center" Margin="0,0,10,0"
+                           Classes="sectionLabel" />
                 <ComboBox Grid.Column="1"
                           ItemsSource="{Binding AvailableThemeVariants}"
                           SelectedItem="{Binding SelectedThemeVariant, Mode=TwoWay}"
-                          MinHeight="28" FontSize="11"
+                          MinHeight="30" FontSize="11"
                           HorizontalAlignment="Stretch">
                     <ComboBox.ItemTemplate>
                         <DataTemplate>
@@ -61,15 +77,20 @@
                            IsVisible="False"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            MaxWidth="360" TextWrapping="Wrap" TextAlignment="Center"
-                           Foreground="#64748B" Opacity="0.85" FontSize="12"
+                           Foreground="{DynamicResource AppForegroundDim}" FontSize="12"
                            Text="No controller theme installed for this style. Drop a VSCView-compatible theme folder into %LocalAppData%\GAMEFLOW\themes." />
                 <views:ThemeSurface x:Name="ThemedSurface"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch" />
             </Grid>
 
+            <!-- Live pressed-button readout. Single line by contract:
+                 see the note on the row definitions above. -->
             <TextBlock Grid.Row="3" Text="{Binding PressedButtonsText}"
-                       Margin="0,8,0,0" FontSize="11" Foreground="#94A3B8" />
+                       Margin="0,4,0,0" FontSize="11"
+                       VerticalAlignment="Center"
+                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource AppForegroundDim}" />
         </Grid>
     </Border>
     </Border>

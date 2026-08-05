@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using GameFlow.Infrastructure.Runtime;
 
 namespace GameFlow.App.ViewModels;
 
@@ -17,6 +18,30 @@ public sealed class MenuColumnItemViewModel
     public string IconText { get; }
     public bool IsConnected { get; }
     public ICommand SelectCommand { get; }
+    public string SecondaryText { get; }
+    public bool HasSecondaryText => !string.IsNullOrWhiteSpace(SecondaryText);
+    public int? BatteryPercentage { get; }
+    public DeviceBatteryState BatteryState { get; }
+    public bool HasBattery => BatteryPercentage is >= 0 and <= 100
+        && BatteryState is not DeviceBatteryState.NoBattery;
+    public string BatteryText => HasBattery ? $"{BatteryPercentage}%" : string.Empty;
+    public string BatteryIcon => BatteryState switch
+    {
+        DeviceBatteryState.Charging => "⚡",
+        DeviceBatteryState.Charged => "●",
+        _ when BatteryPercentage is <= 20 => "▱",
+        _ => "▰",
+    };
+    public string BatteryBrush => BatteryState == DeviceBatteryState.Charging
+        ? "#38BDF8"
+        : BatteryPercentage is <= 20 ? "#F87171" : "#4ADE80";
+    public string BatteryTooltip => BatteryState switch
+    {
+        DeviceBatteryState.Charging => $"Charging · {BatteryPercentage}%",
+        DeviceBatteryState.Charged => "Fully charged",
+        DeviceBatteryState.OnBattery => $"Battery · {BatteryPercentage}%",
+        _ => BatteryText,
+    };
 
     /// <summary>True when this row offers a dashboard pin toggle (physical devices only).</summary>
     public bool CanPin { get; }
@@ -29,8 +54,11 @@ public sealed class MenuColumnItemViewModel
 
     public ICommand? PinCommand { get; }
 
-    public MenuColumnItemViewModel(string id, string name, string iconText, bool isConnected, Action onSelect)
-        : this(id, name, iconText, isConnected, onSelect, isPinned: false, onTogglePin: null)
+    public MenuColumnItemViewModel(
+        string id, string name, string iconText, bool isConnected, Action onSelect,
+        string? secondaryText = null)
+        : this(id, name, iconText, isConnected, onSelect, isPinned: false, onTogglePin: null,
+            secondaryText: secondaryText)
     {
     }
 
@@ -41,12 +69,17 @@ public sealed class MenuColumnItemViewModel
     /// </summary>
     public MenuColumnItemViewModel(
         string id, string name, string iconText, bool isConnected, Action onSelect,
-        bool isPinned, Action? onTogglePin)
+        bool isPinned, Action? onTogglePin, string? secondaryText = null,
+        int? batteryPercentage = null,
+        DeviceBatteryState batteryState = DeviceBatteryState.Unknown)
     {
         Id = id;
         Name = string.IsNullOrWhiteSpace(name) ? "(unnamed)" : name;
         IconText = iconText;
         IsConnected = isConnected;
+        SecondaryText = secondaryText ?? string.Empty;
+        BatteryPercentage = batteryPercentage;
+        BatteryState = batteryState;
         SelectCommand = new RelayCommand(onSelect);
         CanPin = onTogglePin is not null;
         PinIcon = isPinned ? "◉" : "◎";

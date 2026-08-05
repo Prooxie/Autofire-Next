@@ -1054,3 +1054,197 @@ msgstr "Сохранить"
 
 msgid "DashboardNoControllerConnected"
 msgstr "Контроллер не подключён"
+
+# ── Touchpad tab: joystick / D-pad / mouse mapping + gestures ──
+
+msgid "DevicesTouchpadTab"
+msgstr "Тачпад"
+
+msgid "DevicesSlotSettingsTab"
+msgstr "Настройки"
+
+msgid "SlotsNoSelection"
+msgstr "Выберите виртуальный контроллер, чтобы изменить его настройки."
+
+msgid "TouchpadJoystickSection"
+msgstr "Джойстик"
+
+msgid "TouchpadJoystickHint"
+msgstr "Стик центрируется там, где вы коснулись, — как виртуальный стик в мобильной игре."
+
+msgid "TouchpadStickEnabled"
+msgstr "Привязать касание к стику"
+
+msgid "TouchpadTargetStick"
+msgstr "Целевой стик"
+
+msgid "TouchpadStickSensitivity"
+msgstr "Чувствительность"
+
+msgid "TouchpadStickLeft"
+msgstr "Левый стик"
+
+msgid "TouchpadStickRight"
+msgstr "Правый стик"
+
+msgid "TouchpadDpadSection"
+msgstr "Крестовина"
+
+msgid "TouchpadDpadEnabled"
+msgstr "Привязать касание к крестовине"
+
+msgid "TouchpadDpadEightWay"
+msgstr "8 направлений (диагонали)"
+
+msgid "TouchpadDpadDeadzone"
+msgstr "Радиус мёртвой зоны"
+
+msgid "TouchpadMouseSection"
+msgstr "Мышь"
+
+msgid "TouchpadMouseHint"
+msgstr "Двигает курсор от кадра к кадру, как тачпад ноутбука."
+
+msgid "TouchpadMouseEnabled"
+msgstr "Привязать касание к мыши"
+
+msgid "TouchpadMouseSensitivityX"
+msgstr "Чувствительность X"
+
+msgid "TouchpadMouseSensitivityY"
+msgstr "Чувствительность Y"
+
+msgid "TouchpadInvertMouseX"
+msgstr "Инвертировать X"
+
+msgid "TouchpadInvertMouseY"
+msgstr "Инвертировать Y"
+
+msgid "TouchpadGesturesSection"
+msgstr "Жесты"
+
+msgid "TouchpadGesturesEnabled"
+msgstr "Включить жесты"
+
+msgid "TouchpadAddGesture"
+msgstr "Добавить жест"
+
+msgid "TouchpadRemove"
+msgstr "Удалить"
+
+msgid "TouchpadNoGestures"
+msgstr "Жестов пока нет."
+
+msgid "TouchpadGestureTarget"
+msgstr "Нажать"
+
+msgid "TouchpadGestureHold"
+msgstr "Удержание (мс)"
+
+msgid "TouchpadGestureFingers"
+msgstr "Пальцы"
+
+msgid "TouchpadGestureEightWay"
+msgstr "8 направлений"
+
+msgid "TouchpadGestureTapCount"
+msgstr "Касания"
+
+msgid "TouchpadTuningSection"
+msgstr "Распознавание"
+
+msgid "TouchpadSwipeMinDistance"
+msgstr "Дистанция свайпа"
+
+msgid "TouchpadTapMax"
+msgstr "Макс. касание (мс)"
+
+msgid "TouchpadMultiTapWindow"
+msgstr "Окно мультикасания (мс)"
+
+msgid "TouchpadLongPress"
+msgstr "Долгое нажатие (мс)"
+
+msgid "TouchpadPinchThreshold"
+msgstr "Порог щипка"
+
+msgid "TouchpadRotateThreshold"
+msgstr "Порог поворота (°)"
+
+msgid "TouchpadShapeThreshold"
+msgstr "Совпадение формы"
+
+msgid "TouchGestureSwipe"
+msgstr "Свайп"
+
+msgid "TouchGestureTap"
+msgstr "Касание"
+
+msgid "TouchGestureLongPress"
+msgstr "Долгое нажатие"
+
+msgid "TouchGesturePinch"
+msgstr "Щипок"
+
+msgid "TouchGestureRotate"
+msgstr "Поворот"
+
+msgid "TouchGestureShape"
+msgstr "Форма"
+
+msgid "TouchDirUp"
+msgstr "Вверх"
+
+msgid "TouchDirUpRight"
+msgstr "Вверх-вправо"
+
+msgid "TouchDirRight"
+msgstr "Вправо"
+
+msgid "TouchDirDownRight"
+msgstr "Вниз-вправо"
+
+msgid "TouchDirDown"
+msgstr "Вниз"
+
+msgid "TouchDirDownLeft"
+msgstr "Вниз-влево"
+
+msgid "TouchDirLeft"
+msgstr "Влево"
+
+msgid "TouchDirUpLeft"
+msgstr "Вверх-влево"
+
+msgid "TouchPinchIn"
+msgstr "Внутрь"
+
+msgid "TouchPinchOut"
+msgstr "Наружу"
+
+msgid "TouchRotateCw"
+msgstr "По часовой стрелке"
+
+msgid "TouchRotateCcw"
+msgstr "Против часовой стрелки"
+
+msgid "TouchShapeCircleCw"
+msgstr "Круг (по часовой стрелке)"
+
+msgid "TouchShapeCircleCcw"
+msgstr "Круг (против часовой стрелки)"
+
+msgid "TouchShapeSquare"
+msgstr "Квадрат"
+
+msgid "TouchShapeTriangle"
+msgstr "Треугольник"
+
+msgid "TouchShapeZ"
+msgstr "Z"
+
+msgid "TouchShapeCheckmark"
+msgstr "Галочка"
+
+msgid "TouchButtonNone"
+msgstr "— нет —"

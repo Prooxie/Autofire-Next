@@ -92,6 +92,11 @@ public static class DependencyInjection
         // server (writes phone input) and the input source (reads it),
         // so it must be a singleton BOTH resolve to — registering the
         // server as a hosted service alone would give it a separate instance.
+        // Per-slot-per-device tuning. Singleton: the runtime tick reads
+        // it every frame and the UI writes it on every slider drag, so
+        // both must see the same instance.
+        _ = services.AddSingleton<Runtime.DeviceSettingsStore>();
+
         _ = services.AddSingleton<Runtime.Web.WebControllerHub>();
         _ = services.AddSingleton<Runtime.Web.WebControllerServer>();
         _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Web.WebControllerServer>());

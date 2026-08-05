@@ -1,5 +1,5 @@
 {
- "name": "No Gyro",
+ "name": "Midnight Black",
  "width": 1150,
  "height": 669,
  "version": 1,
@@ -97,10 +97,19 @@
    "height": 607.0,
    "center": true,
    "winform.smoothing": "Default",
-   "winform.interpolation": "High",
-   "children": [
-    {
-     "x": 0.0,
+    "winform.interpolation": "High",
+    "children": [
+     {
+      "type": "lightbar",
+      "image": "assets/DualSense_Lightbar.png",
+      "x": 0.0,
+      "y": -69.0,
+      "width": 482.0,
+      "height": 218.0,
+      "center": true
+     },
+     {
+      "x": 0.0,
      "y": 0.0,
      "children": [
       {

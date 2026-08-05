@@ -1,4 +1,5 @@
 using GameFlow.App.Bootstrap;
+using GameFlow.App.Services;
 using GameFlow.App.Startup;
 using GameFlow.App.ViewModels;
 using GameFlow.App.Views;
@@ -24,6 +25,15 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+
+        // Seed the default palette before anything paints. ShellViewModel
+        // re-applies the user's saved theme once profiles have loaded, but
+        // only when it differs from the default — so on a default-theme
+        // launch this is the sole call, and skipping it would leave every
+        // stock Fluent control (check boxes, sliders, scroll bars, combo
+        // popups) on Fluent's own blue instead of the app palette. It also
+        // covers the splash window, which appears long before the shell.
+        AppThemeService.Apply(AppThemeKind.CyberBlue);
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -96,6 +106,7 @@ public partial class App : Application
             {
                 var shellWindow = host!.Services.GetRequiredService<ShellWindow>();
                 shellWindow.DataContext = shellViewModel;
+                shellWindow.FitToWorkingArea();
 
                 desktop.MainWindow = shellWindow;
                 shellWindow.Show();

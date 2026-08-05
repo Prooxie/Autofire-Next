@@ -23,7 +23,7 @@
               Background="{DynamicResource AppSurface1}"
               BorderBrush="{DynamicResource AppBorder0}"
               BorderThickness="0,1,0,0">
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
 
           <TextBlock Grid.Column="0"
                      Text="{Binding StatusMessage}"
@@ -33,34 +33,21 @@
                      TextWrapping="NoWrap"
                      TextTrimming="CharacterEllipsis" />
 
-          <Button Grid.Column="2"
+          <Button Grid.Column="1" Classes="ghost"
                   Content="{Binding RestoreDefaultsButtonLabel}"
-                  Command="{Binding RestoreDefaultsCommand}"
-                  Padding="14,8"
-                  Background="{DynamicResource AppSurface2}"
-                  Foreground="{DynamicResource AppForeground}"
-                  BorderBrush="{DynamicResource AppBorder1}"
-                  BorderThickness="1" />
+                  Command="{Binding RestoreDefaultsCommand}" />
 
-          <Button Grid.Column="3"
+          <Button Grid.Column="2" Classes="ghost"
                   Content="{Binding CancelButtonLabel}"
                   IsCancel="True"
                   Click="OnCancelClick"
-                  Padding="16,8"
-                  Background="{DynamicResource AppSurface2}"
-                  Foreground="{DynamicResource AppForeground}"
-                  BorderBrush="{DynamicResource AppBorder1}"
-                  BorderThickness="1" />
+                  Padding="18,9" />
 
-          <Button Grid.Column="4"
+          <Button Grid.Column="3" Classes="primary"
                   Content="{Binding ApplyButtonLabel}"
                   IsDefault="True"
                   Click="OnApplyClick"
-                  Padding="20,8"
-                  Background="{DynamicResource AppAccent}"
-                  Foreground="{DynamicResource AppPrimaryBtn}"
-                  BorderThickness="0"
-                  FontWeight="SemiBold" />
+                  Padding="22,9" />
 
         </Grid>
       </Border>
@@ -76,8 +63,7 @@
           <!-- Localization & Appearance section -->
           <StackPanel Spacing="10">
             <TextBlock Text="Localization &amp; Appearance"
-                       FontSize="14" FontWeight="SemiBold"
-                       Foreground="{DynamicResource AppAccentHover}" />
+                       Classes="sectionHeading" />
             <Grid ColumnDefinitions="180,*" RowDefinitions="Auto,Auto" RowSpacing="8">
               <TextBlock Grid.Row="0" Grid.Column="0"
                          Text="{Binding Shell.LanguageLabel}"
@@ -98,13 +84,12 @@
             </Grid>
           </StackPanel>
 
-          <Separator Background="{DynamicResource AppBorder0}" Height="1" />
+          <Border Classes="divider" />
 
           <!-- Diagnostics section -->
           <StackPanel Spacing="10">
             <TextBlock Text="{Binding DiagnosticsHeaderLabel}"
-                       FontSize="14" FontWeight="SemiBold"
-                       Foreground="{DynamicResource AppAccentHover}" />
+                       Classes="sectionHeading" />
             <Grid ColumnDefinitions="180,*" RowDefinitions="Auto" RowSpacing="6">
               <TextBlock Grid.Column="0" Text="{Binding LogLevelLabel}"
                          FontSize="12" Foreground="{DynamicResource AppForeground}"
@@ -116,17 +101,15 @@
                         SelectedItem="{Binding SelectedLogLevel, Mode=TwoWay}" />
             </Grid>
             <TextBlock Text="{Binding LogLevelHintLabel}"
-                       FontSize="11" Foreground="{DynamicResource AppForegroundDim}"
-                       TextWrapping="Wrap" />
+                       Classes="hint" />
           </StackPanel>
 
-          <Separator Background="{DynamicResource AppBorder0}" Height="1" />
+          <Border Classes="divider" />
 
           <!-- Paths section -->
           <StackPanel Spacing="10">
             <TextBlock Text="{Binding PathsHeaderLabel}"
-                       FontSize="14" FontWeight="SemiBold"
-                       Foreground="{DynamicResource AppAccentHover}" />
+                       Classes="sectionHeading" />
 
             <StackPanel Spacing="4">
               <TextBlock Text="{Binding ProfilesDirectoryLabel}"
@@ -135,15 +118,11 @@
                 <TextBox Grid.Column="0"
                          Text="{Binding ProfilesDirectoryOverride, Mode=TwoWay}"
                          PlaceholderText="{Binding CurrentProfilesPath}" />
-                <Button Grid.Column="1"
+                <Button Grid.Column="1" Classes="ghost"
                         Content="{Binding BrowseButtonLabel}"
                         Tag="profiles"
                         Click="OnBrowseClick"
-                        Padding="14,6"
-                        Background="{DynamicResource AppSurface2}"
-                        Foreground="{DynamicResource AppForeground}"
-                        BorderBrush="{DynamicResource AppBorder1}"
-                        BorderThickness="1" />
+                        Padding="14,8" />
               </Grid>
               <TextBlock Text="{Binding CurrentProfilesPath}"
                          FontSize="10.5" Foreground="{DynamicResource AppForegroundDim}"
@@ -157,32 +136,26 @@
                 <TextBox Grid.Column="0"
                          Text="{Binding LogsDirectoryOverride, Mode=TwoWay}"
                          PlaceholderText="{Binding CurrentLogsPath}" />
-                <Button Grid.Column="1"
+                <Button Grid.Column="1" Classes="ghost"
                         Content="{Binding BrowseButtonLabel}"
                         Tag="logs"
                         Click="OnBrowseClick"
-                        Padding="14,6"
-                        Background="{DynamicResource AppSurface2}"
-                        Foreground="{DynamicResource AppForeground}"
-                        BorderBrush="{DynamicResource AppBorder1}"
-                        BorderThickness="1" />
+                        Padding="14,8" />
               </Grid>
               <TextBlock Text="{Binding CurrentLogsPath}"
                          FontSize="10.5" Foreground="{DynamicResource AppForegroundDim}"
                          TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
               <TextBlock Text="{Binding LogsPathHintLabel}"
-                         FontSize="11" Foreground="{DynamicResource AppForegroundDim}"
-                         TextWrapping="Wrap" />
+                         Classes="hint" />
             </StackPanel>
           </StackPanel>
 
-          <Separator Background="{DynamicResource AppBorder0}" Height="1" />
+          <Border Classes="divider" />
 
           <!-- Startup section -->
           <StackPanel Spacing="6">
             <TextBlock Text="{Binding StartupHeaderLabel}"
-                       FontSize="14" FontWeight="SemiBold"
-                       Foreground="{DynamicResource AppAccentHover}" />
+                       Classes="sectionHeading" />
             <CheckBox IsChecked="{Binding CheckForUpdatesOnStartup, Mode=TwoWay}"
                       Content="{Binding CheckUpdatesLabel}"
                       Foreground="{DynamicResource AppForeground}" />

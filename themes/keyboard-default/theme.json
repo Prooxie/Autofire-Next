@@ -1,428 +1,79 @@
 {
- "name": "Keyboard \u2014 Default",
- "width": 1400,
- "height": 500,
- "version": 1,
- "children": [
-  {
-   "type": "image",
-   "image": "assets/body.png",
-   "x": 0,
-   "y": 0,
-   "width": 1400,
-   "height": 500
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 40,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:s",
-   "children": [
+  "name": "Graphite",
+  "width": 1400,
+  "height": 500,
+  "version": 1,
+  "children": [
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 40,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 80,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:e",
-   "children": [
+      "type": "image",
+      "image": "assets/body.png",
+      "x": 0,
+      "y": 0,
+      "width": 1400,
+      "height": 500
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 80,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 120,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:w",
-   "children": [
+      "type": "showhide",
+      "input": "quad_left:n",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 1180, "y": 306, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 120,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 160,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:n",
-   "children": [
+      "type": "showhide",
+      "input": "quad_left:w",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 1098, "y": 384, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 160,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 200,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "bumpers:l",
-   "children": [
+      "type": "showhide",
+      "input": "quad_left:s",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 1180, "y": 384, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 200,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 240,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "bumpers:r",
-   "children": [
+      "type": "showhide",
+      "input": "quad_left:e",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 1262, "y": 384, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 240,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 280,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "triggers:l",
-   "children": [
+      "type": "showhide",
+      "input": "quad_right:s",
+      "children": [
+        { "type": "image", "image": "assets/space_glow.png", "x": 380, "y": 384, "width": 500, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 280,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 320,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "triggers:r",
-   "children": [
+      "type": "showhide",
+      "input": "stick_left:y < -0.4",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 156, "y": 228, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 320,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 360,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "stick_left:click",
-   "children": [
+      "type": "showhide",
+      "input": "stick_left:x < -0.4",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 50, "y": 306, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 360,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 400,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "stick_right:click",
-   "children": [
+      "type": "showhide",
+      "input": "stick_left:y > 0.4",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 132, "y": 306, "width": 70, "height": 64 }
+      ]
+    },
     {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 400,
-     "y": 74,
-     "width": 26,
-     "height": 26
+      "type": "showhide",
+      "input": "stick_left:x > 0.4",
+      "children": [
+        { "type": "image", "image": "assets/key_glow.png", "x": 214, "y": 306, "width": 70, "height": 64 }
+      ]
     }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 440,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "menu:l",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 440,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 480,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "menu:r",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 480,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "image",
-   "image": "assets/led_off.png",
-   "x": 520,
-   "y": 74,
-   "width": 26,
-   "height": 26
-  },
-  {
-   "type": "showhide",
-   "input": "home",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/led.png",
-     "x": 520,
-     "y": 74,
-     "width": 26,
-     "height": 26
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:n",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 1180,
-     "y": 306,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:w",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 1098,
-     "y": 384,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:s",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 1180,
-     "y": 384,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:e",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 1262,
-     "y": 384,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:s",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/space_glow.png",
-     "x": 380,
-     "y": 384,
-     "width": 500,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "stick_left:y > 0.4",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 156,
-     "y": 228,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "stick_left:x < -0.4",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 50,
-     "y": 306,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "stick_left:y < -0.4",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 132,
-     "y": 306,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "stick_left:x > 0.4",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/key_glow.png",
-     "x": 214,
-     "y": 306,
-     "width": 70,
-     "height": 64
-    }
-   ]
-  }
- ]
+  ]
 }

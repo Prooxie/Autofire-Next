@@ -51,6 +51,7 @@ public sealed class RuntimeCoordinator(
     Slots.SlotSnapshotStore slotSnapshotStore,
     Slots.PhysicalPanelPinService physicalPanelPins,
     Input.IMouseOutputWriter mouseOutputWriter,
+    DeviceSettingsStore deviceSettingsStore,
     ILogger<RuntimeCoordinator> logger) : BackgroundService
 {
     private readonly IInputSourceFactory inputSourceFactory = inputSourceFactory;
@@ -63,6 +64,7 @@ public sealed class RuntimeCoordinator(
     private readonly Slots.SlotSnapshotStore slotSnapshotStore = slotSnapshotStore;
     private readonly Slots.PhysicalPanelPinService physicalPanelPins = physicalPanelPins;
     private readonly Input.IMouseOutputWriter mouseOutputWriter = mouseOutputWriter;
+    private readonly DeviceSettingsStore deviceSettingsStore = deviceSettingsStore;
     private readonly ILogger<RuntimeCoordinator> logger = logger;
     private readonly SemaphoreSlim providerGate = new(1, 1);
 
@@ -484,7 +486,7 @@ public sealed class RuntimeCoordinator(
         var multiInput = currentInputSource as Slots.IMultiDeviceInputSource
             ?? Slots.EmptyMultiDeviceInputSource.Instance;
 
-        slotRuntime ??= new Slots.SlotRuntime(slotRegistry, outputSinkFactory, slotSnapshotStore, profileRepository, mouseOutputWriter, logger);
+        slotRuntime ??= new Slots.SlotRuntime(slotRegistry, outputSinkFactory, slotSnapshotStore, profileRepository, mouseOutputWriter, deviceSettingsStore, logger);
 
         if (!slotRuntime.HasEnabledSlots)
         {

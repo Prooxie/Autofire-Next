@@ -2,17 +2,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="GameFlow.App.Views.RequirementsDialog"
         Width="640"
-        MinHeight="320"
         SizeToContent="Height"
-        CanResize="False"
+        MinWidth="540"
+        MinHeight="320"
+        MaxHeight="720"
+        CanResize="True"
         WindowStartupLocation="CenterOwner"
-        Background="#050B12"
+        Background="{DynamicResource AppSurface0}"
         Title="Missing requirements">
 
   <Border Margin="0"
           ClipToBounds="True"
-          Background="#07101D"
-          BorderBrush="#0F2035"
+          Background="{DynamicResource AppSurface1}"
+          BorderBrush="{DynamicResource AppBorder0}"
           BorderThickness="1">
 
     <Grid RowDefinitions="Auto,*,Auto" Margin="24,20,24,20" RowSpacing="16">
@@ -22,58 +24,51 @@
         <TextBlock Text="Some optional components aren't installed"
                    FontSize="18"
                    FontWeight="Bold"
-                   Foreground="White" />
+                   Foreground="{DynamicResource AppForeground}" />
         <TextBlock Text="GameFlow can run without them, but parts of the feature set will be unavailable until they're installed."
                    FontSize="12"
-                   Foreground="#94A3B8"
+                   Foreground="{DynamicResource AppForegroundDim}"
                    TextWrapping="Wrap" />
       </StackPanel>
 
       <!-- Per-requirement list — populated from code-behind -->
-      <ItemsControl Grid.Row="1"
-                    Name="RequirementsList"
-                    Margin="0,4,0,0">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate>
-            <Border Margin="0,0,0,10"
-                    Padding="14,12"
-                    Background="#0A1628"
-                    BorderBrush="#1E3A5A"
-                    BorderThickness="1"
-                    CornerRadius="6">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                <StackPanel Grid.Column="0" Spacing="4">
-                  <TextBlock Text="{Binding DisplayName}"
-                             FontSize="14"
-                             FontWeight="SemiBold"
-                             Foreground="White" />
-                  <TextBlock Text="{Binding Description}"
-                             FontSize="11.5"
-                             Foreground="#94A3B8"
-                             TextWrapping="Wrap" />
-                </StackPanel>
-                <Button Grid.Column="1"
-                        Content="Open install page"
-                        Tag="{Binding}"
-                        Click="OnOpenInstallPageClick"
-                        VerticalAlignment="Center"
-                        Padding="14,6"
-                        Background="#0F2535"
-                        Foreground="White"
-                        BorderBrush="#22DEFF"
-                        BorderThickness="1" />
-              </Grid>
-            </Border>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+      <ScrollViewer Grid.Row="1"
+                    Margin="0,4,0,0"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <ItemsControl Name="RequirementsList">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="card" Margin="0,0,8,10" Padding="14,12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource AppForeground}" />
+                    <TextBlock Text="{Binding Description}"
+                               FontSize="11.5"
+                               Foreground="{DynamicResource AppForegroundDim}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="ghost"
+                          Content="Open install page"
+                          Tag="{Binding}"
+                          Click="OnOpenInstallPageClick"
+                          VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
 
       <!-- Footer buttons -->
       <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
         <CheckBox Grid.Column="0"
                   Name="DontAskAgainCheckbox"
                   Content="Don't check at startup again"
-                  Foreground="#94A3B8"
                   VerticalAlignment="Center" />
 
         <Button Grid.Column="2"
@@ -81,11 +76,8 @@
                 IsDefault="True"
                 IsCancel="True"
                 Click="OnCloseClick"
-                Padding="20,8"
-                Background="#00D4FF"
-                Foreground="#040C16"
-                BorderThickness="0"
-                FontWeight="SemiBold" />
+                Classes="primary"
+                Padding="20,9" />
       </Grid>
 
     </Grid>

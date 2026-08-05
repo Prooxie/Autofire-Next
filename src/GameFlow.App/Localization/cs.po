@@ -1041,7 +1041,7 @@ msgid "TemplateOutputProfileLabel"
 msgstr "Profil HIDMaestro"
 
 msgid "TemplateOutputProfileTooltip"
-msgstr "Přesně určuje, jaký ovladač tento slot prezentuje hrám. „Výchozí“ použije standardní profil pro výstupní zařízení výše; volbou konkrétního profilu lze emulovat jakýkoli ovladač podporovaný HIDMaestro — volanty, HOTAS, letecké joysticky, arkádové ovladače a další."
+msgstr "Přesně určuje, jaký ovladač tento slot prezentuje hrám. „Výchozí“ použije standardní profil pro výstupní zařízení výše; seznam zahrnuje širokou nabídku gamepadů a arkádových ovladačů HIDMaestro. Profily volantů a leteckých simulátorů jsou prozatím skryté."
 
 msgid "TemplateOutputProfileDefaultOption"
 msgstr "Výchozí pro zvolené výstupní zařízení"
@@ -1066,3 +1066,197 @@ msgstr "Žádný ovladač není přiřazen"
 
 msgid "SidebarAddController"
 msgstr "Přidat ovladač"
+
+# ── Touchpad tab: joystick / D-pad / mouse mapping + gestures ──
+
+msgid "DevicesTouchpadTab"
+msgstr "Touchpad"
+
+msgid "DevicesSlotSettingsTab"
+msgstr "Nastavení"
+
+msgid "SlotsNoSelection"
+msgstr "Vyberte virtuální ovladač a upravte jeho nastavení."
+
+msgid "TouchpadJoystickSection"
+msgstr "Joystick"
+
+msgid "TouchpadJoystickHint"
+msgstr "Střed páčky vznikne tam, kde přiložíte prst — jako virtuální páčka v mobilní hře."
+
+msgid "TouchpadStickEnabled"
+msgstr "Mapovat dotyk na páčku"
+
+msgid "TouchpadTargetStick"
+msgstr "Cílová páčka"
+
+msgid "TouchpadStickSensitivity"
+msgstr "Citlivost"
+
+msgid "TouchpadStickLeft"
+msgstr "Levá páčka"
+
+msgid "TouchpadStickRight"
+msgstr "Pravá páčka"
+
+msgid "TouchpadDpadSection"
+msgstr "Křížový ovladač"
+
+msgid "TouchpadDpadEnabled"
+msgstr "Mapovat dotyk na křížový ovladač"
+
+msgid "TouchpadDpadEightWay"
+msgstr "8 směrů (diagonály)"
+
+msgid "TouchpadDpadDeadzone"
+msgstr "Poloměr mrtvé zóny"
+
+msgid "TouchpadMouseSection"
+msgstr "Myš"
+
+msgid "TouchpadMouseHint"
+msgstr "Posouvá kurzor snímek po snímku, stejně jako touchpad na notebooku."
+
+msgid "TouchpadMouseEnabled"
+msgstr "Mapovat dotyk na myš"
+
+msgid "TouchpadMouseSensitivityX"
+msgstr "Citlivost X"
+
+msgid "TouchpadMouseSensitivityY"
+msgstr "Citlivost Y"
+
+msgid "TouchpadInvertMouseX"
+msgstr "Převrátit X"
+
+msgid "TouchpadInvertMouseY"
+msgstr "Převrátit Y"
+
+msgid "TouchpadGesturesSection"
+msgstr "Gesta"
+
+msgid "TouchpadGesturesEnabled"
+msgstr "Povolit gesta"
+
+msgid "TouchpadAddGesture"
+msgstr "Přidat gesto"
+
+msgid "TouchpadRemove"
+msgstr "Odebrat"
+
+msgid "TouchpadNoGestures"
+msgstr "Zatím žádná gesta."
+
+msgid "TouchpadGestureTarget"
+msgstr "Stisknout"
+
+msgid "TouchpadGestureHold"
+msgstr "Držet (ms)"
+
+msgid "TouchpadGestureFingers"
+msgstr "Prsty"
+
+msgid "TouchpadGestureEightWay"
+msgstr "8 směrů"
+
+msgid "TouchpadGestureTapCount"
+msgstr "Klepnutí"
+
+msgid "TouchpadTuningSection"
+msgstr "Rozpoznávání"
+
+msgid "TouchpadSwipeMinDistance"
+msgstr "Vzdálenost švihnutí"
+
+msgid "TouchpadTapMax"
+msgstr "Max. klepnutí (ms)"
+
+msgid "TouchpadMultiTapWindow"
+msgstr "Okno více klepnutí (ms)"
+
+msgid "TouchpadLongPress"
+msgstr "Dlouhý stisk (ms)"
+
+msgid "TouchpadPinchThreshold"
+msgstr "Práh sevření"
+
+msgid "TouchpadRotateThreshold"
+msgstr "Práh otočení (°)"
+
+msgid "TouchpadShapeThreshold"
+msgstr "Shoda tvaru"
+
+msgid "TouchGestureSwipe"
+msgstr "Švihnutí"
+
+msgid "TouchGestureTap"
+msgstr "Klepnutí"
+
+msgid "TouchGestureLongPress"
+msgstr "Dlouhý stisk"
+
+msgid "TouchGesturePinch"
+msgstr "Sevření"
+
+msgid "TouchGestureRotate"
+msgstr "Otočení"
+
+msgid "TouchGestureShape"
+msgstr "Tvar"
+
+msgid "TouchDirUp"
+msgstr "Nahoru"
+
+msgid "TouchDirUpRight"
+msgstr "Nahoru doprava"
+
+msgid "TouchDirRight"
+msgstr "Doprava"
+
+msgid "TouchDirDownRight"
+msgstr "Dolů doprava"
+
+msgid "TouchDirDown"
+msgstr "Dolů"
+
+msgid "TouchDirDownLeft"
+msgstr "Dolů doleva"
+
+msgid "TouchDirLeft"
+msgstr "Doleva"
+
+msgid "TouchDirUpLeft"
+msgstr "Nahoru doleva"
+
+msgid "TouchPinchIn"
+msgstr "Dovnitř"
+
+msgid "TouchPinchOut"
+msgstr "Ven"
+
+msgid "TouchRotateCw"
+msgstr "Po směru hodin"
+
+msgid "TouchRotateCcw"
+msgstr "Proti směru hodin"
+
+msgid "TouchShapeCircleCw"
+msgstr "Kruh (po směru hodin)"
+
+msgid "TouchShapeCircleCcw"
+msgstr "Kruh (proti směru hodin)"
+
+msgid "TouchShapeSquare"
+msgstr "Čtverec"
+
+msgid "TouchShapeTriangle"
+msgstr "Trojúhelník"
+
+msgid "TouchShapeZ"
+msgstr "Z"
+
+msgid "TouchShapeCheckmark"
+msgstr "Fajfka"
+
+msgid "TouchButtonNone"
+msgstr "— žádné —"

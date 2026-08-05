@@ -57,6 +57,7 @@ public sealed class InputDeviceCatalog
 
     /// <param name="localization">Localization service used to resolve the catalog's
     /// idle/no-provider status string.</param>
+    /// <param name="categoryOverrides">Saved user overrides applied to detected device categories.</param>
     public InputDeviceCatalog(ILocalizationService localization, DeviceCategoryOverrideStore categoryOverrides)
     {
         this.localization = localization;

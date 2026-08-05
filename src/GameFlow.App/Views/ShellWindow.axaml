@@ -3,14 +3,24 @@
         xmlns:views="using:GameFlow.App.Views"
         xmlns:vm="using:GameFlow.App.ViewModels"
         x:Class="GameFlow.App.Views.ShellWindow"
+        x:Name="ShellRoot"
         x:DataType="vm:ShellViewModel"
         x:CompileBindings="False"
-        Width="1700"
-        Height="1040"
-        MinWidth="1420"
-        MinHeight="860"
+        Width="1280"
+        Height="760"
+        MinWidth="1100"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppSurface0}"
         Title="{Binding WindowTitle}">
+
+  <!--
+      FitToWorkingArea clamps this compact default to 92% of the primary
+      monitor's logical working area before the first Show(). Using logical
+      pixels matters on high-DPI desktops, while the working area reserves
+      taskbar space. The minimums are lowered by the same clamp when a small
+      display cannot satisfy them.
+  -->
 
   <Window.Resources>
     <DataTemplate x:Key="InputProviderTemplate">
@@ -100,12 +110,23 @@
           -->
           <TextBlock Text="{x:Static vm:ShellViewModel.AppFooterText}"
                      FontSize="10.5"
+                     Height="14"
                      HorizontalAlignment="Left"
                      Foreground="{DynamicResource AppForegroundDim}" />
+          <!--
+              Fixed height, not Auto. This line carries transient status
+              ("Profile saved", "Import failed: …") and is empty the rest
+              of the time. On an Auto height the header row grew and shrank
+              with it, and because the header is row 0 of the window grid
+              every page below jumped a line each time a status appeared or
+              expired. Reserving the line keeps the shell still.
+          -->
           <TextBlock Text="{Binding StatusText}" FontSize="10"
+                     Height="13"
                      Foreground="{DynamicResource AppForegroundDim}"
                      HorizontalAlignment="Left"
                      MaxWidth="1000"
+                     TextWrapping="NoWrap"
                      TextTrimming="CharacterEllipsis" />
         </StackPanel>
 
@@ -166,7 +187,7 @@
                 </Grid>
               </ListBoxItem>
             </ListBox>
-            <Border Height="1" Background="{DynamicResource AppBorder0}" Margin="0,6,0,0" />
+            <Border Classes="divider" Margin="0,6,0,0" />
           </StackPanel>
 
           <!-- Device + slot lists -->
@@ -174,68 +195,83 @@
                         VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Disabled">
           <StackPanel Margin="10,10" Spacing="6">
-            <TextBlock Text="{Binding SidebarPhysicalHeader}" FontSize="10" FontWeight="SemiBold"
-                       Opacity="0.5" LetterSpacing="0.8" Margin="8,4,0,4" />
+            <TextBlock Text="{Binding SidebarPhysicalHeader}" Classes="sectionLabel"
+                       Margin="8,4,0,4" />
             <ItemsControl ItemsSource="{Binding PhysicalMenuItems}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                          Padding="8,7" Margin="0,1" Background="Transparent"
-                          BorderThickness="0" CornerRadius="6"
-                          Command="{Binding SelectCommand}">
-                    <Grid ColumnDefinitions="24,*,Auto" ColumnSpacing="6">
-                      <TextBlock Grid.Column="0" Text="{Binding IconText}"
-                                 FontSize="14" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                 VerticalAlignment="Center" FontSize="12"
-                                 TextTrimming="CharacterEllipsis" />
-                      <!-- Pin toggle: shows this device's LAYOUT on the
-                           dashboard — connections + live input, no
-                           virtual controller required. -->
-                      <Button Grid.Column="2" IsVisible="{Binding CanPin}"
-                              Command="{Binding PinCommand}"
-                              ToolTip.Tip="{Binding PinTooltip}"
-                              Content="{Binding PinIcon}" FontSize="12"
-                              Padding="4,0" Background="Transparent"
-                              BorderThickness="0" Cursor="Hand" />
-                    </Grid>
-                  </Button>
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="2">
+                    <Button Grid.Column="0" Classes="nav" Command="{Binding SelectCommand}">
+                      <Grid ColumnDefinitions="24,*,Auto" ColumnSpacing="6">
+                        <TextBlock Grid.Column="0" Text="{Binding IconText}"
+                                   FontSize="14" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding SecondaryText}" FontSize="9.5"
+                                     Foreground="{DynamicResource AppForegroundDim}"
+                                     TextTrimming="CharacterEllipsis"
+                                     IsVisible="{Binding HasSecondaryText}" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Classes="chip" Padding="5,2" Margin="3,0,0,0"
+                                IsVisible="{Binding HasBattery}"
+                                ToolTip.Tip="{Binding BatteryTooltip}">
+                          <StackPanel Orientation="Horizontal" Spacing="3">
+                            <TextBlock Text="{Binding BatteryIcon}" FontSize="9"
+                                       Foreground="{Binding BatteryBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding BatteryText}" FontSize="9.5" FontWeight="SemiBold"
+                                       Foreground="{Binding BatteryBrush}" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Border>
+                      </Grid>
+                    </Button>
+                    <!-- Pin toggle is a sibling of the select action, not a
+                         nested Button, so pinning cannot also activate the row. -->
+                    <Button Grid.Column="1" Classes="iconOnly"
+                            Margin="0,1"
+                            IsVisible="{Binding CanPin}"
+                            Command="{Binding PinCommand}"
+                            ToolTip.Tip="{Binding PinTooltip}"
+                            Content="{Binding PinIcon}" FontSize="12" />
+                  </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <TextBlock Text="(none)" Opacity="0.4" FontSize="11" Margin="14,2"
+            <TextBlock Text="(none)" FontSize="11" Margin="14,2"
+                       Foreground="{DynamicResource AppForegroundDim}"
                        IsVisible="{Binding !PhysicalMenuItems.Count}" />
 
-            <Border Height="1" Background="{DynamicResource AppBorder0}" Margin="0,10,0,4" />
+            <Border Classes="divider" Margin="0,10,0,4" />
 
-            <TextBlock Text="{Binding SidebarVirtualHeader}" FontSize="10" FontWeight="SemiBold"
-                       Opacity="0.5" LetterSpacing="0.8" Margin="8,4,0,4" />
+            <TextBlock Text="{Binding SidebarVirtualHeader}" Classes="sectionLabel"
+                       Margin="8,4,0,4" />
             <ItemsControl ItemsSource="{Binding VirtualMenuItems}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                          Padding="8,7" Margin="0,1" Background="Transparent"
-                          BorderThickness="0" CornerRadius="6"
-                          Command="{Binding SelectCommand}">
+                  <Button Classes="nav" Command="{Binding SelectCommand}">
                     <Grid ColumnDefinitions="24,*" ColumnSpacing="6">
                       <TextBlock Grid.Column="0" Text="{Binding IconText}"
                                  FontSize="14" VerticalAlignment="Center" />
-                      <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                 VerticalAlignment="Center" FontSize="12"
-                                 TextTrimming="CharacterEllipsis" />
+                      <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding SecondaryText}" FontSize="9.5"
+                                   Foreground="{DynamicResource AppForegroundDim}"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding HasSecondaryText}" />
+                      </StackPanel>
                     </Grid>
                   </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="8,7" Margin="0,1" Background="Transparent"
-                    BorderThickness="0" CornerRadius="6" Cursor="Hand"
-                    Command="{Binding AddVirtualControllerCommand}">
+            <Button Classes="nav" Command="{Binding AddVirtualControllerCommand}">
               <Grid ColumnDefinitions="24,*" ColumnSpacing="6">
-                <TextBlock Grid.Column="0" Text="＋" FontSize="14" VerticalAlignment="Center" Opacity="0.7" />
+                <TextBlock Grid.Column="0" Text="＋" FontSize="14" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AppAccent}" />
                 <TextBlock Grid.Column="1" Text="{Binding SidebarAddControllerLabel}"
-                           VerticalAlignment="Center" FontSize="12" Opacity="0.85" />
+                           VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource AppForegroundDim}" />
               </Grid>
             </Button>
           </StackPanel>
@@ -245,12 +281,9 @@
                (moved here from the old overlay over the now-hidden tab
                strip). -->
           <StackPanel Grid.Row="2" Margin="10,0,10,10" Spacing="6">
-            <Border Height="1" Background="{DynamicResource AppBorder0}" Margin="0,0,0,4" />
-            <Button Command="{Binding OpenSettingsCommand}"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
-                    Padding="8,8" Background="Transparent"
-                    BorderThickness="0" CornerRadius="6"
-                    Cursor="Hand">
+            <Border Classes="divider" Margin="0,0,0,4" />
+            <Button Classes="nav" Padding="8,8"
+                    Command="{Binding OpenSettingsCommand}">
               <Grid ColumnDefinitions="24,*" ColumnSpacing="6">
                 <TextBlock Grid.Column="0" Text="⚙" FontSize="14" VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1" Text="{Binding OpenSettingsButtonLabel}"
@@ -267,16 +300,19 @@
         <TabControl.Styles>
           <!-- Section navigation lives in the unified sidebar (left
                column); this TabControl only hosts the CONTENT, so its
-               own header strip is hidden. Avalonia's TabControl template
-               has no "TabStrip" part — the headers are laid out by an
-               ItemsPresenter named PART_ItemsPresenter (which is why an
-               earlier attempt that styled "TabStrip" changed nothing).
-               Both rules are scoped to #OuterNavTabs so the inner
-               Physical/Virtual sub-tabs on the Devices page keep their
-               headers. Selection is still driven through
-               OuterNavSelectedIndex, which the sidebar's nav ListBox
-               binds two-way. -->
-          <Style Selector="TabControl#OuterNavTabs /template/ ItemsPresenter#PART_ItemsPresenter">
+               own header strip is hidden. Both rules are scoped to
+               #OuterNavTabs so the inner Physical/Virtual sub-tabs on
+               the Devices page keep their headers. Selection is still
+               driven through OuterNavSelectedIndex, which the sidebar's
+               nav ListBox binds two-way.
+
+               Matched by TYPE, not by name: an earlier attempt targeted
+               "TabStrip" and a later one "ItemsPresenter#PART_ItemsPresenter",
+               and neither part exists in the template Avalonia 12 ships —
+               so both rules silently matched nothing and only the
+               belt-and-braces TabItem rule below was doing the work. A
+               bare type selector cannot go stale the same way. -->
+          <Style Selector="TabControl#OuterNavTabs /template/ ItemsPresenter">
             <Setter Property="IsVisible" Value="False" />
           </Style>
           <!-- Belt and braces: even if a theme renames the presenter
@@ -292,11 +328,20 @@
         <!-- ═══ DASHBOARD ══════════════════════════════════════════════ -->
         <TabItem>
 
-          <ScrollViewer Margin="20,16,20,16"
-                        Padding="0,0,22,0"
+          <!--
+              AllowAutoHide=False keeps the scroll bar in the layout at a
+              constant width instead of overlaying the content on hover.
+              This replaces a hardcoded 22px right padding that stood in
+              for the bar: that guess was applied whether or not the page
+              actually overflowed, so short dashboards sat visibly
+              off-centre, and it did nothing to stop the reflow when the
+              bar appeared as slots were added.
+          -->
+          <ScrollViewer Margin="20,16"
                         VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Spacing="16">
+                        HorizontalScrollBarVisibility="Disabled"
+                        AllowAutoHide="False">
+            <StackPanel Spacing="16" Margin="0,0,10,0">
 
               <!-- Streaming / chroma-key background picker. Chroma green and
                    chroma blue are OBS-standard key colours, so a streamer can
@@ -304,9 +349,10 @@
                    the dashboard preferences. -->
               <StackPanel Orientation="Horizontal" Spacing="8"
                           HorizontalAlignment="Right" VerticalAlignment="Center">
-                <TextBlock Text="{Binding DashboardBackgroundLabel}" FontSize="11" Opacity="0.6"
+                <TextBlock Text="{Binding DashboardBackgroundLabel}" FontSize="11"
+                           Foreground="{DynamicResource AppForegroundDim}"
                            VerticalAlignment="Center" />
-                <ComboBox MinWidth="160"
+                <ComboBox MinWidth="170"
                           ItemsSource="{Binding PanelBackgroundOptions}"
                           SelectedItem="{Binding SelectedPanelBackgroundOption, Mode=TwoWay}">
                   <ComboBox.ItemTemplate>
@@ -315,6 +361,69 @@
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
+              </StackPanel>
+
+              <!-- PadForge-inspired slot overview: the dashboard answers
+                   what each virtual controller is, what drives it, and
+                   whether it is ready before asking the user to inspect a
+                   full live controller surface. Clicking a card opens that
+                   exact slot's focused configuration. -->
+              <StackPanel Spacing="9" IsVisible="{Binding SlotsPanel.Slots.Count}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Grid.Column="0" Text="VIRTUAL CONTROLLERS" Classes="sectionLabel"
+                             VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Classes="ghost" Padding="8,4" FontSize="11"
+                          Content="+ Add controller" Command="{Binding AddVirtualControllerCommand}" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding SlotsPanel.Slots}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Width="228" MinHeight="116" Margin="0,0,10,10" Padding="0"
+                              Background="Transparent" BorderThickness="0"
+                              HorizontalContentAlignment="Stretch"
+                              Command="{Binding #ShellRoot.DataContext.OpenVirtualControllerCommand}"
+                              CommandParameter="{Binding Id}">
+                        <Border Classes="card" Padding="12" BorderBrush="{Binding StatusBrush}"
+                                HorizontalAlignment="Stretch">
+                          <StackPanel Spacing="7">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                              <Border Grid.Column="0" Width="30" Height="30" CornerRadius="7"
+                                      Background="{DynamicResource AppAccentSoft}">
+                                <TextBlock Text="{Binding OutputIcon}" FontSize="10" FontWeight="Bold"
+                                           Foreground="{DynamicResource AppAccent}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              </Border>
+                              <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SlotLabel}" Classes="sectionLabel" />
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                              </StackPanel>
+                              <Border Grid.Column="2" CornerRadius="12" MinWidth="58" Height="24"
+                                      Padding="8,0" VerticalAlignment="Center"
+                                      BorderBrush="{Binding StatusBrush}" BorderThickness="1">
+                                <TextBlock Text="{Binding StatusLabel}" Foreground="{Binding StatusBrush}"
+                                           FontSize="9" FontWeight="SemiBold" TextAlignment="Center"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              </Border>
+                            </Grid>
+                            <TextBlock Text="{Binding KindLabel}" FontSize="11"
+                                       Foreground="{DynamicResource AppAccentHover}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding DeviceSummary}" Classes="hint"
+                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                            <TextBlock Text="{Binding ProfileSummary}" FontSize="10"
+                                       Foreground="{DynamicResource AppForegroundDim}" />
+                          </StackPanel>
+                        </Border>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
               </StackPanel>
 
 
@@ -399,20 +508,32 @@
                                 every OTHER application, just not to itself.
                             -->
                           </Border>
-                          <!-- Output problem banner: the sink's own status
-                               line, e.g. "HIDMaestro unavailable — no output
-                               (not running as Administrator)". Answers "no
-                               controller is being created" on the panel
-                               itself instead of only in the log. -->
-                          <Border Grid.Column="1"
-                                  HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                  Margin="10,0,10,10" Padding="10,5" CornerRadius="8"
-                                  Background="#33D97706" BorderBrush="#D97706" BorderThickness="1"
-                                  IsVisible="{Binding HasOutputWarning}"
-                                  IsHitTestVisible="False">
-                            <TextBlock Text="{Binding OutputStatus}" FontSize="11"
-                                       Foreground="#F5C36B" TextWrapping="Wrap"
-                                       MaxWidth="520" TextAlignment="Center" />
+                           <!-- Compact output warning. The concise explanation
+                                and full technical status live in the tooltip,
+                                keeping paths and diagnostics off the artwork. -->
+                           <Border Grid.Column="1"
+                                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                                  Margin="0,10,82,0" Padding="7,3" CornerRadius="10"
+                                  Background="{DynamicResource AppWarningSoft}"
+                                  BorderBrush="{DynamicResource AppWarning}" BorderThickness="1"
+                                  IsVisible="{Binding HasOutputWarning}">
+                             <ToolTip.Tip>
+                              <StackPanel Spacing="5" MaxWidth="360">
+                                <TextBlock Text="{Binding OutputWarningText}"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding OutputStatus}"
+                                           Classes="hint" FontSize="10.5" />
+                              </StackPanel>
+                             </ToolTip.Tip>
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                              <TextBlock Text="⚠" FontSize="10"
+                                         Foreground="{DynamicResource AppWarning}"
+                                         VerticalAlignment="Center" />
+                              <TextBlock Text="NO OUTPUT" FontSize="9"
+                                         FontWeight="Bold" LetterSpacing="0.6"
+                                         Foreground="{DynamicResource AppWarning}"
+                                         VerticalAlignment="Center" />
+                            </StackPanel>
                           </Border>
                           <Border Grid.Column="1"
                                   HorizontalAlignment="Right" VerticalAlignment="Top"
@@ -439,12 +560,10 @@
         <TabItem>
 
           <Grid Margin="20,16" RowDefinitions="Auto,Auto,*" RowSpacing="14">
-            <Border Grid.Row="0" Padding="18,16" CornerRadius="14"
-                    Background="{DynamicResource AppSurface1}"
-                    BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1">
+            <Border Grid.Row="0" Classes="panel" Padding="18,16">
               <StackPanel Spacing="14">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                  <StackPanel Spacing="3">
+                  <StackPanel Spacing="3" VerticalAlignment="Center">
                     <TextBlock Text="{Binding ProfileEditorLabel}"
                                FontSize="15" FontWeight="SemiBold"
                                Foreground="{DynamicResource AppForeground}" />
@@ -452,39 +571,50 @@
                                FontSize="12" Foreground="{DynamicResource AppForegroundDim}"
                                TextWrapping="Wrap" />
                   </StackPanel>
-                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Classes="ghost" Padding="14,9"
+                  <!--
+                      WrapPanel, not a horizontal StackPanel: seven
+                      buttons whose labels are translated into eight
+                      languages overflowed the row on the longer ones
+                      (German and Czech in particular), and a horizontal
+                      StackPanel has no way to give — it just pushed the
+                      title text into an ellipsis and clipped the last
+                      button off the card. Wrapping trades a second row
+                      of buttons for keeping all of them reachable.
+                  -->
+                  <WrapPanel Grid.Column="1" Orientation="Horizontal"
+                             HorizontalAlignment="Right" VerticalAlignment="Center"
+                             MaxWidth="740">
+                    <Button Classes="ghost" Margin="0,0,8,4"
                             Command="{Binding CreateProfileCommand}"
                             Content="{Binding CreateProfileButtonLabel}" />
-                    <Button Classes="ghost" Padding="14,9"
+                    <Button Classes="ghost" Margin="0,0,8,4"
                             Command="{Binding DuplicateProfileCommand}"
                             Content="{Binding DuplicateProfileButtonLabel}" />
-                    <Button Classes="ghost" Padding="14,9"
+                    <Button Classes="ghost" Margin="0,0,8,4"
                             Command="{Binding ImportProfileCommand}"
                             Content="{Binding ImportProfileButtonLabel}" />
-                    <Button Classes="ghost" Padding="14,9"
+                    <Button Classes="ghost" Margin="0,0,8,4"
                             Command="{Binding ExportProfileCommand}"
                             Content="{Binding ExportProfileButtonLabel}" />
-                    <Button Classes="danger" Padding="14,9"
+                    <Button Classes="danger" Margin="0,0,8,4"
                             Command="{Binding DeleteProfileCommand}"
                             Content="{Binding DeleteProfileButtonLabel}" />
-                    <Button Classes="primary" Padding="14,9"
-                            Command="{Binding SaveProfileCommand}"
-                            Content="{Binding SaveProfileButtonLabel}" />
-                    <Button Classes="ghost" Padding="14,9"
+                    <Button Classes="ghost" Margin="0,0,8,4"
                             Command="{Binding ResetProfileCommand}"
                             Content="{Binding ResetProfileButtonLabel}" />
-                  </StackPanel>
+                    <Button Classes="primary" Margin="0,0,0,4"
+                            Command="{Binding SaveProfileCommand}"
+                            Content="{Binding SaveProfileButtonLabel}" />
+                  </WrapPanel>
                 </Grid>
 
                 <Grid ColumnDefinitions="180,*" ColumnSpacing="12">
                   <StackPanel Grid.Column="0" Spacing="5">
-                    <TextBlock Text="{Binding ProfileComboLabel}" FontSize="10" FontWeight="SemiBold"
-                               Foreground="{DynamicResource AppForegroundDim}" LetterSpacing="0.8" />
+                    <TextBlock Text="{Binding ProfileComboLabel}" Classes="sectionLabel" />
                     <TextBlock Text="{Binding SelectedProfileSummary}" FontSize="12"
                                Foreground="{DynamicResource AppForeground}" TextWrapping="Wrap" />
                   </StackPanel>
-                  <ComboBox Grid.Column="1"
+                  <ComboBox Grid.Column="1" VerticalAlignment="Top"
                             ItemsSource="{Binding AvailableProfiles}"
                             SelectedItem="{Binding SelectedProfileOption}"
                             ItemTemplate="{StaticResource ProfileOptionTemplate}" />
@@ -492,13 +622,12 @@
 
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                   <TextBlock Grid.Column="0" Text="{Binding ProfileNameLabel}"
-                             FontSize="11" FontWeight="SemiBold"
-                             Foreground="{DynamicResource AppForegroundDim}"
-                             VerticalAlignment="Center" LetterSpacing="0.5" />
+                             Classes="sectionLabel" FontSize="11"
+                             VerticalAlignment="Center" />
                   <TextBox Grid.Column="1"
                            Text="{Binding ProfileName}"
                            PlaceholderText="{Binding ProfileNameWatermark}" />
-                  <Button Grid.Column="2" Classes="ghost" Padding="14,9"
+                  <Button Grid.Column="2" Classes="ghost"
                           Command="{Binding RenameProfileCommand}"
                           Content="{Binding RenameProfileButtonLabel}" />
                 </Grid>
@@ -506,10 +635,22 @@
               </StackPanel>
             </Border>
 
-            <Grid Grid.Row="2" ColumnDefinitions="440,*" ColumnSpacing="14">
-              <Border Grid.Column="0" Padding="18,16" CornerRadius="14"
-                      Background="{DynamicResource AppSurface1}"
-                      BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1">
+            <Grid Grid.Row="2" ColumnSpacing="14">
+              <Grid.ColumnDefinitions>
+                <!-- Was a hard 440. A fixed pane cannot give any width
+                     back when the window approaches its minimum, which
+                     left the rule editor to the right of it clipped
+                     rather than merely narrow. Star sizing with a floor
+                     keeps the overview readable while letting the
+                     editor claim the surplus on a wide screen.
+
+                     The 654 floor is what MappingEditorView needs for
+                     its own two panes; see the sizing note on the
+                     Window element. -->
+                <ColumnDefinition Width="0.85*" MinWidth="320" />
+                <ColumnDefinition Width="1.6*" MinWidth="654" />
+              </Grid.ColumnDefinitions>
+              <Border Grid.Column="0" Classes="panel" Padding="18,16">
                 <Grid RowDefinitions="Auto,*" RowSpacing="12">
                   <StackPanel Grid.Row="0" Spacing="4">
                     <TextBlock Text="{Binding MappingOverviewLabel}"
@@ -522,15 +663,12 @@
                   <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel Spacing="10">
                       <TextBlock Text="{Binding NoMappingCardsText}"
-                                 FontSize="11" Foreground="{DynamicResource AppForegroundDim}"
-                                 TextWrapping="Wrap"
+                                 Classes="hint"
                                  IsVisible="{Binding HasNoControlConfigurationCards}" />
                       <ItemsControl ItemsSource="{Binding ControlConfigurationCards}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate>
-                            <Border CornerRadius="12" Padding="14,12"
-                                    Background="{DynamicResource AppSurface0}"
-                                    BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1">
+                            <Border Classes="inset" Padding="14,12" Margin="0,0,0,10">
                               <StackPanel Spacing="10">
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                   <StackPanel Spacing="3">
@@ -542,9 +680,7 @@
                                                TextWrapping="Wrap" />
                                   </StackPanel>
                                   <StackPanel Grid.Column="1" Spacing="6" HorizontalAlignment="Right">
-                                    <Border Background="{DynamicResource AppAccentSoft}"
-                                            BorderBrush="{DynamicResource AppAccent}" BorderThickness="1"
-                                            CornerRadius="999" Padding="10,4">
+                                    <Border Classes="chip">
                                       <TextBlock Text="{Binding RuleCountText}" FontSize="10"
                                                  FontWeight="Bold"
                                                  Foreground="{DynamicResource AppAccent}" />
@@ -558,7 +694,7 @@
                                 <ItemsControl ItemsSource="{Binding Entries}">
                                   <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                      <Border CornerRadius="10" Padding="10,8"
+                                      <Border CornerRadius="10" Padding="10,8" Margin="0,0,0,6"
                                               Background="{DynamicResource AppSurface1}"
                                               BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1">
                                         <Grid ColumnDefinitions="4,Auto,*" ColumnSpacing="10">
@@ -568,10 +704,17 @@
                                                      FontSize="10.5" FontWeight="SemiBold"
                                                      Foreground="{DynamicResource AppForeground}"
                                                      VerticalAlignment="Center" />
+                                          <!-- MaxLines + ellipsis, not MaxHeight:
+                                               a height cap crops the third line
+                                               through the middle of the glyphs,
+                                               which reads as a rendering fault
+                                               rather than as truncation. -->
                                           <TextBlock Grid.Column="2" Text="{Binding Value}"
                                                      FontSize="11.5"
                                                      Foreground="{DynamicResource AppForeground}"
-                                                     TextWrapping="Wrap" MaxHeight="36" />
+                                                     TextWrapping="Wrap" MaxLines="2"
+                                                     TextTrimming="CharacterEllipsis"
+                                                     ToolTip.Tip="{Binding Value}" />
                                         </Grid>
                                       </Border>
                                     </DataTemplate>
@@ -610,36 +753,54 @@
           <Grid Margin="20,16" DataContext="{Binding DevicesPanel}"
                 RowDefinitions="Auto,*" RowSpacing="14">
 
-            <!-- Header: title + refresh + counts -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="16"
-                        VerticalAlignment="Center">
-              <TextBlock Text="{Binding TitleLabel}" FontSize="18" FontWeight="SemiBold"
+            <!-- Header: title + refresh + counts.
+                 A Grid, not a horizontal StackPanel. The provider status
+                 is an arbitrary-length backend message ("SDL3: 2 gamepads,
+                 1 joystick; Raw Input: keyboard+mouse") and it carried
+                 TextWrapping="Wrap" — which does nothing inside a
+                 horizontal StackPanel, because that panel measures its
+                 children with infinite width. The text simply ran past
+                 the page edge. A star column gives it a real width to
+                 wrap or ellipsize against. -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="16">
+              <TextBlock Grid.Column="0" Text="{Binding TitleLabel}"
+                         FontSize="18" FontWeight="SemiBold"
                          VerticalAlignment="Center" />
-              <Button Content="{Binding RefreshLabel}" Command="{Binding RefreshCommand}"
-                      Padding="10,4" VerticalAlignment="Center" />
-              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
-                          Opacity="0.6">
+              <Button Grid.Column="1" Classes="ghost" Padding="12,6"
+                      Content="{Binding RefreshLabel}" Command="{Binding RefreshCommand}"
+                      VerticalAlignment="Center" />
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                          VerticalAlignment="Center">
+                <StackPanel.Styles>
+                  <Style Selector="TextBlock">
+                    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+                  </Style>
+                </StackPanel.Styles>
                 <TextBlock Text="{Binding OnlineCount}" />
                 <TextBlock Text="{Binding OnlineTotalLabel}" />
                 <TextBlock Text="{Binding TotalCount}" />
                 <TextBlock Text="{Binding TotalLabel}" />
               </StackPanel>
-              <TextBlock Text="{Binding ProviderStatus}" Opacity="0.5"
+              <TextBlock Grid.Column="3" Text="{Binding ProviderStatus}"
+                         Foreground="{DynamicResource AppForegroundDim}"
                          VerticalAlignment="Center" FontSize="12"
-                         TextWrapping="Wrap" />
-            </StackPanel>
+                         TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding ProviderStatus}" />
+            </Grid>
 
-            <Grid Grid.Row="1" ColumnDefinitions="340,*" ColumnSpacing="14">
+            <Grid Grid.Row="1" ColumnSpacing="14">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" MinWidth="300" />
+                <ColumnDefinition Width="*" MinWidth="380" />
+              </Grid.ColumnDefinitions>
 
               <!-- Device list -->
-              <Border Grid.Column="0" CornerRadius="12"
-                      Background="{DynamicResource AppSurface1}"
-                      BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1"
-                      Padding="6">
+              <Border Grid.Column="0" Classes="card" Width="340" Padding="6">
                 <Panel>
-                  <TextBlock Text="{Binding EmptyListLabel}" Opacity="0.5"
+                  <TextBlock Text="{Binding EmptyListLabel}"
+                             Foreground="{DynamicResource AppForegroundDim}"
                              HorizontalAlignment="Center" VerticalAlignment="Center"
-                             TextWrapping="Wrap" MaxWidth="320" TextAlignment="Center"
+                             TextWrapping="Wrap" MaxWidth="300" TextAlignment="Center"
                              IsVisible="{Binding IsEmpty}" />
                   <ListBox ItemsSource="{Binding Devices}"
                            SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
@@ -668,8 +829,20 @@
                               </StackPanel>
                             </StackPanel>
                           </StackPanel>
-                          <TextBlock Grid.Column="2" Text="{Binding ConnectionText}"
-                                     FontSize="10" Opacity="0.45" VerticalAlignment="Center" />
+                          <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center"
+                                      HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding ConnectionText}" FontSize="10"
+                                       Foreground="{DynamicResource AppForegroundDim}"
+                                       HorizontalAlignment="Right" />
+                            <StackPanel Orientation="Horizontal" Spacing="3"
+                                        IsVisible="{Binding HasBattery}"
+                                        HorizontalAlignment="Right">
+                              <TextBlock Text="{Binding BatteryIcon}" FontSize="9"
+                                         Foreground="{DynamicResource AppSuccess}" />
+                              <TextBlock Text="{Binding BatteryText}" FontSize="10" FontWeight="SemiBold"
+                                         Foreground="{DynamicResource AppSuccess}" />
+                            </StackPanel>
+                          </StackPanel>
                         </Grid>
                       </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -678,12 +851,10 @@
               </Border>
 
               <!-- Detail pane -->
-              <Border Grid.Column="1" CornerRadius="12"
-                      Background="{DynamicResource AppSurface1}"
-                      BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1"
-                      Padding="16,14">
+              <Border Grid.Column="1" Classes="card" Padding="16,14">
                 <Panel>
-                  <TextBlock Text="{Binding NoSelectionLabel}" Opacity="0.5"
+                  <TextBlock Text="{Binding NoSelectionLabel}"
+                             Foreground="{DynamicResource AppForegroundDim}"
                              HorizontalAlignment="Center" VerticalAlignment="Center"
                              TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"
                              IsVisible="{Binding !HasSelectedDevice}" />
@@ -701,13 +872,20 @@
                           <TextBlock Text="{Binding KindLabel}" FontSize="9"
                                      FontWeight="SemiBold" Foreground="White" />
                         </Border>
+                        <Border Classes="chip" Padding="7,2" IsVisible="{Binding HasBattery}">
+                          <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding BatteryIcon}" FontSize="10"
+                                       Foreground="{DynamicResource AppSuccess}" />
+                            <TextBlock Text="{Binding BatteryStatusText}" FontSize="10.5"
+                                       Foreground="{DynamicResource AppSuccess}" />
+                          </StackPanel>
+                        </Border>
                       </StackPanel>
 
-                      <Border Height="1" Background="{DynamicResource AppBorder0}" />
+                      <Border Classes="divider" />
 
                       <StackPanel Spacing="3" IsVisible="{Binding HasHardwareId}">
-                        <TextBlock Text="VID : PID" FontSize="10" FontWeight="SemiBold"
-                                   Opacity="0.5" LetterSpacing="0.8" />
+                        <TextBlock Text="VID : PID" Classes="sectionLabel" />
                         <StackPanel Orientation="Horizontal" Spacing="6">
                           <TextBlock Text="{Binding VendorIdHex}" FontFamily="Consolas" FontSize="12" />
                           <TextBlock Text=":" FontSize="12" Opacity="0.5" />
@@ -716,17 +894,13 @@
                       </StackPanel>
 
                       <StackPanel Spacing="3">
-                        <TextBlock Text="DEVICE ID" FontSize="10" FontWeight="SemiBold"
-                                   Opacity="0.5" LetterSpacing="0.8" />
-                        <TextBlock Text="{Binding Id}" FontFamily="Consolas" FontSize="11"
-                                   Opacity="0.7" TextWrapping="Wrap" />
+                        <TextBlock Text="DEVICE ID" Classes="sectionLabel" />
+                        <TextBlock Text="{Binding Id}" Classes="mono" FontSize="11" TextWrapping="Wrap" />
                       </StackPanel>
 
                       <StackPanel Spacing="3" IsVisible="{Binding HasHardwareId}">
-                        <TextBlock Text="HARDWARE ID" FontSize="10" FontWeight="SemiBold"
-                                   Opacity="0.5" LetterSpacing="0.8" />
-                        <TextBlock Text="{Binding HardwareId}" FontFamily="Consolas" FontSize="11"
-                                   Opacity="0.7" TextWrapping="Wrap" />
+                        <TextBlock Text="HARDWARE ID" Classes="sectionLabel" />
+                        <TextBlock Text="{Binding HardwareId}" Classes="mono" FontSize="11" TextWrapping="Wrap" />
                       </StackPanel>
                     </StackPanel>
 
@@ -736,10 +910,9 @@
                          device catalog itself, so slots, themes, and the
                          dashboard all see the corrected type. -->
                     <StackPanel Spacing="6" IsVisible="{Binding HasCategoryOverrideTarget}">
-                      <Border Height="1" Background="{DynamicResource AppBorder0}" />
-                      <TextBlock Text="TREAT AS" FontSize="10" FontWeight="SemiBold"
-                                 Opacity="0.5" LetterSpacing="0.8" />
-                      <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.6"
+                      <Border Classes="divider" />
+                      <TextBlock Text="TREAT AS" Classes="sectionLabel" />
+                      <TextBlock Classes="hint"
                                  Text="If Windows identifies this device incorrectly (e.g. a HID controller listed as unknown, or a device stuck as keyboard/mouse), override its type here. Takes effect immediately and persists." />
                       <ComboBox ItemsSource="{Binding CategoryOverrideOptions}"
                                 SelectedItem="{Binding SelectedCategoryOverride, Mode=TwoWay}"
@@ -752,10 +925,9 @@
 
                     <!-- Button calibration (DevicesPanel scope) — gamepad/joystick only -->
                     <StackPanel Spacing="8" IsVisible="{Binding IsCalibratableSelected}">
-                      <Border Height="1" Background="{DynamicResource AppBorder0}" />
-                      <TextBlock Text="BUTTON MAPPING" FontSize="10" FontWeight="SemiBold"
-                                 Opacity="0.5" LetterSpacing="0.8" />
-                      <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.6"
+                      <Border Classes="divider" />
+                      <TextBlock Text="BUTTON MAPPING" Classes="sectionLabel" />
+                      <TextBlock Classes="hint"
                                  Text="If this controller's buttons are recognized in the wrong places, calibrate it — you'll be prompted to press each button in turn." />
                       <StackPanel Orientation="Horizontal" Spacing="8"
                                   IsVisible="{Binding !IsCalibrating}">
@@ -773,7 +945,7 @@
                           <TextBlock Text="{Binding CalibrationPrompt}" FontWeight="SemiBold"
                                      TextWrapping="Wrap" />
                           <TextBlock Text="Press that button on the controller, or Skip to leave it unmapped."
-                                     FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+                                     Classes="fieldLabel" TextWrapping="Wrap" />
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button Content="Skip" Command="{Binding SkipButtonCommand}" />
                             <Button Content="Cancel" Command="{Binding CancelCalibrationCommand}" />
@@ -784,17 +956,23 @@
 
                     <!-- Keyboard-as-gamepad reference (DevicesPanel scope) — keyboard only -->
                     <StackPanel Spacing="8" IsVisible="{Binding IsKeyboardSelected}">
-                      <Border Height="1" Background="{DynamicResource AppBorder0}" />
-                      <TextBlock Text="KEYBOARD AS GAMEPAD" FontSize="10" FontWeight="SemiBold"
-                                 Opacity="0.5" LetterSpacing="0.8" />
-                      <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.6"
-                                 Text="{Binding KeyboardHintLabel}" />
-                      <Border BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1"
-                              CornerRadius="6" Padding="8" Margin="0,2">
+                      <Border Classes="divider" />
+                      <TextBlock Text="KEYBOARD AS GAMEPAD" Classes="sectionLabel" />
+                      <TextBlock Classes="hint" Text="{Binding KeyboardHintLabel}" />
+                      <!--
+                          Fixed-height live readout. The key list changes on
+                          every keystroke, and while it was free to wrap it
+                          grew and shrank a line at a time, walking the
+                          keyboard diagram below it up and down the page as
+                          you typed. Two lines' worth of reserved space fits
+                          any realistic chord.
+                      -->
+                      <Border Classes="inset" Padding="8" Margin="0,2">
                         <StackPanel Spacing="4">
-                          <TextBlock Text="{Binding KeysDownLabel}" FontSize="10" Opacity="0.5" />
-                          <TextBlock Text="{Binding KeyboardKeysDown}" FontFamily="Consolas, monospace"
-                                     FontSize="12" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding KeysDownLabel}" Classes="sectionLabel" />
+                          <TextBlock Text="{Binding KeyboardKeysDown}" Classes="mono"
+                                     Height="34" TextWrapping="Wrap" MaxLines="2"
+                                     TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                       </Border>
                       <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
@@ -804,17 +982,18 @@
 
                     <!-- Mouse-as-gamepad (DevicesPanel scope) — mouse only -->
                     <StackPanel Spacing="8" IsVisible="{Binding IsMouseSelected}">
-                      <Border Height="1" Background="{DynamicResource AppBorder0}" />
-                      <TextBlock Text="MOUSE AS GAMEPAD" FontSize="10" FontWeight="SemiBold"
-                                 Opacity="0.5" LetterSpacing="0.8" />
-                      <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.6"
-                                 Text="{Binding MouseHintLabel}" />
-                      <Border BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1"
-                              CornerRadius="6" Padding="8" Margin="0,2">
+                      <Border Classes="divider" />
+                      <TextBlock Text="MOUSE AS GAMEPAD" Classes="sectionLabel" />
+                      <TextBlock Classes="hint" Text="{Binding MouseHintLabel}" />
+                      <!-- Reserved height, same reasoning as the keyboard
+                           readout above: this updates continuously as the
+                           pointer moves. -->
+                      <Border Classes="inset" Padding="8" Margin="0,2">
                         <StackPanel Spacing="4">
-                          <TextBlock Text="{Binding InputLiveLabel}" FontSize="10" Opacity="0.5" />
-                          <TextBlock Text="{Binding MouseInfo}" FontFamily="Consolas, monospace"
-                                     FontSize="12" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding InputLiveLabel}" Classes="sectionLabel" />
+                          <TextBlock Text="{Binding MouseInfo}" Classes="mono"
+                                     Height="34" TextWrapping="Wrap" MaxLines="2"
+                                     TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                       </Border>
                       <views:MouseSurface />
@@ -822,22 +1001,20 @@
 
                     <!-- Live raw state (DevicesPanel scope) -->
                     <StackPanel Spacing="10" IsVisible="{Binding HasRawState}">
-                      <Border Height="1" Background="{DynamicResource AppBorder0}" />
-                      <TextBlock Text="LIVE STATE" FontSize="10" FontWeight="SemiBold"
-                                 Opacity="0.5" LetterSpacing="0.8" />
+                      <Border Classes="divider" />
+                      <TextBlock Text="LIVE STATE" Classes="sectionLabel" />
 
                       <!-- Axes -->
                       <ItemsControl ItemsSource="{Binding RawAxes}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate>
                             <Grid ColumnDefinitions="46,*,52" Margin="0,2">
-                              <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="11"
-                                         Opacity="0.7" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="0" Text="{Binding Label}" Classes="fieldLabel"
+                                         VerticalAlignment="Center" />
                               <ProgressBar Grid.Column="1" Minimum="0" Maximum="1"
                                            Value="{Binding Normalized}" Height="6"
                                            VerticalAlignment="Center" Margin="4,0" />
-                              <TextBlock Grid.Column="2" Text="{Binding RawText}" FontSize="10"
-                                         FontFamily="Consolas" Opacity="0.6"
+                              <TextBlock Grid.Column="2" Text="{Binding RawText}" Classes="mono" FontSize="10"
                                          HorizontalAlignment="Right" VerticalAlignment="Center" />
                             </Grid>
                           </DataTemplate>
@@ -891,8 +1068,7 @@
 
             <!-- Create controls -->
             <StackPanel Grid.Row="0" Spacing="10">
-              <TextBlock Text="{Binding VirtualControllersHeader}" FontSize="10" FontWeight="SemiBold"
-                         Opacity="0.5" LetterSpacing="0.8" />
+              <TextBlock Text="{Binding VirtualControllersHeader}" Classes="sectionLabel" />
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <ComboBox MinWidth="180" ItemsSource="{Binding OutputKindOptions}"
                           SelectedItem="{Binding NewSlotKind}">
@@ -904,23 +1080,31 @@
               </StackPanel>
             </StackPanel>
 
-            <Grid Grid.Row="1" ColumnDefinitions="320,*" ColumnSpacing="14">
+            <Grid Grid.Row="1" ColumnSpacing="14" RowDefinitions="Auto,*" RowSpacing="10">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" MinWidth="260" />
+                <ColumnDefinition Width="*" MinWidth="420" />
+              </Grid.ColumnDefinitions>
 
               <!-- Master: slot list -->
-              <Border Grid.Column="0" CornerRadius="8" BorderThickness="1"
-                      BorderBrush="{DynamicResource AppBorder0}" Padding="4">
+              <Border Grid.Column="0" Grid.RowSpan="2" Classes="card" Width="320" Padding="6">
                 <ListBox ItemsSource="{Binding Slots}" SelectedItem="{Binding SelectedSlot}"
-                         Background="Transparent">
+                         Background="Transparent" BorderThickness="0">
                   <ListBox.ItemTemplate>
                     <DataTemplate>
                       <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="2,4">
                         <Panel Grid.Column="0" Width="9" Height="9" VerticalAlignment="Center">
-                          <Ellipse Width="9" Height="9" Fill="#22C55E" IsVisible="{Binding Enabled}" />
-                          <Ellipse Width="9" Height="9" Fill="#6B7280" IsVisible="{Binding !Enabled}" />
+                          <Ellipse Width="9" Height="9"
+                                    Fill="{DynamicResource AppSuccess}"
+                                   IsVisible="{Binding Enabled}" />
+                          <Ellipse Width="9" Height="9"
+                                   Fill="{DynamicResource AppForegroundDim}"
+                                   IsVisible="{Binding !Enabled}" />
                         </Panel>
                         <StackPanel Grid.Column="1" Spacing="1">
-                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                          <TextBlock FontSize="11" Opacity="0.6">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Classes="fieldLabel" TextTrimming="CharacterEllipsis">
                             <Run Text="{Binding KindLabel}" />
                             <Run Text=" · " />
                             <Run Text="{Binding DeviceSummary}" />
@@ -932,14 +1116,111 @@
                 </ListBox>
               </Border>
 
-              <!-- Detail -->
-              <ScrollViewer Grid.Column="1" IsVisible="{Binding HasSelectedSlot}">
-                <StackPanel Spacing="14">
+              <!-- Selected-slot context stays visible while switching
+                   feature tabs, matching the output/device hierarchy in
+                   PadForge without hiding identity inside the first tab. -->
+              <Border Grid.Column="1" Grid.Row="0" Classes="card" Padding="14,11"
+                      IsVisible="{Binding HasSelectedSlot}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                  <Border Grid.Column="0" Width="38" Height="38" CornerRadius="9"
+                          Background="{DynamicResource AppAccentSoft}">
+                    <TextBlock Text="{Binding SelectedSlot.OutputIcon}" FontSize="11" FontWeight="Bold"
+                               Foreground="{DynamicResource AppAccent}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding SelectedSlotLabel}" Classes="sectionLabel"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding SlotName}" FontSize="15" FontWeight="SemiBold"
+                                 VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock FontSize="10.5" Foreground="{DynamicResource AppForegroundDim}"
+                               TextTrimming="CharacterEllipsis">
+                      <Run Text="{Binding SelectedSlotOutput}" />
+                      <Run Text="  ·  " />
+                      <Run Text="{Binding SelectedSlotInput}" />
+                      <Run Text="  ·  " />
+                      <Run Text="{Binding SelectedSlotProfiles}" />
+                    </TextBlock>
+                  </StackPanel>
+                  <Border Grid.Column="2" CornerRadius="12" MinWidth="64" Height="26" Padding="9,0"
+                          BorderBrush="{Binding SelectedSlotStatusBrush}" BorderThickness="1"
+                          VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SelectedSlotStatus}"
+                               Foreground="{Binding SelectedSlotStatusBrush}"
+                               FontSize="10" FontWeight="SemiBold" TextAlignment="Center"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                </Grid>
+              </Border>
+
+              <!-- Empty state, matching the Devices detail pane and the
+                   mapping-rule editor. Without it this half of the page
+                   is simply blank until a slot is picked. -->
+              <TextBlock Grid.Column="1" Grid.Row="1" Text="{Binding NoSlotSelectedLabel}"
+                         Foreground="{DynamicResource AppForegroundDim}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"
+                         IsVisible="{Binding !HasSelectedSlot}" />
+
+              <!-- Detail. Tabbed rather than one long scroll: the
+                   Touchpad tab only exists for slots whose hardware has a
+                   touch surface, and a section that silently appears and
+                   disappears part-way down a scroll reads as a glitch. -->
+              <TabControl Grid.Column="1" Grid.Row="1" IsVisible="{Binding HasSelectedSlot}"
+                          ClipToBounds="True">
+                <TabItem Header="{Binding PreviewTabHeader}">
+                  <ScrollViewer>
+                    <StackPanel Spacing="12" Margin="0,10,0,0">
+                      <Border Classes="card" Padding="14">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                          <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Map the controller you see" FontSize="15" FontWeight="SemiBold" />
+                            <TextBlock Classes="hint"
+                                       Text="Hover a virtual button, trigger, touchpad, or stick to identify it. Click it to choose that output and create its mapping rule." />
+                          </StackPanel>
+                          <Button Grid.Column="1" Classes="ghost" Content="Open all mappings"
+                                  Command="{Binding #ShellRoot.DataContext.OpenMappingsCommand}"
+                                  VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+
+                      <Border Classes="panel" Padding="10" MinHeight="330" ClipToBounds="True">
+                        <views:ControllerSurface DataContext="{Binding #ShellRoot.DataContext.SlotConfigurationController}" />
+                      </Border>
+
+                      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                        <Border Grid.Column="0" Classes="inset" Padding="12">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="1  CHOOSE OUTPUT" Classes="sectionLabel" />
+                            <TextBlock Text="Click it on the controller" Classes="hint" />
+                          </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Classes="inset" Padding="12">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="2  CHOOSE INPUT" Classes="sectionLabel" />
+                            <TextBlock Text="Pick the physical source" Classes="hint" />
+                          </StackPanel>
+                        </Border>
+                        <Border Grid.Column="2" Classes="inset" Padding="12">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="3  SAVE RULE" Classes="sectionLabel" />
+                            <TextBlock Text="The slot updates immediately" Classes="hint" />
+                          </StackPanel>
+                        </Border>
+                      </Grid>
+                    </StackPanel>
+                  </ScrollViewer>
+                </TabItem>
+                <TabItem Header="{Binding SlotSettingsTabHeader}">
+                <ScrollViewer>
+                <StackPanel Spacing="14" Margin="0,10,0,0">
 
                   <!-- Identity + lifecycle -->
                   <StackPanel Spacing="8">
                     <StackPanel Spacing="3">
-                      <TextBlock Text="Name" FontSize="11" Opacity="0.6" />
+                      <TextBlock Text="Name" Classes="fieldLabel" />
                       <TextBox Text="{Binding SlotName}" />
                     </StackPanel>
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
@@ -950,12 +1231,11 @@
                     </Grid>
                   </StackPanel>
 
-                  <Border Height="1" Background="{DynamicResource AppBorder0}" />
+                  <Border Classes="divider" />
 
                   <!-- Device assignment -->
                   <StackPanel Spacing="6">
-                    <TextBlock Text="ASSIGNED DEVICES" FontSize="10" FontWeight="SemiBold"
-                               Opacity="0.5" LetterSpacing="0.8" />
+                    <TextBlock Text="ASSIGNED DEVICES" Classes="sectionLabel" />
                     <ItemsControl ItemsSource="{Binding AssignedDevices}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -982,7 +1262,7 @@
                               Margin="0,4,0,0" FontSize="12" />
 
                     <StackPanel Spacing="6" IsEnabled="{Binding !TemplateEditor.DemoPreview}">
-                    <TextBlock Text="Available" FontSize="11" Opacity="0.6" Margin="0,4,0,0" />
+                    <TextBlock Text="Available" Classes="fieldLabel" Margin="0,4,0,0" />
                     <ItemsControl ItemsSource="{Binding AvailableDevices}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -999,14 +1279,13 @@
                     </StackPanel>
                   </StackPanel>
 
-                  <Border Height="1" Background="{DynamicResource AppBorder0}" />
+                  <Border Classes="divider" />
 
                   <!-- Layered profiles (SlotsPanel scope) -->
                   <StackPanel Spacing="6">
-                    <TextBlock Text="PROFILES (LAYERED)" FontSize="10" FontWeight="SemiBold"
-                               Opacity="0.5" LetterSpacing="0.8" />
+                    <TextBlock Text="PROFILES (LAYERED)" Classes="sectionLabel" />
                     <TextBlock Text="Applied in order; later layers win. Empty = pass-through."
-                               FontSize="11" Opacity="0.5" TextWrapping="Wrap" />
+                               Classes="hint" />
                     <ItemsControl ItemsSource="{Binding AssignedProfiles}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -1038,18 +1317,17 @@
                     </Grid>
                   </StackPanel>
 
-                  <Border Height="1" Background="{DynamicResource AppBorder0}" />
+                  <Border Classes="divider" />
 
                   <!-- Output template (bound to SlotsPanel.TemplateEditor) -->
                   <StackPanel Spacing="10" DataContext="{Binding TemplateEditor}"
                               IsVisible="{Binding HasTemplate}">
-                    <TextBlock Text="OUTPUT TEMPLATE" FontSize="10" FontWeight="SemiBold"
-                               Opacity="0.5" LetterSpacing="0.8" />
+                    <TextBlock Text="OUTPUT TEMPLATE" Classes="sectionLabel" />
                     <CheckBox Content="{Binding EmitLabel}"
                               ToolTip.Tip="{Binding EmitTooltip}"
                               IsChecked="{Binding Enabled}" />
                     <StackPanel Spacing="3">
-                      <TextBlock Text="{Binding OutputDeviceLabel}" FontSize="11" Opacity="0.6" />
+                      <TextBlock Text="{Binding OutputDeviceLabel}" Classes="fieldLabel" />
                       <ComboBox ItemsSource="{Binding OutputKindOptions}"
                                 SelectedItem="{Binding SelectedOutputKind}"
                                 HorizontalAlignment="Stretch">
@@ -1068,7 +1346,7 @@
                          four curated kinds above. Hidden until the catalog
                          has been enumerated. -->
                     <StackPanel Spacing="3" IsVisible="{Binding HasOutputProfileOptions}">
-                      <TextBlock Text="{Binding OutputProfileLabel}" FontSize="11" Opacity="0.6" />
+                      <TextBlock Text="{Binding OutputProfileLabel}" Classes="fieldLabel" />
                       <ComboBox ItemsSource="{Binding OutputProfileOptions}"
                                 SelectedItem="{Binding SelectedOutputProfile}"
                                 ToolTip.Tip="{Binding OutputProfileTooltip}"
@@ -1081,7 +1359,7 @@
                     </StackPanel>
 
                     <StackPanel Spacing="6" IsVisible="{Binding ShowGenericShape}">
-                      <TextBlock Text="Device shape" FontSize="11" Opacity="0.6" />
+                      <TextBlock Text="Device shape" Classes="fieldLabel" />
                       <Grid ColumnDefinitions="*,110" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="4">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Thumbsticks" FontSize="11" VerticalAlignment="Center" />
                         <TextBox  Grid.Row="0" Grid.Column="1" Text="{Binding ThumbstickCount}" />
@@ -1103,6 +1381,262 @@
 
                 </StackPanel>
               </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="{Binding MappingsTabHeader}">
+                  <ScrollViewer>
+                    <StackPanel Spacing="12" Margin="0,10,0,0">
+                      <Border Classes="card" Padding="16">
+                        <StackPanel Spacing="8">
+                          <TextBlock Text="Mappings" FontSize="16" FontWeight="SemiBold" />
+                          <TextBlock Classes="hint"
+                                     Text="For the fastest setup, return to Preview and click the exact virtual control you want to produce. The focused editor will ask for its physical source." />
+                          <Button Content="Open complete mapping rule editor"
+                                  Command="{Binding #ShellRoot.DataContext.OpenMappingsCommand}"
+                                  HorizontalAlignment="Left" />
+                        </StackPanel>
+                      </Border>
+
+                      <Border Classes="card" Padding="16">
+                        <StackPanel Spacing="8">
+                          <TextBlock Text="PROFILE LAYERS" Classes="sectionLabel" />
+                          <TextBlock Text="No profile layers · direct pass-through is active"
+                                     Classes="hint" IsVisible="{Binding !AssignedProfiles.Count}" />
+                          <ItemsControl ItemsSource="{Binding AssignedProfiles}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Border Classes="inset" Padding="10" Margin="0,0,0,6">
+                                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Text="●" FontSize="8"
+                                               Foreground="{DynamicResource AppSuccess}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                               TextTrimming="CharacterEllipsis" />
+                                  </Grid>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <TextBlock Classes="hint"
+                                     Text="Add, remove, and reorder profile layers from Setup. Later layers take priority." />
+                        </StackPanel>
+                      </Border>
+                    </StackPanel>
+                  </ScrollViewer>
+                </TabItem>
+
+                <!-- Touchpad. Hidden unless an assigned device actually
+                     reports a touch surface (DualSense / DualSense Edge /
+                     DualShock 4), so it never shows a page of controls
+                     that could not do anything. -->
+                <TabItem Header="{Binding TouchpadTabHeader}"
+                         IsVisible="{Binding SelectedSlotHasTouchpad}">
+                  <ScrollViewer DataContext="{Binding TouchpadEditor}">
+                    <StackPanel Spacing="14" Margin="0,10,0,0" IsVisible="{Binding HasSlot}">
+
+                      <!-- Joystick -->
+                      <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding JoystickSectionLabel}" Classes="sectionLabel" />
+                        <CheckBox Content="{Binding StickEnabledLabel}" IsChecked="{Binding StickEnabled}" />
+                        <TextBlock Text="{Binding JoystickHint}" Classes="hint" />
+                        <StackPanel Spacing="6" IsEnabled="{Binding StickEnabled}" Margin="0,4,0,0">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding TargetStickLabel}" Classes="fieldLabel" />
+                            <ComboBox ItemsSource="{Binding StickOptions}" SelectedItem="{Binding TargetStick}"
+                                      HorizontalAlignment="Stretch" />
+                          </StackPanel>
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding StickSensitivityLabel}" Classes="fieldLabel" />
+                            <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
+                              <Slider Grid.Column="0" Minimum="0.1" Maximum="10" SmallChange="0.1"
+                                      LargeChange="0.5" Value="{Binding StickSensitivity}" />
+                              <TextBox Grid.Column="1" Text="{Binding StickSensitivity}"
+                                       HorizontalContentAlignment="Center" />
+                            </Grid>
+                          </StackPanel>
+                        </StackPanel>
+                      </StackPanel>
+
+                      <Border Classes="divider" />
+
+                      <!-- D-pad -->
+                      <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding DpadSectionLabel}" Classes="sectionLabel" />
+                        <CheckBox Content="{Binding DpadEnabledLabel}" IsChecked="{Binding DpadEnabled}" />
+                        <StackPanel Spacing="6" IsEnabled="{Binding DpadEnabled}" Margin="0,4,0,0">
+                          <CheckBox Content="{Binding DpadEightWayLabel}" IsChecked="{Binding DpadEightWay}" />
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding DpadDeadzoneLabel}" Classes="fieldLabel" />
+                            <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
+                              <Slider Grid.Column="0" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                                      LargeChange="0.05" Value="{Binding DpadDeadzoneRadius}" />
+                              <TextBox Grid.Column="1" Text="{Binding DpadDeadzoneRadius}"
+                                       HorizontalContentAlignment="Center" />
+                            </Grid>
+                          </StackPanel>
+                        </StackPanel>
+                      </StackPanel>
+
+                      <Border Classes="divider" />
+
+                      <!-- Mouse -->
+                      <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding MouseSectionLabel}" Classes="sectionLabel" />
+                        <CheckBox Content="{Binding MouseEnabledLabel}" IsChecked="{Binding MouseEnabled}" />
+                        <TextBlock Text="{Binding MouseHint}" Classes="hint" />
+                        <StackPanel Spacing="6" IsEnabled="{Binding MouseEnabled}" Margin="0,4,0,0">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding MouseSensitivityXLabel}" Classes="fieldLabel" />
+                            <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
+                              <Slider Grid.Column="0" Minimum="0.1" Maximum="10" SmallChange="0.1"
+                                      LargeChange="0.5" Value="{Binding MouseSensitivityX}" />
+                              <TextBox Grid.Column="1" Text="{Binding MouseSensitivityX}"
+                                       HorizontalContentAlignment="Center" />
+                            </Grid>
+                          </StackPanel>
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="{Binding MouseSensitivityYLabel}" Classes="fieldLabel" />
+                            <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
+                              <Slider Grid.Column="0" Minimum="0.1" Maximum="10" SmallChange="0.1"
+                                      LargeChange="0.5" Value="{Binding MouseSensitivityY}" />
+                              <TextBox Grid.Column="1" Text="{Binding MouseSensitivityY}"
+                                       HorizontalContentAlignment="Center" />
+                            </Grid>
+                          </StackPanel>
+                          <StackPanel Orientation="Horizontal" Spacing="16">
+                            <CheckBox Content="{Binding InvertMouseXLabel}" IsChecked="{Binding InvertMouseX}" />
+                            <CheckBox Content="{Binding InvertMouseYLabel}" IsChecked="{Binding InvertMouseY}" />
+                          </StackPanel>
+                        </StackPanel>
+                      </StackPanel>
+
+                      <Border Classes="divider" />
+
+                      <!-- Gestures -->
+                      <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding GesturesSectionLabel}" Classes="sectionLabel" />
+                        <CheckBox Content="{Binding GesturesEnabledLabel}" IsChecked="{Binding GesturesEnabled}" />
+
+                        <StackPanel Spacing="8" IsEnabled="{Binding GesturesEnabled}" Margin="0,4,0,0">
+                          <TextBlock Text="{Binding NoGesturesLabel}" Classes="hint"
+                                     IsVisible="{Binding !HasGestures}" />
+
+                          <ItemsControl ItemsSource="{Binding Gestures}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate>
+                                <Border CornerRadius="6" BorderThickness="1" Padding="10" Margin="0,0,0,8"
+                                        BorderBrush="{DynamicResource AppBorder0}">
+                                  <StackPanel Spacing="8">
+
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                      <CheckBox Grid.Column="0" IsChecked="{Binding Enabled}"
+                                                VerticalAlignment="Center" />
+                                      <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                                                ItemsSource="{Binding Parent.KindOptions}"
+                                                SelectedItem="{Binding Kind}" />
+                                      <Button Grid.Column="2" Classes="danger" FontSize="11"
+                                              Content="{Binding Parent.RemoveLabel}"
+                                              Command="{Binding Parent.RemoveGestureCommand}"
+                                              CommandParameter="{Binding Id}" />
+                                    </Grid>
+
+                                    <!-- Per-kind detail. Exactly one of these
+                                         shows at a time, driven by the row's
+                                         own Show* flags. -->
+                                    <StackPanel Spacing="6" IsVisible="{Binding ShowSwipeDetail}">
+                                      <ComboBox HorizontalAlignment="Stretch"
+                                                ItemsSource="{Binding Parent.SwipeDirectionOptions}"
+                                                SelectedItem="{Binding SwipeDirection}" />
+                                      <CheckBox Content="{Binding Parent.GestureEightWayLabel}"
+                                                IsChecked="{Binding EightWay}" />
+                                    </StackPanel>
+
+                                    <Grid ColumnDefinitions="Auto,80" ColumnSpacing="8"
+                                          IsVisible="{Binding ShowTapDetail}">
+                                      <TextBlock Grid.Column="0" VerticalAlignment="Center" Classes="fieldLabel" Text="{Binding Parent.GestureTapCountLabel}" />
+                                      <TextBox Grid.Column="1" Text="{Binding TapCount}"
+                                               HorizontalContentAlignment="Center" />
+                                    </Grid>
+
+                                    <ComboBox HorizontalAlignment="Stretch" IsVisible="{Binding ShowPinchDetail}"
+                                              ItemsSource="{Binding Parent.PinchDirectionOptions}"
+                                              SelectedItem="{Binding PinchDirection}" />
+
+                                    <ComboBox HorizontalAlignment="Stretch" IsVisible="{Binding ShowRotateDetail}"
+                                              ItemsSource="{Binding Parent.RotateDirectionOptions}"
+                                              SelectedItem="{Binding RotateDirection}" />
+
+                                    <ComboBox HorizontalAlignment="Stretch" IsVisible="{Binding ShowShapeDetail}"
+                                              ItemsSource="{Binding Parent.ShapeOptions}"
+                                              SelectedItem="{Binding Shape}" />
+
+                                    <Grid ColumnDefinitions="Auto,80" ColumnSpacing="8"
+                                          IsVisible="{Binding ShowFingerCount}">
+                                      <TextBlock Grid.Column="0" VerticalAlignment="Center" Classes="fieldLabel" Text="{Binding Parent.GestureFingersLabel}" />
+                                      <TextBox Grid.Column="1" Text="{Binding FingerCount}"
+                                               HorizontalContentAlignment="Center" />
+                                    </Grid>
+
+                                    <Grid ColumnDefinitions="Auto,*,Auto,80" ColumnSpacing="8">
+                                      <TextBlock Grid.Column="0" VerticalAlignment="Center" Classes="fieldLabel" Text="{Binding Parent.GestureTargetLabel}" />
+                                      <ComboBox Grid.Column="1" HorizontalAlignment="Stretch"
+                                                MaxDropDownHeight="320"
+                                                ItemsSource="{Binding Parent.ButtonOptions}"
+                                                SelectedItem="{Binding TargetButton}" />
+                                      <TextBlock Grid.Column="2" VerticalAlignment="Center" Classes="fieldLabel" Text="{Binding Parent.GestureHoldLabel}" />
+                                      <TextBox Grid.Column="3" Text="{Binding HoldMilliseconds}"
+                                               HorizontalContentAlignment="Center" />
+                                    </Grid>
+
+                                  </StackPanel>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+
+                          <Button Content="{Binding AddGestureLabel}" Command="{Binding AddGestureCommand}"
+                                  HorizontalAlignment="Left" />
+                        </StackPanel>
+                      </StackPanel>
+
+                      <Border Classes="divider" />
+
+                      <!-- Recognition thresholds. These describe the
+                           surface and the hand using it, so they are
+                           shared by every gesture rather than set per
+                           binding. -->
+                      <StackPanel Spacing="6" IsEnabled="{Binding GesturesEnabled}">
+                        <TextBlock Text="{Binding TuningSectionLabel}" Classes="sectionLabel" />
+                        <Grid ColumnDefinitions="*,110" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                              ColumnSpacing="8" RowSpacing="5">
+                          <TextBlock Grid.Row="0" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding SwipeMinDistanceLabel}" />
+                          <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SwipeMinDistance}" />
+                          <TextBlock Grid.Row="1" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding TapMaxLabel}" />
+                          <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding TapMaxMilliseconds}" />
+                          <TextBlock Grid.Row="2" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding MultiTapWindowLabel}" />
+                          <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MultiTapWindowMilliseconds}" />
+                          <TextBlock Grid.Row="3" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding LongPressLabel}" />
+                          <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding LongPressMilliseconds}" />
+                          <TextBlock Grid.Row="4" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding PinchThresholdLabel}" />
+                          <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding PinchThreshold}" />
+                          <TextBlock Grid.Row="5" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding RotateThresholdLabel}" />
+                          <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding RotateThresholdDegrees}" />
+                          <TextBlock Grid.Row="6" Grid.Column="0" FontSize="11" VerticalAlignment="Center"
+                                     Text="{Binding ShapeThresholdLabel}" />
+                          <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding ShapeMatchThreshold}" />
+                        </Grid>
+                      </StackPanel>
+
+                    </StackPanel>
+                  </ScrollViewer>
+                </TabItem>
+              </TabControl>
             </Grid>
           </Grid>
             </TabItem>

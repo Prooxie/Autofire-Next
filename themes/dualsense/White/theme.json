@@ -14,6 +14,14 @@
       "height": 816
     },
     {
+      "type": "lightbar",
+      "x": 410,
+      "y": 169,
+      "image": "\\dualsense\\Image Assets\\DualSense_Lightbar.png",
+      "width": 647,
+      "height": 293
+    },
+    {
       "type": "image",
       "x": 170,
       "y": 1,

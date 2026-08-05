@@ -47,6 +47,8 @@ public sealed class ThemeSurface : Control
 
     private InstalledTheme? activeTheme;
     private ControllerSnapshot snapshot = ControllerSnapshot.Empty();
+    private string lightColor = "#00000000";
+    private IBrush? lightbarBrush;
     // The snapshot we last actually painted. UpdateState compares incoming
     // frames against THIS (not merely the previous frame) so slow continuous
     // movement still repaints once it accumulates past the threshold, while a
@@ -123,6 +125,7 @@ public sealed class ThemeSurface : Control
                 Log.Information("ThemeSurface theme cleared.");
             }
             highlightMaskCache.Clear();
+            lightbarMaskCache.Clear();
             hoveredHit = null;
             pressedHit = null;
             InvalidateVisual();
@@ -161,6 +164,21 @@ public sealed class ThemeSurface : Control
         }
 
         lastRenderedSnapshot = newSnapshot;
+        InvalidateVisual();
+    }
+
+    /// <summary>
+    /// Updates the colour consumed by <see cref="LightbarNode"/> elements.
+    /// The brush is parsed once when settings change, never in the render
+    /// loop. Invalid or transparent values simply switch the light off.
+    /// </summary>
+    public void UpdateLightColor(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? "#00000000" : value;
+        if (string.Equals(lightColor, normalized, StringComparison.OrdinalIgnoreCase)) { return; }
+
+        lightColor = normalized;
+        lightbarBrush = IsTransparentColor(normalized) ? null : HexBrush(normalized);
         InvalidateVisual();
     }
 
@@ -266,14 +284,14 @@ public sealed class ThemeSurface : Control
     /// this" — both filling the element's whole silhouette (outline and
     /// interior together, since the mask covers the full shape).
     /// </summary>
-    private static readonly SolidColorBrush HighlightHoverBrush =
-        new(Color.FromArgb(0x66, 0xFF, 0xC3, 0x00));
-    private static readonly SolidColorBrush HighlightPressedBrush =
-        new(Color.FromArgb(0xAA, 0xFF, 0xC3, 0x00));
-
-    /// <summary>Outline pen for the rounded-rect fallback (element has no art of its own).</summary>
-    private static readonly Pen HighlightFallbackPen =
-        new(new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xC3, 0x00)), 2);
+    private static readonly SolidColorBrush HighlightBrush =
+        new(Color.FromArgb(0xE6, 0xFF, 0xC3, 0x00));
+    private static readonly Pen HighlightOutlinePen = new(HighlightBrush, 2);
+    private static readonly Vector[] HighlightOutlineOffsets =
+    [
+        new(-2.25, 0), new(2.25, 0), new(0, -2.25), new(0, 2.25),
+        new(-1.6, -1.6), new(1.6, -1.6), new(-1.6, 1.6), new(1.6, 1.6),
+    ];
 
     /// <summary>
     /// Per-path opacity-mask brushes for the silhouette highlight. Tiny
@@ -281,6 +299,9 @@ public sealed class ThemeSurface : Control
     /// most once per art path instead of once per 30 Hz repaint.
     /// </summary>
     private readonly Dictionary<string, ImageBrush?> highlightMaskCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Per-theme light masks, reused across live animation frames.</summary>
+    private readonly Dictionary<string, ImageBrush?> lightbarMaskCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Sliders whose one-shot diagnostic has fired (see <see cref="LogSliderDiagnosticsOnce"/>).</summary>
     private readonly HashSet<SliderNode> sliderDiagnosticsLogged = [];
@@ -430,11 +451,11 @@ public sealed class ThemeSurface : Control
             // Nothing persists once the pointer releases or leaves.
             if (pressedHit is not null)
             {
-                DrawHighlight(context, pressedHit, HighlightPressedBrush);
+                DrawPressedHighlight(context, pressedHit);
             }
             else if (hoveredHit is not null)
             {
-                DrawHighlight(context, hoveredHit, HighlightHoverBrush);
+                DrawHoverOutline(context, hoveredHit);
             }
         }
         }
@@ -480,11 +501,6 @@ public sealed class ThemeSurface : Control
         // nothing to configure by hovering the virtual/output side, and
         // showing the same highlight there was misleading (it looked
         // clickable but silently did nothing useful).
-        if (DataContext is ControllerVisualStateViewModel { IsPhysicalView: false })
-        {
-            return;
-        }
-
         if (activeTheme is null) { return; }
         if (lastTransform.Scale <= 0) { return; }
 
@@ -539,11 +555,6 @@ public sealed class ThemeSurface : Control
         // Same restriction as hover — click-to-map configures a physical
         // button's behavior, which is meaningless on the virtual/output
         // side.
-        if (DataContext is ControllerVisualStateViewModel { IsPhysicalView: false })
-        {
-            return;
-        }
-
         if (Clicked is null) { return; }
         if (activeTheme is null) { return; }
         if (lastTransform.Scale <= 0) { return; }
@@ -608,32 +619,80 @@ public sealed class ThemeSurface : Control
     }
 
     /// <summary>
-    /// Paints one highlight in the SHAPE of the hit element: the
-    /// element's own art becomes an opacity mask over a solid tint fill,
-    /// producing a tinted silhouette of exactly what the theme renders
-    /// for that control during play — outline and interior together.
-    /// Falls back to a rounded rect (fill + outline) when the element
-    /// has no art or its bitmap can't load.
+    /// Paints a hover ring derived from the hit element's own alpha mask.
+    /// Irregular controls therefore follow their artwork instead of an
+    /// approximate bounding ellipse/rectangle. Falls back to an inset
+    /// geometric outline when a node has no bitmap mask.
     /// </summary>
-    private void DrawHighlight(DrawingContext ctx, ThemeHitResult hit, SolidColorBrush tint)
+    private void DrawHoverOutline(DrawingContext ctx, ThemeHitResult hit)
     {
         var theme = activeTheme;
-        ImageBrush? mask = null;
-        if (theme is not null && hit.ShapeImagePath is { Length: > 0 } path)
+        var mask = theme is null ? null : GetHighlightMask(theme, hit.ShapeImagePath);
+        if (theme is not null && mask is not null)
         {
-            if (!highlightMaskCache.TryGetValue(path, out mask))
+            // Build a true silhouette outline from the control's own alpha
+            // mask. Eight small translated copies form the outside ring;
+            // repainting the normal theme through the unshifted mask restores
+            // the interior, leaving only the artwork-accurate edge visible.
+            // This avoids the old ellipse/rectangle exceeding irregular
+            // bumpers, D-pads, and trigger artwork.
+            foreach (var offset in HighlightOutlineOffsets)
             {
-                var bmp = LoadBitmap(path, theme);
-                mask = bmp is null ? null : new ImageBrush(bmp) { Stretch = Stretch.Fill };
-                highlightMaskCache[path] = mask;
+                var shifted = new Rect(
+                    hit.Bounds.X + offset.X,
+                    hit.Bounds.Y + offset.Y,
+                    hit.Bounds.Width,
+                    hit.Bounds.Height);
+                using (ctx.PushOpacityMask(mask, shifted))
+                {
+                    ctx.FillRectangle(HighlightBrush, shifted);
+                }
             }
+
+            using (ctx.PushOpacityMask(mask, hit.Bounds))
+            {
+                foreach (var node in theme.Document.Children)
+                {
+                    RenderNode(ctx, node, theme);
+                }
+            }
+            return;
         }
+
+        const double inset = 2;
+        var bounds = hit.Bounds.Width > inset * 2 && hit.Bounds.Height > inset * 2
+            ? new Rect(
+                hit.Bounds.X + inset,
+                hit.Bounds.Y + inset,
+                hit.Bounds.Width - inset * 2,
+                hit.Bounds.Height - inset * 2)
+            : hit.Bounds;
+
+        if (IsRoundControl(hit.ElementId))
+        {
+            ctx.DrawEllipse(null, HighlightOutlinePen, bounds);
+            return;
+        }
+
+        var radius = Math.Min(10, Math.Min(bounds.Width, bounds.Height) / 3);
+        ctx.DrawRectangle(null, HighlightOutlinePen, bounds, radius, radius);
+    }
+
+    private static bool IsRoundControl(string elementId) => elementId is
+        "South" or "East" or "West" or "North" or "Guide" or
+        "LeftStick" or "RightStick" or
+        "LeftStick.Button" or "RightStick.Button";
+
+    private void DrawPressedHighlight(DrawingContext ctx, ThemeHitResult hit)
+    {
+        var theme = activeTheme;
+        var mask = theme is null ? null : GetHighlightMask(theme, hit.ShapeImagePath);
 
         if (mask is not null)
         {
             using (ctx.PushOpacityMask(mask, hit.Bounds))
             {
-                ctx.FillRectangle(tint, hit.Bounds);
+                ctx.FillRectangle(HighlightBrush, hit.Bounds);
             }
         }
         else
@@ -641,8 +700,26 @@ public sealed class ThemeSurface : Control
             // No art to silhouette — rounded rect with both fill and
             // outline so it still reads as a soft button shape rather
             // than a hard box.
-            ctx.DrawRectangle(tint, HighlightFallbackPen, hit.Bounds, 8, 8);
+            ctx.DrawRectangle(HighlightBrush, HighlightOutlinePen, hit.Bounds, 8, 8);
         }
+    }
+
+    private ImageBrush? GetHighlightMask(InstalledTheme theme, string? imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            return null;
+        }
+
+        if (highlightMaskCache.TryGetValue(imagePath, out var cached))
+        {
+            return cached;
+        }
+
+        var bitmap = LoadBitmap(imagePath, theme);
+        var mask = bitmap is null ? null : new ImageBrush(bitmap) { Stretch = Stretch.Fill };
+        highlightMaskCache[imagePath] = mask;
+        return mask;
     }
 
     /// <summary>
@@ -674,6 +751,7 @@ public sealed class ThemeSurface : Control
         {
             case ShowHideNode:
             case PBarNode:
+            case TrailPadNode:
                 // Active feedback — skip entirely in physical view.
                 return;
 
@@ -687,6 +765,17 @@ public sealed class ThemeSurface : Control
                 {
                     DrawImage(ctx, image, owner);
                     foreach (var child in image.Children)
+                    {
+                        RenderNodeStaticOnly(ctx, child, owner);
+                    }
+                }
+                return;
+
+            case LightbarNode lightbar:
+                using (ctx.PushTransform(transform))
+                {
+                    DrawLightbar(ctx, lightbar, owner);
+                    foreach (var child in lightbar.Children)
                     {
                         RenderNodeStaticOnly(ctx, child, owner);
                     }
@@ -739,7 +828,7 @@ public sealed class ThemeSurface : Control
 
             case SliderNode slider:
             {
-                LogSliderDiagnosticsOnce(slider, symbols);
+                LogSliderDiagnosticsOnce(slider, symbols, transform);
                 // Deflection ONLY: the walker's preamble at the top of
                 // this method already applied the node's own X/Y (every
                 // node renders inside its translated frame — that IS the
@@ -761,6 +850,22 @@ public sealed class ThemeSurface : Control
                 return;
             }
 
+            case TrailPadNode trailPad:
+            {
+                if (trailPad.Input.Evaluate(symbols) == 0) { return; }
+
+                var t =
+                    Matrix.CreateTranslation(trailPad.InputX.Evaluate(symbols),
+                                             trailPad.InputY.Evaluate(symbols)) *
+                    transform;
+                using (ctx.PushTransform(t))
+                {
+                    DrawTrailPadMarker(ctx, trailPad, owner);
+                    foreach (var child in trailPad.Children) { RenderNode(ctx, child, owner); }
+                }
+                return;
+            }
+
             case ImageNode image:
             {
                 // See the static path's note: one frame, no extra child
@@ -773,6 +878,14 @@ public sealed class ThemeSurface : Control
                 }
                 return;
             }
+
+            case LightbarNode lightbar:
+                using (ctx.PushTransform(transform))
+                {
+                    DrawLightbar(ctx, lightbar, owner);
+                    foreach (var child in lightbar.Children) { RenderNode(ctx, child, owner); }
+                }
+                return;
 
             case PBarNode bar:
                 using (ctx.PushTransform(transform))
@@ -813,6 +926,45 @@ public sealed class ThemeSurface : Control
         var dx = image.Center ? -w / 2 : 0;
         var dy = image.Center ? -h / 2 : 0;
         ctx.DrawImage(bmp, new Rect(dx, dy, w, h));
+    }
+
+    private static void DrawTrailPadMarker(DrawingContext ctx, TrailPadNode trailPad, InstalledTheme owner)
+    {
+        if (string.IsNullOrWhiteSpace(trailPad.ImagePath)) { return; }
+
+        var bitmap = LoadBitmap(trailPad.ImagePath, owner);
+        if (bitmap is null) { return; }
+
+        var width = trailPad.Width > 0 ? trailPad.Width : bitmap.PixelSize.Width;
+        var height = trailPad.Height > 0 ? trailPad.Height : bitmap.PixelSize.Height;
+        ctx.DrawImage(bitmap, new Rect(-width / 2, -height / 2, width, height));
+    }
+
+    private void DrawLightbar(DrawingContext ctx, LightbarNode lightbar, InstalledTheme owner)
+    {
+        if (lightbarBrush is null || string.IsNullOrWhiteSpace(lightbar.ImagePath)) { return; }
+
+        var bitmap = LoadBitmap(lightbar.ImagePath, owner);
+        if (bitmap is null) { return; }
+
+        if (!lightbarMaskCache.TryGetValue(lightbar.ImagePath, out var mask))
+        {
+            mask = new ImageBrush(bitmap) { Stretch = Stretch.Fill };
+            lightbarMaskCache[lightbar.ImagePath] = mask;
+        }
+        if (mask is null) { return; }
+
+        var width = lightbar.Width > 0 ? lightbar.Width : bitmap.PixelSize.Width;
+        var height = lightbar.Height > 0 ? lightbar.Height : bitmap.PixelSize.Height;
+        var bounds = new Rect(
+            lightbar.Center ? -width / 2 : 0,
+            lightbar.Center ? -height / 2 : 0,
+            width,
+            height);
+        using (ctx.PushOpacityMask(mask, bounds))
+        {
+            ctx.FillRectangle(lightbarBrush, bounds);
+        }
     }
 
     private void RenderPBar(DrawingContext ctx, PBarNode bar, InstalledTheme owner)
@@ -870,7 +1022,7 @@ public sealed class ThemeSurface : Control
     /// what magnitude, and does the child art exist" without needing
     /// the theme's JSON in hand.
     /// </summary>
-    private void LogSliderDiagnosticsOnce(SliderNode slider, GameFlow.Infrastructure.Theming.Flee.IFleeSymbols symbols)
+    private void LogSliderDiagnosticsOnce(SliderNode slider, GameFlow.Infrastructure.Theming.Flee.IFleeSymbols symbols, Matrix accumulated)
     {
         if (sliderDiagnosticsLogged.Contains(slider))
         {
@@ -886,9 +1038,24 @@ public sealed class ThemeSurface : Control
 
         _ = sliderDiagnosticsLogged.Add(slider);
         var firstChild = slider.Children.FirstOrDefault();
+
+        // The accumulated transform is the decisive piece: node.X/Y alone
+        // can look perfectly correct while the parent chain places the
+        // whole group somewhere wrong. Logging where the stick ACTUALLY
+        // lands on the document, versus where the theme says its base
+        // is, separates "wrong base position" (parent chain) from "wrong
+        // deflection" (input expression / sign) — two different bugs that
+        // look identical on screen.
+        var restingPoint = accumulated.Transform(new Point(slider.X, slider.Y));
+        var deflectedPoint = accumulated.Transform(new Point(slider.X + ix, slider.Y + iy));
+
         Log.Information(
-            "Theme slider diagnostic: node=({X},{Y}) deflection=({Ix:F1},{Iy:F1})px children={Count} firstChild={Kind} {Detail}",
-            slider.X, slider.Y, ix, iy, slider.Children.Count,
+            "Theme slider diagnostic: node=({X},{Y}) deflection=({Ix:F1},{Iy:F1})px " +
+            "resolvedResting=({RX:F1},{RY:F1}) resolvedDeflected=({DX:F1},{DY:F1}) " +
+            "children={Count} firstChild={Kind} {Detail}",
+            slider.X, slider.Y, ix, iy,
+            restingPoint.X, restingPoint.Y, deflectedPoint.X, deflectedPoint.Y,
+            slider.Children.Count,
             firstChild?.GetType().Name ?? "(none)",
             firstChild is ImageNode img ? $"image='{img.ImagePath}' at ({img.X},{img.Y}) {img.Width}x{img.Height} center={img.Center}" : string.Empty);
     }
@@ -988,6 +1155,15 @@ public sealed class ThemeSurface : Control
             return new SolidColorBrush(Color.FromUInt32(argb));
         }
         catch { return null; }
+    }
+
+    private static bool IsTransparentColor(string value)
+    {
+        if (string.Equals(value, "Transparent", StringComparison.OrdinalIgnoreCase)) { return true; }
+
+        var clean = value.Trim().TrimStart('#');
+        return clean.Length == 8
+            && string.Equals(clean[..2], "00", StringComparison.OrdinalIgnoreCase);
     }
 }
 

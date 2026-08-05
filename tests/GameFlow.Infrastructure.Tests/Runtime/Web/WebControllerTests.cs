@@ -98,6 +98,120 @@ public sealed class WebControllerProtocolTests
         Assert.Equal(0f, snapshot!.LeftStick.X, precision: 3);
         Assert.Equal(0f, snapshot.RightTrigger, precision: 3);
     }
+
+    [Fact]
+    public void PhoneMotionPopulatesGyroAndAccelerometer()
+    {
+        var snapshot = WebControllerProtocol.TryParseInput(
+            "{\"b\":0,\"gyro\":1,\"gp\":0.5,\"gy\":-1.25,\"gr\":0.1,\"ax\":0.2,\"ay\":9.8,\"az\":-0.3}",
+            padIndex: 0);
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot!.HasGyro);
+        Assert.Equal(0.5f, snapshot.GyroPitch, precision: 3);
+        Assert.Equal(-1.25f, snapshot.GyroYaw, precision: 3);
+        Assert.Equal(0.1f, snapshot.GyroRoll, precision: 3);
+        Assert.Equal(9.8f, snapshot.AccelY, precision: 3);
+    }
+
+    [Fact]
+    public void PhoneWithoutMotionPermissionReportsNoGyro()
+    {
+        // A phone that never got sensor permission (or a desktop browser)
+        // must read as "no gyro hardware", not "gyro sitting perfectly
+        // still" — the pipeline treats those differently.
+        var snapshot = WebControllerProtocol.TryParseInput("{\"b\":0}", padIndex: 0);
+
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.HasGyro);
+    }
+
+    [Fact]
+    public void MotionValuesAreNotClampedToStickRange()
+    {
+        // Angular velocity legitimately exceeds 1.0 rad/s on a fast
+        // flick; clamping it like a stick axis would cap real input.
+        var snapshot = WebControllerProtocol.TryParseInput(
+            "{\"b\":0,\"gyro\":1,\"gy\":8.5}", padIndex: 0);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(8.5f, snapshot!.GyroYaw, precision: 3);
+    }
+
+    [Fact]
+    public void HostileMotionValuesAreRejected()
+    {
+        var nan = WebControllerProtocol.TryParseInput("{\"b\":0,\"gyro\":1,\"gp\":\"NaN\"}", padIndex: 0);
+        Assert.NotNull(nan);
+        Assert.Equal(0f, nan!.GyroPitch, precision: 5);
+
+        var huge = WebControllerProtocol.TryParseInput("{\"b\":0,\"gyro\":1,\"gy\":1e30}", padIndex: 0);
+        Assert.NotNull(huge);
+        Assert.InRange(huge!.GyroYaw, -1000f, 1000f);
+    }
+
+    [Fact]
+    public void WrongTypedFieldsReadAsNeutralInsteadOfThrowing()
+    {
+        // Same hazard as the motion fields: JsonElement's TryGet* throw on a
+        // wrong-typed element rather than returning false, so every numeric
+        // field a phone can send needs to survive being a string.
+        var snapshot = WebControllerProtocol.TryParseInput(
+            "{\"b\":\"7\",\"lx\":\"0.5\",\"lt\":true,\"gyro\":\"1\"}", padIndex: 0);
+
+        Assert.NotNull(snapshot);
+        Assert.False(snapshot!.IsPressed(ButtonId.South));
+        Assert.Equal(0f, snapshot.LeftStick.X, precision: 3);
+        Assert.Equal(0f, snapshot.LeftTrigger, precision: 3);
+        Assert.False(snapshot.HasGyro);
+    }
+
+    [Fact]
+    public void TouchpadContactsPopulateTheFullMultiTouchSnapshot()
+    {
+        var snapshot = WebControllerProtocol.TryParseInput(
+            "{\"b\":32768,\"touch\":[{\"i\":7,\"x\":0.75,\"y\":0.25,\"p\":0.4},{\"i\":2,\"x\":0.2,\"y\":0.8}]}",
+            padIndex: 0);
+
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot!.TouchDown);
+        Assert.True(snapshot.IsPressed(ButtonId.Touchpad));
+        Assert.Equal(2, snapshot.TouchContactCount);
+        Assert.Equal([2, 7], snapshot.TouchContacts.Select(contact => contact.FingerIndex));
+        Assert.Equal(0.2f, snapshot.TouchX, precision: 3);
+        Assert.Equal(0.8f, snapshot.TouchY, precision: 3);
+        Assert.Equal(1f, snapshot.TouchContacts[0].Pressure, precision: 3);
+        Assert.Equal(0.4f, snapshot.TouchContacts[1].Pressure, precision: 3);
+    }
+
+    [Fact]
+    public void TouchpadContactsAreBoundedAndMalformedEntriesAreIgnored()
+    {
+        var snapshot = WebControllerProtocol.TryParseInput(
+            """
+            {
+              "touch": [
+                {"i": 0, "x": -4, "y": 9, "p": 5},
+                {"i": 0, "x": 0.5, "y": 0.5},
+                {"i": -1, "x": 0.5, "y": 0.5},
+                {"i": 1, "x": "bad", "y": 0.5},
+                {"i": 2, "x": 0.2, "y": 0.2},
+                {"i": 3, "x": 0.3, "y": 0.3},
+                {"i": 4, "x": 0.4, "y": 0.4},
+                {"i": 5, "x": 0.5, "y": 0.5},
+                {"i": 6, "x": 0.6, "y": 0.6}
+              ]
+            }
+            """,
+            padIndex: 0);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(5, snapshot!.TouchContactCount);
+        Assert.Equal([0, 2, 3, 4, 5], snapshot.TouchContacts.Select(contact => contact.FingerIndex));
+        Assert.Equal(0f, snapshot.TouchContacts[0].X);
+        Assert.Equal(1f, snapshot.TouchContacts[0].Y);
+        Assert.Equal(1f, snapshot.TouchContacts[0].Pressure);
+    }
 }
 
 public sealed class WebControllerHubTests

@@ -174,6 +174,16 @@ public static class ThemeJsonLoader
                     Center    = GetBool(element, "center", false)
                 };
 
+            case "lightbar":
+                return new LightbarNode
+                {
+                    X = x, Y = y, Rotation = rot, Children = children,
+                    ImagePath = GetString(element, "image") ?? string.Empty,
+                    Width     = GetDouble(element, "width", 0),
+                    Height    = GetDouble(element, "height", 0),
+                    Center    = GetBool(element, "center", false)
+                };
+
             case "showhide":
                 return new ShowHideNode
                 {
@@ -206,7 +216,7 @@ public static class ThemeJsonLoader
                     Center     = GetBool(element, "center", false)
                 };
 
-            // The remaining VSCView types (ppie, trailpad, basic3d1) are
+            // The remaining VSCView types (ppie, basic3d1) are
             // declared in the spec but not yet rendered by Autofire — we
             // log at Debug and treat them as group nodes so any children
             // still render in the right coordinate space. Adding real
@@ -224,28 +234,16 @@ public static class ThemeJsonLoader
                 };
 
             case "trailpad":
-            {
-                // The trail (touch history) isn't implemented, but the
-                // pad's own art very much matters — a DS4 theme without
-                // its touchpad looks broken. Render it as a plain image
-                // with the children (touch dot etc.) layered in the same
-                // coordinate space; the dot just won't move yet.
-                var padImage = element.TryGetProperty("image", out var trailImg)
-                    ? trailImg.GetString() ?? string.Empty
-                    : string.Empty;
-                if (string.IsNullOrWhiteSpace(padImage))
-                {
-                    return new GroupNode { X = x, Y = y, Rotation = rot, Children = children };
-                }
-                return new ImageNode
+                return new TrailPadNode
                 {
                     X = x, Y = y, Rotation = rot, Children = children,
-                    ImagePath = padImage,
-                    Width  = element.TryGetProperty("width",  out var tw) ? tw.GetDouble() : 0,
-                    Height = element.TryGetProperty("height", out var th) ? th.GetDouble() : 0,
-                    Center = element.TryGetProperty("center", out var tc) && tc.ValueKind == JsonValueKind.True,
+                    Input = ParseExpression(GetString(element, "input"), "0"),
+                    InputX = ParseExpression(GetString(element, "inputX"), "0"),
+                    InputY = ParseExpression(GetString(element, "inputY"), "0"),
+                    ImagePath = GetString(element, "image") ?? string.Empty,
+                    Width = GetDouble(element, "width", 0),
+                    Height = GetDouble(element, "height", 0)
                 };
-            }
         }
     }
 

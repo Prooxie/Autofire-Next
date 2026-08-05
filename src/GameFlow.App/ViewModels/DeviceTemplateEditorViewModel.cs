@@ -25,10 +25,10 @@ public sealed record SlotOutputProfileOption(string Key, string Label);
 /// device shape for the generic kind, lighting for the DualShock family,
 /// adaptive triggers for DualSense.
 ///
-/// <para>Beyond the four curated kinds, the editor lists HIDMaestro's
-/// full profile catalog (225 profiles across 32 vendors when the SDK is
-/// present) so a slot can emit ANY supported controller — wheels, HOTAS,
-/// flight sticks, arcade pads — not just the Xbox/PlayStation set.
+/// <para>Beyond the curated kinds, the editor lists HIDMaestro's broad
+/// handheld and arcade-controller catalog when the SDK is present.
+/// Specialized wheel and flight-simulation profiles remain hidden until
+/// GameFlow has dedicated mapping UI for their additional controls.
 /// Picking a profile also re-classifies the template's kind family so
 /// the dashboard theme follows the selection.</para>
 /// </summary>
@@ -118,6 +118,10 @@ public sealed class DeviceTemplateEditorViewModel : ViewModelBase
                 // them spares a pick that's guaranteed to fail.
                 continue;
             }
+            if (!HidMaestroProfileCatalogService.IsGameControllerProfile(profile))
+            {
+                continue;
+            }
             var label = string.IsNullOrWhiteSpace(profile.Vendor)
                 ? $"{profile.Name}  ·  {profile.Id}"
                 : $"{profile.Vendor} — {profile.Name}  ·  {profile.Id}";
@@ -141,8 +145,8 @@ public sealed class DeviceTemplateEditorViewModel : ViewModelBase
     public string OutputProfileLabel => Loc("TemplateOutputProfileLabel", "HIDMaestro profile");
     public string OutputProfileTooltip => Loc("TemplateOutputProfileTooltip",
         "Exactly which controller this slot presents to games. \"Default\" uses the standard profile for the " +
-        "output device above; picking a specific profile can emit any controller HIDMaestro supports — " +
-        "wheels, HOTAS, flight sticks, arcade pads and more.");
+        "output device above; the profile list covers HIDMaestro's broad gamepad and arcade-controller catalog. " +
+        "Wheel and flight-simulation profiles are hidden for now.");
     private string DefaultProfileOptionLabel => Loc("TemplateOutputProfileDefaultOption", "Default for the selected output device");
 
     /// <summary>PO lookup with an English fallback for keys not yet translated (the localizer returns the key itself for unknown ids).</summary>

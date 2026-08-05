@@ -1,5 +1,5 @@
 {
- "name": "Simple Gamepad \u2014 Default",
+ "name": "Classic 1–4",
  "width": 1200,
  "height": 760,
  "version": 1,
@@ -15,32 +15,24 @@
   {
    "type": "pbar",
    "input": "triggers:l:analog",
-   "x": 165,
-   "y": 60,
-   "width": 60,
-   "height": 80,
-   "direction": "down",
+   "x": 185,
+   "y": 103,
+   "width": 150,
+   "height": 8,
+   "direction": "right",
    "foreground": "CC35C8E8",
    "background": "33141922"
   },
   {
    "type": "pbar",
    "input": "triggers:r:analog",
-   "x": 975,
-   "y": 60,
-   "width": 60,
-   "height": 80,
-   "direction": "down",
+   "x": 865,
+   "y": 103,
+   "width": 150,
+   "height": 8,
+   "direction": "right",
    "foreground": "CC35C8E8",
    "background": "33141922"
-  },
-  {
-   "type": "image",
-   "image": "assets/bumper.png",
-   "x": 150,
-   "y": 96,
-   "width": 180,
-   "height": 44
   },
   {
    "type": "showhide",
@@ -49,20 +41,12 @@
     {
      "type": "image",
      "image": "assets/bumper_glow.png",
-     "x": 150,
-     "y": 96,
-     "width": 180,
-     "height": 44
+     "x": 145,
+     "y": 120,
+     "width": 220,
+     "height": 48
     }
    ]
-  },
-  {
-   "type": "image",
-   "image": "assets/bumper.png",
-   "x": 870,
-   "y": 96,
-   "width": 180,
-   "height": 44
   },
   {
    "type": "showhide",
@@ -71,19 +55,19 @@
     {
      "type": "image",
      "image": "assets/bumper_glow.png",
-     "x": 870,
-     "y": 96,
-     "width": 180,
-     "height": 44
+     "x": 835,
+     "y": 120,
+     "width": 220,
+     "height": 48
     }
    ]
   },
   {
    "type": "slider",
    "inputX": "stick_left:x * 26",
-   "inputY": "stick_left:y * -26",
-   "x": 330,
-   "y": 430,
+   "inputY": "stick_left:y * 26",
+   "x": 390,
+   "y": 480,
    "children": [
     {
      "type": "image",
@@ -114,9 +98,9 @@
   {
    "type": "slider",
    "inputX": "stick_right:x * 26",
-   "inputY": "stick_right:y * -26",
-   "x": 730,
-   "y": 430,
+   "inputY": "stick_right:y * 26",
+   "x": 810,
+   "y": 480,
    "children": [
     {
      "type": "image",
@@ -147,8 +131,8 @@
   {
    "type": "image",
    "image": "assets/dpad_v.png",
-   "x": 497,
-   "y": 305,
+   "x": 227,
+   "y": 240,
    "width": 46,
    "height": 60
   },
@@ -159,8 +143,8 @@
     {
      "type": "image",
      "image": "assets/dpad_v_glow.png",
-     "x": 497,
-     "y": 305,
+     "x": 227,
+     "y": 240,
      "width": 46,
      "height": 60
     }
@@ -169,8 +153,8 @@
   {
    "type": "image",
    "image": "assets/dpad_v.png",
-   "x": 497,
-   "y": 365,
+   "x": 227,
+   "y": 300,
    "width": 46,
    "height": 60
   },
@@ -181,8 +165,8 @@
     {
      "type": "image",
      "image": "assets/dpad_v_glow.png",
-     "x": 497,
-     "y": 365,
+     "x": 227,
+     "y": 300,
      "width": 46,
      "height": 60
     }
@@ -191,8 +175,8 @@
   {
    "type": "image",
    "image": "assets/dpad_h.png",
-   "x": 460,
-   "y": 342,
+   "x": 190,
+   "y": 277,
    "width": 60,
    "height": 46
   },
@@ -203,8 +187,8 @@
     {
      "type": "image",
      "image": "assets/dpad_h_glow.png",
-     "x": 460,
-     "y": 342,
+     "x": 190,
+     "y": 277,
      "width": 60,
      "height": 46
     }
@@ -213,8 +197,8 @@
   {
    "type": "image",
    "image": "assets/dpad_h.png",
-   "x": 520,
-   "y": 342,
+   "x": 250,
+   "y": 277,
    "width": 60,
    "height": 46
   },
@@ -225,8 +209,8 @@
     {
      "type": "image",
      "image": "assets/dpad_h_glow.png",
-     "x": 520,
-     "y": 342,
+     "x": 250,
+     "y": 277,
      "width": 60,
      "height": 46
     }
@@ -235,8 +219,8 @@
   {
    "type": "image",
    "image": "assets/btn.png",
-   "x": 928,
-   "y": 296,
+   "x": 908,
+   "y": 316,
    "width": 84,
    "height": 84
   },
@@ -247,8 +231,8 @@
     {
      "type": "image",
      "image": "assets/btn_glow.png",
-     "x": 928,
-     "y": 296,
+     "x": 908,
+     "y": 316,
      "width": 84,
      "height": 84
     }
@@ -257,8 +241,8 @@
   {
    "type": "image",
    "image": "assets/btn.png",
-   "x": 976,
-   "y": 238,
+   "x": 956,
+   "y": 258,
    "width": 84,
    "height": 84
   },
@@ -269,8 +253,8 @@
     {
      "type": "image",
      "image": "assets/btn_glow.png",
-     "x": 976,
-     "y": 238,
+     "x": 956,
+     "y": 258,
      "width": 84,
      "height": 84
     }
@@ -279,8 +263,8 @@
   {
    "type": "image",
    "image": "assets/btn.png",
-   "x": 880,
-   "y": 238,
+   "x": 860,
+   "y": 258,
    "width": 84,
    "height": 84
   },
@@ -291,8 +275,8 @@
     {
      "type": "image",
      "image": "assets/btn_glow.png",
-     "x": 880,
-     "y": 238,
+     "x": 860,
+     "y": 258,
      "width": 84,
      "height": 84
     }
@@ -301,8 +285,8 @@
   {
    "type": "image",
    "image": "assets/btn.png",
-   "x": 928,
-   "y": 180,
+   "x": 908,
+   "y": 200,
    "width": 84,
    "height": 84
   },
@@ -313,8 +297,8 @@
     {
      "type": "image",
      "image": "assets/btn_glow.png",
-     "x": 928,
-     "y": 180,
+     "x": 908,
+     "y": 200,
      "width": 84,
      "height": 84
     }
@@ -323,8 +307,8 @@
   {
    "type": "image",
    "image": "assets/pill.png",
-   "x": 505,
-   "y": 218,
+   "x": 496,
+   "y": 234,
    "width": 70,
    "height": 32
   },
@@ -335,8 +319,8 @@
     {
      "type": "image",
      "image": "assets/pill_glow.png",
-     "x": 505,
-     "y": 218,
+     "x": 496,
+     "y": 234,
      "width": 70,
      "height": 32
     }
@@ -345,8 +329,8 @@
   {
    "type": "image",
    "image": "assets/pill.png",
-   "x": 625,
-   "y": 218,
+   "x": 634,
+   "y": 234,
    "width": 70,
    "height": 32
   },
@@ -357,8 +341,8 @@
     {
      "type": "image",
      "image": "assets/pill_glow.png",
-     "x": 625,
-     "y": 218,
+     "x": 634,
+     "y": 234,
      "width": 70,
      "height": 32
     }
@@ -368,23 +352,31 @@
    "type": "image",
    "image": "assets/btn.png",
    "x": 558,
-   "y": 150,
+   "y": 288,
    "width": 84,
    "height": 84
   },
-  {
-   "type": "showhide",
-   "input": "home",
+   {
+    "type": "showhide",
+    "input": "home",
    "children": [
     {
      "type": "image",
      "image": "assets/btn_glow.png",
      "x": 558,
-     "y": 150,
+     "y": 288,
      "width": 84,
      "height": 84
     }
-   ]
-  }
+    ]
+   },
+   {
+    "type": "image",
+    "image": "assets/face-labels.png",
+    "x": 0,
+    "y": 0,
+    "width": 1200,
+    "height": 760
+   }
  ]
 }

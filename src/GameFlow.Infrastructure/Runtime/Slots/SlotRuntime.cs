@@ -24,6 +24,7 @@ public sealed class SlotRuntime : IAsyncDisposable
     private readonly SlotSnapshotStore snapshotStore;
     private readonly IProfileRepository profileRepository;
     private readonly Input.IMouseOutputWriter mouseOutputWriter;
+    private readonly DeviceSettingsStore deviceSettingsStore;
     private readonly ILogger logger;
 
     private readonly List<SlotPipeline> pipelines = [];
@@ -51,13 +52,15 @@ public sealed class SlotRuntime : IAsyncDisposable
 
     public SlotRuntime(SlotRegistry registry, IOutputSinkFactory outputSinkFactory,
         SlotSnapshotStore snapshotStore,
-        IProfileRepository profileRepository, Input.IMouseOutputWriter mouseOutputWriter, ILogger logger)
+        IProfileRepository profileRepository, Input.IMouseOutputWriter mouseOutputWriter,
+        DeviceSettingsStore deviceSettingsStore, ILogger logger)
     {
         this.registry = registry;
         this.outputSinkFactory = outputSinkFactory;
         this.snapshotStore = snapshotStore;
         this.profileRepository = profileRepository;
         this.mouseOutputWriter = mouseOutputWriter;
+        this.deviceSettingsStore = deviceSettingsStore;
         this.logger = logger;
     }
 
@@ -247,14 +250,19 @@ public sealed class SlotRuntime : IAsyncDisposable
                 }
                 else if (deviceIds.Count == 1)
                 {
-                    snapshot = input.ReadDevice(deviceIds[0]);
+                    snapshot = ApplyDeviceSettings(pipeline.SlotId, deviceIds[0], input.ReadDevice(deviceIds[0]));
                 }
                 else
                 {
                     var snaps = new List<ControllerSnapshot>(deviceIds.Count);
                     foreach (var id in deviceIds)
                     {
-                        snaps.Add(input.ReadDevice(id));
+                        // Conditioned per device BEFORE merging. Doing it
+                        // after would apply one device's deadzone/curve to
+                        // the combined result, which is wrong whenever the
+                        // devices are tuned differently — and the whole
+                        // point of per-device settings is that they can be.
+                        snaps.Add(ApplyDeviceSettings(pipeline.SlotId, id, input.ReadDevice(id)));
                     }
                     snapshot = ControllerSnapshotMerger.Merge("Merged", snaps) with { Timestamp = now };
                 }
@@ -292,15 +300,40 @@ public sealed class SlotRuntime : IAsyncDisposable
     }
 
     /// <summary>
-    /// Loads and composes the slot's layered profiles. Missing ids are
-    /// skipped; an empty/all-missing set yields the neutral empty profile
-    /// (no remapping) — slots are independent of the global active profile.
+    /// Applies this slot's tuning for one device. Short-circuits when the
+    /// device has no settings or they're all defaults — that's the common
+    /// case, and this runs per device per tick at up to 1000 Hz.
+    ///
+    /// <para>
+    /// The check is by VALUE, not by reference. Settings restored from
+    /// device-settings.json are a fresh instance, never reference-equal to
+    /// <see cref="DeviceSettings.Default"/>, so a reference fast path would
+    /// only ever fire for the in-memory default — and the same untuned pad
+    /// would condition differently depending on whether its settings came
+    /// from memory or from disk.
+    /// </para>
+    /// </summary>
+    private ControllerSnapshot ApplyDeviceSettings(string slotId, string deviceId, ControllerSnapshot snapshot)
+    {
+        var settings = deviceSettingsStore.Get(slotId, deviceId);
+        if (DeviceSettingsProcessor.IsIdentity(settings))
+        {
+            return snapshot;
+        }
+        return DeviceSettingsProcessor.Apply(snapshot, settings);
+    }
+
+    /// <summary>
+    /// Loads and composes the slot's layered profiles, then appends the
+    /// slot's own touchpad rule. Missing ids are skipped; an empty/
+    /// all-missing set yields the neutral empty profile (no remapping) —
+    /// slots are independent of the global active profile.
     /// </summary>
     private async Task<ProfileDocument> ResolveSlotProfileAsync(ControllerSlot slot)
     {
         if (slot.ProfileIds.Count == 0)
         {
-            return SlotProfileComposer.Empty;
+            return WithSlotTouchpad(SlotProfileComposer.Empty, slot);
         }
 
         var layers = new List<ProfileDocument>(slot.ProfileIds.Count);
@@ -335,7 +368,36 @@ public sealed class SlotRuntime : IAsyncDisposable
             }
         }
 
-        return SlotProfileComposer.Compose(layers);
+        return WithSlotTouchpad(SlotProfileComposer.Compose(layers), slot);
+    }
+
+    /// <summary>
+    /// Appends the slot's touchpad rule to its composed profile, so the
+    /// mapping pipeline picks it up like any other rule.
+    ///
+    /// <para>
+    /// Appended LAST, after every profile layer, because the touchpad
+    /// belongs to the slot's hardware rather than to a profile: swapping
+    /// or reordering profiles must not change what the touch surface
+    /// does. Any touchpad rule that a layered profile happens to carry
+    /// still runs — both are in the list — but the slot's own rule is
+    /// applied after it and so wins on the controls they share.
+    /// </para>
+    /// </summary>
+    private static ProfileDocument WithSlotTouchpad(ProfileDocument composed, ControllerSlot slot)
+    {
+        if (slot.Touchpad is null)
+        {
+            return composed;
+        }
+
+        // The rule id is derived from the slot id rather than carried in
+        // the saved rule, so a slot duplicated through the registry can't
+        // hand its copy a colliding id — the pipeline keys per-rule
+        // gesture and anchor state by that id, and two slots sharing one
+        // would be two touch surfaces writing over each other's state.
+        var rule = slot.Touchpad with { Id = $"slot-touchpad-{slot.Id}" };
+        return composed with { Rules = [.. composed.Rules, rule] };
     }
 
     private async Task DisposePipelinesAsync()

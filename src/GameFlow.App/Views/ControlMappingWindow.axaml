@@ -23,6 +23,11 @@
             BorderBrush="{DynamicResource AppBorder0}"
             BorderThickness="0,0,0,1">
       <StackPanel Spacing="6">
+        <TextBlock Text="{Binding SelectionScopeLabel}"
+                   FontSize="10"
+                   FontWeight="Bold"
+                   LetterSpacing="1.2"
+                   Foreground="{DynamicResource AppAccent}" />
         <TextBlock Text="{Binding SelectionTitle}"
                    FontSize="22"
                    FontWeight="Bold"

@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using GameFlow.Infrastructure.Updates;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
@@ -121,7 +120,7 @@ public partial class UpdateAvailableDialog : Window
     /// Opens the release notes URL in the default browser. Failures
     /// are logged at Debug — the dialog stays open.
     /// </summary>
-    private void OnReleaseNotesClick(object? sender, PointerPressedEventArgs e)
+    private void OnReleaseNotesClick(object? sender, RoutedEventArgs e)
     {
         if (update is null)
         {

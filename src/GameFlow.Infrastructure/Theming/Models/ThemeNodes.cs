@@ -128,6 +128,24 @@ public sealed record ImageNode : ThemeNode
 }
 
 /// <summary>
+/// Runtime-coloured controller light. The referenced bitmap supplies the
+/// light's alpha mask while the dashboard supplies the live RGB value.
+/// Keeping the geometry in the theme lets every controller model place its
+/// LEDs accurately without model-specific drawing code in the app.
+/// </summary>
+public sealed record LightbarNode : ThemeNode
+{
+    /// <summary>Alpha-mask image for the illuminated region.</summary>
+    public string ImagePath { get; init; } = string.Empty;
+
+    public double Width { get; init; }
+    public double Height { get; init; }
+
+    /// <summary>Anchor at the image centre instead of its top-left.</summary>
+    public bool Center { get; init; }
+}
+
+/// <summary>
 /// Conditional-visibility wrapper. Mirrors VSCView's
 /// <c>"type": "showhide"</c>: renders its <see cref="ThemeNode.Children"/>
 /// only when the compiled Flee <see cref="Input"/> evaluates to non-zero.
@@ -167,6 +185,30 @@ public sealed record SliderNode : ThemeNode
 
     /// <summary>Compiled Flee expression for an additional rotation offset (degrees).</summary>
     public FleeNode InputR { get; init; } = new LiteralNode(0);
+}
+
+/// <summary>
+/// Touch-contact marker used by VSCView's <c>trailpad</c> element. The
+/// current renderer draws the active marker at its evaluated position;
+/// retaining historical trail samples can be added later without changing
+/// the theme schema or reintroducing an idle marker.
+/// </summary>
+public sealed record TrailPadNode : ThemeNode
+{
+    /// <summary>Non-zero while this touch contact is active.</summary>
+    public FleeNode Input { get; init; } = new LiteralNode(0);
+
+    /// <summary>Horizontal marker offset in theme-local pixels.</summary>
+    public FleeNode InputX { get; init; } = new LiteralNode(0);
+
+    /// <summary>Vertical marker offset in theme-local pixels.</summary>
+    public FleeNode InputY { get; init; } = new LiteralNode(0);
+
+    /// <summary>Marker image stamped at the current touch position.</summary>
+    public string ImagePath { get; init; } = string.Empty;
+
+    public double Width { get; init; }
+    public double Height { get; init; }
 }
 
 /// <summary>

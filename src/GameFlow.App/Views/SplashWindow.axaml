@@ -7,14 +7,14 @@
         CanResize="False"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False"
-        Background="#050B12"
+        Background="{DynamicResource AppSurface0}"
         WindowDecorations="Full">
 
   <Border Margin="0"
           CornerRadius="18"
           ClipToBounds="True"
-          Background="#07101D"
-          BorderBrush="#0F2035"
+          Background="{DynamicResource AppSurface1}"
+          BorderBrush="{DynamicResource AppBorder0}"
           BorderThickness="1">
     <Grid RowDefinitions="*,Auto">
 
@@ -54,23 +54,25 @@
                     Spacing="12">
           <StackPanel Orientation="Horizontal" Spacing="18" HorizontalAlignment="Center">
             <Border Width="64" Height="64" CornerRadius="16"
-                    Background="#001B26" BorderBrush="#00D4FF" BorderThickness="2"
+                    Background="{DynamicResource AppAccentSoft}"
+                    BorderBrush="{DynamicResource AppAccent}"
+                    BorderThickness="2"
                     VerticalAlignment="Center">
               <TextBlock Text="⊕" FontSize="34" FontWeight="Black"
-                         Foreground="#00D4FF"
+                         Foreground="{DynamicResource AppAccent}"
                          HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <!-- Single-line two-tone wordmark — see ShellWindow.axaml for why this replaced stacked two-line text. -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="0">
               <TextBlock Text="GAME" FontSize="46" FontWeight="Black"
-                         Foreground="White" VerticalAlignment="Center" LetterSpacing="1.5" />
+                         Foreground="{DynamicResource AppForeground}" VerticalAlignment="Center" LetterSpacing="1.5" />
               <TextBlock Text="FLOW" FontSize="46" FontWeight="Black"
-                         Foreground="#00D4FF" VerticalAlignment="Center" LetterSpacing="1.5" />
+                         Foreground="{DynamicResource AppAccent}" VerticalAlignment="Center" LetterSpacing="1.5" />
             </StackPanel>
           </StackPanel>
           <TextBlock Text="Cross-platform controller remapping, autofire &amp; speedrun tooling"
                      FontSize="14"
-                     Foreground="#8FA3BC"
+                     Foreground="{DynamicResource AppForegroundDim}"
                      TextWrapping="Wrap"
                      TextAlignment="Center"
                      HorizontalAlignment="Center" />
@@ -80,15 +82,14 @@
       <!-- Loading footer -->
       <Border Grid.Row="1"
               Padding="40,18,40,24"
-              Background="#04080F"
-              BorderBrush="#0F2035"
+              Background="{DynamicResource AppSurface0}"
+              BorderBrush="{DynamicResource AppBorder0}"
               BorderThickness="0,1,0,0">
         <StackPanel Spacing="10">
-          <ProgressBar IsIndeterminate="True" Height="2"
-                       Background="#0A1828" CornerRadius="1" />
+          <ProgressBar IsIndeterminate="True" Height="2" CornerRadius="1" />
           <TextBlock Text="Bootstrapping host, runtime pipeline, profile store and translations…"
                      FontSize="12"
-                     Foreground="#334155" />
+                     Foreground="{DynamicResource AppForegroundDim}" />
         </StackPanel>
       </Border>
 

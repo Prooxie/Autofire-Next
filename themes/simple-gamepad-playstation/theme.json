@@ -1,0 +1,382 @@
+{
+ "name": "PlayStation Symbols",
+ "width": 1200,
+ "height": 760,
+ "version": 1,
+ "children": [
+  {
+   "type": "image",
+   "image": "assets/body.png",
+   "x": 0,
+   "y": 0,
+   "width": 1200,
+   "height": 760
+  },
+  {
+   "type": "pbar",
+   "input": "triggers:l:analog",
+   "x": 185,
+   "y": 103,
+   "width": 150,
+   "height": 8,
+   "direction": "right",
+   "foreground": "CC35C8E8",
+   "background": "33141922"
+  },
+  {
+   "type": "pbar",
+   "input": "triggers:r:analog",
+   "x": 865,
+   "y": 103,
+   "width": 150,
+   "height": 8,
+   "direction": "right",
+   "foreground": "CC35C8E8",
+   "background": "33141922"
+  },
+  {
+   "type": "showhide",
+   "input": "bumpers:l",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/bumper_glow.png",
+     "x": 145,
+     "y": 120,
+     "width": 220,
+     "height": 48
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "bumpers:r",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/bumper_glow.png",
+     "x": 835,
+     "y": 120,
+     "width": 220,
+     "height": 48
+    }
+   ]
+  },
+  {
+   "type": "slider",
+   "inputX": "stick_left:x * 26",
+   "inputY": "stick_left:y * 26",
+   "x": 390,
+   "y": 480,
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/stick_cap.png",
+     "x": 0,
+     "y": 0,
+     "width": 150,
+     "height": 150,
+     "center": true
+    },
+    {
+     "type": "showhide",
+     "input": "stick_left:click",
+     "children": [
+      {
+       "type": "image",
+       "image": "assets/stick_glow.png",
+       "x": 0,
+       "y": 0,
+       "width": 150,
+       "height": 150,
+       "center": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "slider",
+   "inputX": "stick_right:x * 26",
+   "inputY": "stick_right:y * 26",
+   "x": 810,
+   "y": 480,
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/stick_cap.png",
+     "x": 0,
+     "y": 0,
+     "width": 150,
+     "height": 150,
+     "center": true
+    },
+    {
+     "type": "showhide",
+     "input": "stick_right:click",
+     "children": [
+      {
+       "type": "image",
+       "image": "assets/stick_glow.png",
+       "x": 0,
+       "y": 0,
+       "width": 150,
+       "height": 150,
+       "center": true
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/dpad_v.png",
+   "x": 227,
+   "y": 240,
+   "width": 46,
+   "height": 60
+  },
+  {
+   "type": "showhide",
+   "input": "quad_left:n",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/dpad_v_glow.png",
+     "x": 227,
+     "y": 240,
+     "width": 46,
+     "height": 60
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/dpad_v.png",
+   "x": 227,
+   "y": 300,
+   "width": 46,
+   "height": 60
+  },
+  {
+   "type": "showhide",
+   "input": "quad_left:s",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/dpad_v_glow.png",
+     "x": 227,
+     "y": 300,
+     "width": 46,
+     "height": 60
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/dpad_h.png",
+   "x": 190,
+   "y": 277,
+   "width": 60,
+   "height": 46
+  },
+  {
+   "type": "showhide",
+   "input": "quad_left:w",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/dpad_h_glow.png",
+     "x": 190,
+     "y": 277,
+     "width": 60,
+     "height": 46
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/dpad_h.png",
+   "x": 250,
+   "y": 277,
+   "width": 60,
+   "height": 46
+  },
+  {
+   "type": "showhide",
+   "input": "quad_left:e",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/dpad_h_glow.png",
+     "x": 250,
+     "y": 277,
+     "width": 60,
+     "height": 46
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/btn.png",
+   "x": 908,
+   "y": 316,
+   "width": 84,
+   "height": 84
+  },
+  {
+   "type": "showhide",
+   "input": "quad_right:s",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/btn_glow.png",
+     "x": 908,
+     "y": 316,
+     "width": 84,
+     "height": 84
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/btn.png",
+   "x": 956,
+   "y": 258,
+   "width": 84,
+   "height": 84
+  },
+  {
+   "type": "showhide",
+   "input": "quad_right:e",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/btn_glow.png",
+     "x": 956,
+     "y": 258,
+     "width": 84,
+     "height": 84
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/btn.png",
+   "x": 860,
+   "y": 258,
+   "width": 84,
+   "height": 84
+  },
+  {
+   "type": "showhide",
+   "input": "quad_right:w",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/btn_glow.png",
+     "x": 860,
+     "y": 258,
+     "width": 84,
+     "height": 84
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/btn.png",
+   "x": 908,
+   "y": 200,
+   "width": 84,
+   "height": 84
+  },
+  {
+   "type": "showhide",
+   "input": "quad_right:n",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/btn_glow.png",
+     "x": 908,
+     "y": 200,
+     "width": 84,
+     "height": 84
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/pill.png",
+   "x": 496,
+   "y": 234,
+   "width": 70,
+   "height": 32
+  },
+  {
+   "type": "showhide",
+   "input": "menu:l",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/pill_glow.png",
+     "x": 496,
+     "y": 234,
+     "width": 70,
+     "height": 32
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/pill.png",
+   "x": 634,
+   "y": 234,
+   "width": 70,
+   "height": 32
+  },
+  {
+   "type": "showhide",
+   "input": "menu:r",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/pill_glow.png",
+     "x": 634,
+     "y": 234,
+     "width": 70,
+     "height": 32
+    }
+   ]
+  },
+  {
+   "type": "image",
+   "image": "assets/btn.png",
+   "x": 558,
+   "y": 288,
+   "width": 84,
+   "height": 84
+  },
+   {
+    "type": "showhide",
+    "input": "home",
+   "children": [
+    {
+     "type": "image",
+     "image": "assets/btn_glow.png",
+     "x": 558,
+     "y": 288,
+     "width": 84,
+     "height": 84
+    }
+    ]
+   },
+   {
+    "type": "image",
+    "image": "assets/face-labels.png",
+    "x": 0,
+    "y": 0,
+    "width": 1200,
+    "height": 760
+   }
+ ]
+}

@@ -157,15 +157,11 @@ public sealed class ThemeRegistry
 
     /// <summary>
     /// Returns the installed themes to offer for <paramref name="style"/>,
-    /// sorted by display name. Resolution walks a FAMILY FALLBACK CHAIN
-    /// rather than requiring an exact style match: an Xbox 360 panel with
-    /// no 360-specific theme installed falls back to any Xbox-generation
-    /// theme, a DualSense panel to any PlayStation theme, and — as the
-    /// universal last resort — ANY installed theme at all. Rendering the
-    /// nearest available art (with its name visible in the skin picker)
-    /// beats a blank panel that says "no theme installed" when the user
-    /// demonstrably has themes; the exact-match message now only appears
-    /// when the themes folder is genuinely empty.
+    /// sorted by display name. Only exact controller-model matches are
+    /// returned: a DualSense skin cannot be selected for a DualShock 4,
+    /// and an Xbox 360 skin cannot be selected for an Xbox Series output.
+    /// This keeps short skin names such as "Black" meaningful inside the
+    /// model-specific picker and prevents misleading controller artwork.
     /// <see cref="ControllerVisualStyle.None"/> and
     /// <see cref="ControllerVisualStyle.Auto"/> still return an empty
     /// list — None means "render nothing" by contract.
@@ -179,56 +175,19 @@ public sealed class ThemeRegistry
 
         lock (syncRoot)
         {
-            foreach (var candidate in FallbackChainFor(style))
+            var result = new List<InstalledTheme>();
+            foreach (var theme in themes)
             {
-                var result = new List<InstalledTheme>();
-                foreach (var t in themes)
+                if (theme.PreferredStyle == style)
                 {
-                    if (t.PreferredStyle == candidate)
-                    {
-                        result.Add(t);
-                    }
-                }
-                if (result.Count > 0)
-                {
-                    result.Sort(static (a, b) => string.Compare(
-                        a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
-                    return result;
+                    result.Add(theme);
                 }
             }
-
-            // Universal last resort: anything installed at all.
-            var any = new List<InstalledTheme>(themes);
-            any.Sort(static (a, b) => string.Compare(
+            result.Sort(static (a, b) => string.Compare(
                 a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase));
-            return any;
+            return result;
         }
     }
-
-    /// <summary>
-    /// Family-ordered fallback for each style: same generation first,
-    /// then siblings within the brand family, nearest generation first.
-    /// </summary>
-    private static ControllerVisualStyle[] FallbackChainFor(ControllerVisualStyle style) => style switch
-    {
-        ControllerVisualStyle.Xbox360 => [ControllerVisualStyle.Xbox360, ControllerVisualStyle.Xbox, ControllerVisualStyle.XboxOne, ControllerVisualStyle.XboxSeries],
-        ControllerVisualStyle.XboxOne => [ControllerVisualStyle.XboxOne, ControllerVisualStyle.XboxSeries, ControllerVisualStyle.Xbox, ControllerVisualStyle.Xbox360],
-        ControllerVisualStyle.XboxSeries => [ControllerVisualStyle.XboxSeries, ControllerVisualStyle.XboxOne, ControllerVisualStyle.Xbox, ControllerVisualStyle.Xbox360],
-        ControllerVisualStyle.Xbox => [ControllerVisualStyle.Xbox, ControllerVisualStyle.XboxSeries, ControllerVisualStyle.XboxOne, ControllerVisualStyle.Xbox360],
-        ControllerVisualStyle.PlayStation5 => [ControllerVisualStyle.PlayStation5, ControllerVisualStyle.PlayStation4, ControllerVisualStyle.PlayStation3],
-        ControllerVisualStyle.PlayStation4 => [ControllerVisualStyle.PlayStation4, ControllerVisualStyle.PlayStation5, ControllerVisualStyle.PlayStation3],
-        ControllerVisualStyle.PlayStation3 => [ControllerVisualStyle.PlayStation3, ControllerVisualStyle.PlayStation4, ControllerVisualStyle.PlayStation5],
-        ControllerVisualStyle.SteamDeck => [ControllerVisualStyle.SteamDeck, ControllerVisualStyle.SteamController],
-        ControllerVisualStyle.SteamController => [ControllerVisualStyle.SteamController, ControllerVisualStyle.SteamDeck],
-        ControllerVisualStyle.SimpleGamepad => [ControllerVisualStyle.SimpleGamepad, ControllerVisualStyle.Arcade, ControllerVisualStyle.Xbox360, ControllerVisualStyle.XboxSeries],
-        ControllerVisualStyle.Arcade => [ControllerVisualStyle.Arcade, ControllerVisualStyle.SimpleGamepad],
-        // Keyboard/Mouse never borrow gamepad art via the family chain —
-        // wrong-device art there is worse than the bundled defaults,
-        // which ship for both styles.
-        ControllerVisualStyle.Keyboard => [ControllerVisualStyle.Keyboard],
-        ControllerVisualStyle.Mouse => [ControllerVisualStyle.Mouse],
-        _ => [style],
-    };
 
     /// <summary>
     /// Resolves a theme by its registry id (the lower-cased,
@@ -276,9 +235,19 @@ public sealed class ThemeRegistry
     /// substring tests cover the common naming patterns (<c>xbox-series-x</c>,
     /// <c>ps5-default</c>, <c>dualshock-4-jet-black</c>, etc.).
     /// </summary>
-    private static ControllerVisualStyle GuessStyleFromFolderName(string folder)
+    internal static ControllerVisualStyle GuessStyleFromFolderName(string folder)
     {
         var name = folder.ToLowerInvariant();
+        // Composite Simple Gamepad skin names intentionally carry the
+        // legend they render (for example simple-gamepad-xbox and
+        // simple-gamepad-nintendo).  Resolve the family marker first so
+        // those words do not incorrectly reclassify the skin as a full
+        // Xbox or Switch Pro controller theme.
+        if (name.Contains("simple-gamepad", StringComparison.Ordinal) ||
+            name.Contains("simplegamepad", StringComparison.Ordinal))
+        {
+            return ControllerVisualStyle.SimpleGamepad;
+        }
         if (name.Contains("ps5", StringComparison.Ordinal) ||
             name.Contains("dualsense", StringComparison.Ordinal) ||
             name.Contains("playstation5", StringComparison.Ordinal))

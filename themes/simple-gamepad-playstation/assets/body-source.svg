@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#303746"/>
+      <stop offset="1" stop-color="#242a35"/>
+    </linearGradient>
+    <linearGradient id="grip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a313e"/>
+      <stop offset="1" stop-color="#202631"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M247 132 C165 132 112 181 93 277 L57 529 C42 633 88 710 166 713 C207 715 235 691 265 650 L355 530 H845 L935 650 C965 691 993 715 1034 713 C1112 710 1158 633 1143 529 L1107 277 C1088 181 1035 132 953 132 Z"
+        fill="url(#shell)" stroke="#5b667c" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M266 162 H934 C1007 162 1055 202 1071 288 L1097 470 C1043 426 977 403 902 400 L831 497 H369 L298 400 C223 403 157 426 103 470 L129 288 C145 202 193 162 266 162 Z"
+        fill="none" stroke="#3c4557" stroke-width="4"/>
+
+  <path d="M103 470 C157 426 223 403 298 400 L355 530 L265 650 C235 691 207 715 166 713 C88 710 42 633 57 529 Z"
+        fill="url(#grip)" stroke="#4c566b" stroke-width="4"/>
+  <path d="M1097 470 C1043 426 977 403 902 400 L845 530 L935 650 C965 691 993 715 1034 713 C1112 710 1158 633 1143 529 Z"
+        fill="url(#grip)" stroke="#4c566b" stroke-width="4"/>
+
+  <circle cx="250" cy="300" r="112" fill="#202630" stroke="#465066" stroke-width="5"/>
+  <circle cx="950" cy="300" r="112" fill="#202630" stroke="#465066" stroke-width="5"/>
+  <circle cx="390" cy="480" r="91" fill="#1d222c" stroke="#566177" stroke-width="5"/>
+  <circle cx="810" cy="480" r="91" fill="#1d222c" stroke="#566177" stroke-width="5"/>
+
+  <rect x="487" y="228" width="88" height="44" rx="22" fill="#1c212a" stroke="#4d586d" stroke-width="4"/>
+  <rect x="625" y="228" width="88" height="44" rx="22" fill="#1c212a" stroke="#4d586d" stroke-width="4"/>
+  <circle cx="600" cy="330" r="49" fill="#1c212a" stroke="#4d586d" stroke-width="4"/>
+
+  <rect x="170" y="55" width="180" height="56" rx="22" fill="#202630" stroke="#5b667c" stroke-width="5"/>
+  <rect x="850" y="55" width="180" height="56" rx="22" fill="#202630" stroke="#5b667c" stroke-width="5"/>
+  <rect x="145" y="120" width="220" height="48" rx="22" fill="#29303d" stroke="#667188" stroke-width="5"/>
+  <rect x="835" y="120" width="220" height="48" rx="22" fill="#29303d" stroke="#667188" stroke-width="5"/>
+
+  <g fill="#aeb8ca" font-family="Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle">
+    <text x="260" y="91">L2</text>
+    <text x="940" y="91">R2</text>
+    <text x="255" y="152">L1</text>
+    <text x="945" y="152">R1</text>
+  </g>
+</svg>

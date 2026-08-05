@@ -1054,3 +1054,197 @@ msgstr "Enregistrer"
 
 msgid "DashboardNoControllerConnected"
 msgstr "Aucune manette connectée"
+
+# ── Touchpad tab: joystick / D-pad / mouse mapping + gestures ──
+
+msgid "DevicesTouchpadTab"
+msgstr "Pavé tactile"
+
+msgid "DevicesSlotSettingsTab"
+msgstr "Paramètres"
+
+msgid "SlotsNoSelection"
+msgstr "Sélectionnez une manette virtuelle pour modifier ses paramètres."
+
+msgid "TouchpadJoystickSection"
+msgstr "Joystick"
+
+msgid "TouchpadJoystickHint"
+msgstr "Le stick se centre là où votre doigt se pose, comme le stick virtuel d'un jeu mobile."
+
+msgid "TouchpadStickEnabled"
+msgstr "Associer le toucher à un stick"
+
+msgid "TouchpadTargetStick"
+msgstr "Stick cible"
+
+msgid "TouchpadStickSensitivity"
+msgstr "Sensibilité"
+
+msgid "TouchpadStickLeft"
+msgstr "Stick gauche"
+
+msgid "TouchpadStickRight"
+msgstr "Stick droit"
+
+msgid "TouchpadDpadSection"
+msgstr "Croix directionnelle"
+
+msgid "TouchpadDpadEnabled"
+msgstr "Associer le toucher à la croix"
+
+msgid "TouchpadDpadEightWay"
+msgstr "8 directions (diagonales)"
+
+msgid "TouchpadDpadDeadzone"
+msgstr "Rayon de zone morte"
+
+msgid "TouchpadMouseSection"
+msgstr "Souris"
+
+msgid "TouchpadMouseHint"
+msgstr "Déplace le curseur image par image, comme le pavé tactile d'un portable."
+
+msgid "TouchpadMouseEnabled"
+msgstr "Associer le toucher à la souris"
+
+msgid "TouchpadMouseSensitivityX"
+msgstr "Sensibilité X"
+
+msgid "TouchpadMouseSensitivityY"
+msgstr "Sensibilité Y"
+
+msgid "TouchpadInvertMouseX"
+msgstr "Inverser X"
+
+msgid "TouchpadInvertMouseY"
+msgstr "Inverser Y"
+
+msgid "TouchpadGesturesSection"
+msgstr "Gestes"
+
+msgid "TouchpadGesturesEnabled"
+msgstr "Activer les gestes"
+
+msgid "TouchpadAddGesture"
+msgstr "Ajouter un geste"
+
+msgid "TouchpadRemove"
+msgstr "Supprimer"
+
+msgid "TouchpadNoGestures"
+msgstr "Aucun geste pour l'instant."
+
+msgid "TouchpadGestureTarget"
+msgstr "Appuyer sur"
+
+msgid "TouchpadGestureHold"
+msgstr "Maintien (ms)"
+
+msgid "TouchpadGestureFingers"
+msgstr "Doigts"
+
+msgid "TouchpadGestureEightWay"
+msgstr "8 directions"
+
+msgid "TouchpadGestureTapCount"
+msgstr "Appuis"
+
+msgid "TouchpadTuningSection"
+msgstr "Reconnaissance"
+
+msgid "TouchpadSwipeMinDistance"
+msgstr "Distance de balayage"
+
+msgid "TouchpadTapMax"
+msgstr "Appui max (ms)"
+
+msgid "TouchpadMultiTapWindow"
+msgstr "Fenêtre multi-appui (ms)"
+
+msgid "TouchpadLongPress"
+msgstr "Appui long (ms)"
+
+msgid "TouchpadPinchThreshold"
+msgstr "Seuil de pincement"
+
+msgid "TouchpadRotateThreshold"
+msgstr "Seuil de rotation (°)"
+
+msgid "TouchpadShapeThreshold"
+msgstr "Correspondance de forme"
+
+msgid "TouchGestureSwipe"
+msgstr "Balayer"
+
+msgid "TouchGestureTap"
+msgstr "Appuyer"
+
+msgid "TouchGestureLongPress"
+msgstr "Appui long"
+
+msgid "TouchGesturePinch"
+msgstr "Pincer"
+
+msgid "TouchGestureRotate"
+msgstr "Pivoter"
+
+msgid "TouchGestureShape"
+msgstr "Forme"
+
+msgid "TouchDirUp"
+msgstr "Haut"
+
+msgid "TouchDirUpRight"
+msgstr "Haut droite"
+
+msgid "TouchDirRight"
+msgstr "Droite"
+
+msgid "TouchDirDownRight"
+msgstr "Bas droite"
+
+msgid "TouchDirDown"
+msgstr "Bas"
+
+msgid "TouchDirDownLeft"
+msgstr "Bas gauche"
+
+msgid "TouchDirLeft"
+msgstr "Gauche"
+
+msgid "TouchDirUpLeft"
+msgstr "Haut gauche"
+
+msgid "TouchPinchIn"
+msgstr "Rapprocher"
+
+msgid "TouchPinchOut"
+msgstr "Écarter"
+
+msgid "TouchRotateCw"
+msgstr "Sens horaire"
+
+msgid "TouchRotateCcw"
+msgstr "Sens antihoraire"
+
+msgid "TouchShapeCircleCw"
+msgstr "Cercle (sens horaire)"
+
+msgid "TouchShapeCircleCcw"
+msgstr "Cercle (sens antihoraire)"
+
+msgid "TouchShapeSquare"
+msgstr "Carré"
+
+msgid "TouchShapeTriangle"
+msgstr "Triangle"
+
+msgid "TouchShapeZ"
+msgstr "Z"
+
+msgid "TouchShapeCheckmark"
+msgstr "Coche"
+
+msgid "TouchButtonNone"
+msgstr "— aucun —"

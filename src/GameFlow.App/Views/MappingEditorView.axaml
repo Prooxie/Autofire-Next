@@ -18,7 +18,23 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Grid ColumnDefinitions="*,430" ColumnSpacing="14" Margin="20,16">
+  <!-- The edit form was pinned at exactly 430px. That is wide enough for
+       its two-column field rows but it never yields, so as the window
+       approached its minimum the rule list to its left was squeezed
+       toward zero instead of the two panes sharing the loss. A floor plus
+       a cap lets the form shrink to a still-usable 340 and stop growing
+       past 470, where the fields just stretch without gaining anything.
+
+       These two floors plus this Grid's own margin and gutter are what
+       set the 654 MinWidth on the column that hosts this control, over
+       in ShellWindow. Raising either one without raising that number
+       pushes this pane off the right edge of the window at its minimum
+       size instead of shrinking it. -->
+  <Grid ColumnSpacing="14" Margin="20,16">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" MinWidth="260" />
+      <ColumnDefinition Width="0.62*" MinWidth="340" MaxWidth="470" />
+    </Grid.ColumnDefinitions>
 
     <!-- ══ LEFT: Rule list ══════════════════════════════════════════ -->
     <Grid RowDefinitions="Auto,*" RowSpacing="12">
@@ -56,7 +72,7 @@
                     <Border Padding="8,4" CornerRadius="6"
                             Background="{Binding KindBadgeColor}">
                       <TextBlock Text="{Binding KindLabel}" FontSize="9.5"
-                                 FontWeight="Bold" Foreground="#040C16"
+                                 FontWeight="Bold" Foreground="{DynamicResource AppBadgeForeground}"
                                  LetterSpacing="0.5" />
                     </Border>
                     <CheckBox IsChecked="{Binding Enabled}"
@@ -68,9 +84,15 @@
                   <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Top">
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                FontSize="13" Foreground="{DynamicResource AppForeground}" />
+                    <!-- MaxLines, not MaxHeight: the height cap sliced the
+                         third line horizontally through the letterforms,
+                         which looks like a clipping bug rather than
+                         deliberate truncation. -->
                     <TextBlock Text="{Binding SummaryText}" FontSize="11.5"
                                Foreground="{DynamicResource AppForegroundDim}"
-                               TextWrapping="Wrap" MaxHeight="38"
+                               TextWrapping="Wrap" MaxLines="2"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding SummaryText}"
                                FontFamily="Cascadia Code,Consolas,monospace" />
                   </StackPanel>
 
@@ -143,7 +165,7 @@
                       Background="{Binding KindBadgeColor}"
                       HorizontalAlignment="Left">
                 <TextBlock Text="{Binding KindLabel}" FontSize="10"
-                           FontWeight="Bold" Foreground="#040C16" LetterSpacing="0.5" />
+                           FontWeight="Bold" Foreground="{DynamicResource AppBadgeForeground}" LetterSpacing="0.5" />
               </Border>
               <TextBlock Text="{Binding #EditorRoot.DataContext.EditPanelTitle, FallbackValue='Edit rule'}"
                          FontSize="15" FontWeight="SemiBold"
@@ -151,7 +173,7 @@
                          TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
-            <Border Height="1" Background="{DynamicResource AppBorder0}" />
+            <Border Classes="divider" />
 
             <!-- ── Common fields ──────────────────────────────────── -->
             <StackPanel Spacing="5">
@@ -180,17 +202,17 @@
 
             <!-- ── Button remap fields ─────────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsButtonRemap}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                 <StackPanel Grid.Column="0" Spacing="5">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SourceButtonLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#4F8CFF" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppInfo}" LetterSpacing="0.8" />
                   <ComboBox ItemsSource="{Binding ButtonOptions}"
                             SelectedItem="{Binding SelectedSourceButtonOption}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="5">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.TargetButtonLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#4F8CFF" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppInfo}" LetterSpacing="0.8" />
                   <ComboBox ItemsSource="{Binding ButtonOptions}"
                             SelectedItem="{Binding SelectedTargetButtonOption}" />
                 </StackPanel>
@@ -201,17 +223,17 @@
 
             <!-- ── Button autofire fields ──────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsButtonAutofire}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                 <StackPanel Grid.Column="0" Spacing="5">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTriggerButtonLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#F97316" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppWarning}" LetterSpacing="0.8" />
                   <ComboBox ItemsSource="{Binding ButtonOptions}"
                             SelectedItem="{Binding SelectedSourceButtonOption}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="5">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionOutputButtonLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#F97316" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppWarning}" LetterSpacing="0.8" />
                   <ComboBox ItemsSource="{Binding ButtonOptions}"
                             SelectedItem="{Binding SelectedTargetButtonOption}" />
                 </StackPanel>
@@ -222,10 +244,10 @@
 
             <!-- ── Stick threshold fields ──────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsStickThreshold}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <StackPanel Spacing="5">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTargetStickLabel}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="#10B981" LetterSpacing="0.8" />
+                            Foreground="{DynamicResource AppSuccess}" LetterSpacing="0.8" />
                 <ComboBox ItemsSource="{Binding StickOptions}"
                           SelectedItem="{Binding SelectedTargetStickOption}" />
               </StackPanel>
@@ -234,7 +256,7 @@
               <StackPanel Spacing="5">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionDeadzoneLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#10B981" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppSuccess}" LetterSpacing="0.8" />
                   <TextBlock Grid.Column="1" Text="{Binding DeadzoneText}"
                              FontSize="12" Foreground="{DynamicResource AppAccent}"
                              FontFamily="Cascadia Code,Consolas,monospace" />
@@ -252,7 +274,7 @@
               <StackPanel Spacing="5">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionFullAtLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#10B981" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppSuccess}" LetterSpacing="0.8" />
                   <TextBlock Grid.Column="1" Text="{Binding FullAtText}"
                              FontSize="12" Foreground="{DynamicResource AppAccent}"
                              FontFamily="Cascadia Code,Consolas,monospace" />
@@ -271,24 +293,24 @@
 
             <!-- ── Stick autofire fields ───────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsStickAutofire}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                 <StackPanel Grid.Column="0" Spacing="5">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionSourceStickLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#A78BFA" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppFeature}" LetterSpacing="0.8" />
                   <ComboBox ItemsSource="{Binding StickOptions}"
                             SelectedItem="{Binding SelectedSourceStickOption}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Spacing="5">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTargetStickLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#A78BFA" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppFeature}" LetterSpacing="0.8" />
                   <ComboBox ItemsSource="{Binding StickOptions}"
                             SelectedItem="{Binding SelectedTargetStickOption}" />
                 </StackPanel>
               </Grid>
               <StackPanel Spacing="5">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionBlendModeLabel}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="#A78BFA" LetterSpacing="0.8" />
+                            Foreground="{DynamicResource AppFeature}" LetterSpacing="0.8" />
                 <ComboBox ItemsSource="{Binding BlendModeOptions}"
                           SelectedItem="{Binding SelectedBlendModeOption}" />
               </StackPanel>
@@ -297,7 +319,7 @@
               <StackPanel Spacing="5">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionActivationDeadzoneLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#A78BFA" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppFeature}" LetterSpacing="0.8" />
                   <TextBlock Grid.Column="1" Text="{Binding DeadzoneText}"
                              FontSize="12" Foreground="{DynamicResource AppAccent}"
                              FontFamily="Cascadia Code,Consolas,monospace" />
@@ -313,7 +335,7 @@
               <StackPanel Spacing="5">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionActivationFullAtLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#A78BFA" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppFeature}" LetterSpacing="0.8" />
                   <TextBlock Grid.Column="1" Text="{Binding FullAtText}"
                              FontSize="12" Foreground="{DynamicResource AppAccent}"
                              FontFamily="Cascadia Code,Consolas,monospace" />
@@ -330,10 +352,10 @@
 
             <!-- ── Script rule fields ──────────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsScriptRule}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <StackPanel Spacing="5">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTargetControlKeyLabel}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="#FACC15" LetterSpacing="0.8" />
+                            Foreground="{DynamicResource AppWarning}" LetterSpacing="0.8" />
                 <TextBox Text="{Binding ControlKey}"
                          PlaceholderText="South / LeftStick / RightTrigger.Analog" />
                 <CheckBox IsChecked="{Binding SuppressScriptSourceInput}"
@@ -345,7 +367,7 @@
               <StackPanel Spacing="5">
                 <Grid ColumnDefinitions="*,Auto">
                   <TextBlock Text="{Binding #EditorRoot.DataContext.SectionScriptLabel}" FontSize="10" FontWeight="SemiBold"
-                             Foreground="#FACC15" LetterSpacing="0.8" />
+                              Foreground="{DynamicResource AppWarning}" LetterSpacing="0.8" />
                   <TextBlock Grid.Column="1" Text="{Binding ScriptPreviewText}"
                              FontSize="11" Foreground="{DynamicResource AppForegroundDim}"
                              MaxWidth="160" TextTrimming="CharacterEllipsis" />
@@ -361,7 +383,7 @@
 
             <!-- ── Freeze last direction fields ───────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsFreeze}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <StackPanel Spacing="5">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionActivationButtonLabel}" FontSize="10"
                            FontWeight="SemiBold" Foreground="{DynamicResource AppAccent}"
@@ -399,10 +421,10 @@
 
             <!-- ── Multi-button autofire fields ───────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsMultiButtonAutofire}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <StackPanel Spacing="5">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTriggerButtonHoldLabel}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="#FB7185" LetterSpacing="0.8" />
+                            Foreground="{DynamicResource AppDanger}" LetterSpacing="0.8" />
                 <ComboBox ItemsSource="{Binding ButtonOptions}"
                           SelectedItem="{Binding SelectedSourceButtonOption}"
                           HorizontalAlignment="Stretch" />
@@ -412,7 +434,7 @@
 
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionSequenceStepsLabel}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="#FB7185" LetterSpacing="0.8" VerticalAlignment="Center" />
+                            Foreground="{DynamicResource AppDanger}" LetterSpacing="0.8" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Content="{Binding #EditorRoot.DataContext.AddStepLabel}"
                         Command="{Binding AddStepCommand}"
                         Padding="8,3" FontSize="11" />
@@ -431,7 +453,7 @@
                         <Grid ColumnDefinitions="*,Auto">
                           <StackPanel Grid.Column="0" Spacing="3">
                             <TextBlock Text="{Binding #EditorRoot.DataContext.SectionStepTargetLabel}" FontSize="9" FontWeight="SemiBold"
-                                       Foreground="#FB7185" LetterSpacing="0.8" />
+                                       Foreground="{DynamicResource AppDanger}" LetterSpacing="0.8" />
                             <ComboBox ItemsSource="{Binding ButtonOptions}"
                                       SelectedItem="{Binding SelectedTargetButtonOption}"
                                       HorizontalAlignment="Stretch" />
@@ -467,10 +489,10 @@
 
             <!-- ── Rule toggle fields ─────────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding IsRuleToggle}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <StackPanel Spacing="5">
                 <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTriggerButtonToggleLabel}" FontSize="10" FontWeight="SemiBold"
-                           Foreground="#34D399" LetterSpacing="0.8" />
+                            Foreground="{DynamicResource AppSuccess}" LetterSpacing="0.8" />
                 <ComboBox ItemsSource="{Binding ButtonOptions}"
                           SelectedItem="{Binding SelectedSourceButtonOption}"
                           HorizontalAlignment="Stretch" />
@@ -479,7 +501,7 @@
                         Content="{Binding #EditorRoot.DataContext.SuppressSourceButtonLabel}" />
 
               <TextBlock Text="{Binding #EditorRoot.DataContext.SectionRulesToToggleLabel}" FontSize="10" FontWeight="SemiBold"
-                         Foreground="#34D399" LetterSpacing="0.8" />
+                          Foreground="{DynamicResource AppSuccess}" LetterSpacing="0.8" />
               <TextBlock Text="{Binding #EditorRoot.DataContext.ToggleHintLabel}"
                          FontSize="11" Foreground="{DynamicResource AppForegroundDim}"
                          TextWrapping="Wrap" />
@@ -498,7 +520,7 @@
 
             <!-- ── Timing fields ──────────────────────────────────── -->
             <StackPanel Spacing="12" IsVisible="{Binding ShowPulseTiming}">
-              <Border Height="1" Background="{DynamicResource AppBorder0}" />
+              <Border Classes="divider" />
               <TextBlock Text="{Binding #EditorRoot.DataContext.SectionTimingLabel}" FontSize="10" FontWeight="SemiBold"
                          Foreground="{DynamicResource AppForegroundDim}" LetterSpacing="0.8" />
               <StackPanel Spacing="5">
@@ -540,7 +562,7 @@
             </StackPanel>
 
             <!-- ── Save / Cancel — fix #4: Save rule text centered ── -->
-            <Border Height="1" Background="{DynamicResource AppBorder0}" />
+            <Border Classes="divider" />
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
               <Button Grid.Column="0"
                       Classes="primary"

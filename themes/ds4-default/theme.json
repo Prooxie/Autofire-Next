@@ -1,5 +1,5 @@
 {
- "name": "No Gyro",
+ "name": "Jet Black",
  "width": 1150,
  "height": 622,
  "version": 1,
@@ -97,10 +97,28 @@
    "height": 583.0,
    "center": true,
    "winform.smoothing": "Default",
-   "winform.interpolation": "High",
-   "children": [
-    {
-     "x": 0.0,
+    "winform.interpolation": "High",
+    "children": [
+     {
+      "type": "lightbar",
+      "image": "assets/DS4_Lightbar_Rear.png",
+      "x": 0.0,
+      "y": -194.0,
+      "width": 268.0,
+      "height": 16.0,
+      "center": true
+     },
+     {
+      "type": "lightbar",
+      "image": "assets/DS4_Lightbar_Front.png",
+      "x": 0.0,
+      "y": -207.0,
+      "width": 325.0,
+      "height": 3.0,
+      "center": true
+     },
+     {
+      "x": 0.0,
      "y": 0.0,
      "children": [
       {

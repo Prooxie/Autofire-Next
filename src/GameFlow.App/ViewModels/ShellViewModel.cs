@@ -70,6 +70,9 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     private readonly IServiceProvider serviceProvider;
     private readonly AppRuntimeOptions runtimeOptions;
     private readonly SemaphoreSlim rulesSaveGate = new(1, 1);
+    private readonly SemaphoreSlim panelBackgroundSaveGate = new(1, 1);
+    private int panelBackgroundPersistVersion;
+    private string? pendingPanelBackgroundBrush;
 
     private LanguageOption? selectedLanguage;
     private AppThemeOption? selectedTheme;
@@ -157,6 +160,8 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         OpenControlEditorCommand         = new RelayCommand<string>(OpenControlEditor);
         OpenSettingsCommand              = new AsyncRelayCommand(OpenSettingsAsync);
         AddVirtualControllerCommand      = new RelayCommand(AddVirtualControllerFromSidebar);
+        OpenVirtualControllerCommand     = new RelayCommand<string>(SelectVirtualMenuItem);
+        OpenMappingsCommand              = new RelayCommand(() => OuterNavSelectedIndex = 1);
 
         SupportedLanguages     = localizationService.SupportedLanguages;
         ThemeOptions           = CreateThemeOptions();
@@ -207,6 +212,8 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         PhysicalController.SetPanelKind(isPhysical: true);
         VirtualController  = new ControllerVisualStateViewModel(OnControllerElementSelected, localizationService);
         VirtualController.SetPanelKind(isPhysical: false);
+        SlotConfigurationController = new ControllerVisualStateViewModel(OnControllerElementSelected, localizationService);
+        SlotConfigurationController.SetPanelKind(isPhysical: false);
 
         // Initial build — deliberately AFTER PhysicalController /
         // VirtualController above; see the note on the removed early
@@ -258,6 +265,8 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
 
     /// <summary>Sidebar "+ Add controller": creates a slot and jumps to its editor.</summary>
     public IRelayCommand AddVirtualControllerCommand { get; }
+    public IRelayCommand<string> OpenVirtualControllerCommand { get; }
+    public IRelayCommand OpenMappingsCommand { get; }
 
     public string SidebarAddControllerLabel => Localized("SidebarAddController", "Add controller");
 
@@ -325,6 +334,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     public SlotsViewModel SlotsPanel { get; }
     public ControllerVisualStateViewModel PhysicalController { get; }
     public ControllerVisualStateViewModel VirtualController  { get; }
+    public ControllerVisualStateViewModel SlotConfigurationController { get; }
 
     /// <summary>Per-slot live controller panels shown on the dashboard.</summary>
     public System.Collections.ObjectModel.ObservableCollection<DashboardControllerPanelViewModel> ControllerPanels { get; } = [];
@@ -370,11 +380,22 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
                 _                       => "■",
             };
             var capturedId = device.Id;
+            var deviceType = device.Category switch
+            {
+                DeviceCategory.Gamepad => "Gamepad",
+                DeviceCategory.Joystick => "Controller / HID",
+                DeviceCategory.Keyboard => "Keyboard",
+                DeviceCategory.Mouse => "Mouse",
+                _ => "Input device",
+            };
             PhysicalMenuItems.Add(new MenuColumnItemViewModel(
                 device.Id, device.DisplayName, icon, isConnected: true,
                 onSelect: () => SelectPhysicalMenuItem(capturedId),
                 isPinned: physicalPanelPins.IsPinned(capturedId),
-                onTogglePin: () => physicalPanelPins.TogglePin(capturedId)));
+                onTogglePin: () => physicalPanelPins.TogglePin(capturedId),
+                secondaryText: deviceType,
+                batteryPercentage: device.BatteryPercentage,
+                batteryState: device.BatteryState));
         }
 
         VirtualMenuItems.Clear();
@@ -382,9 +403,13 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         {
             var name = string.IsNullOrWhiteSpace(slot.Name) ? "(unnamed)" : slot.Name;
             var capturedId = slot.Id;
+            var row = SlotsPanel.Slots.FirstOrDefault(item => item.Id == slot.Id);
             VirtualMenuItems.Add(new MenuColumnItemViewModel(
                 slot.Id, name, "▣", isConnected: slot.Enabled,
-                onSelect: () => SelectVirtualMenuItem(capturedId)));
+                onSelect: () => SelectVirtualMenuItem(capturedId),
+                secondaryText: row is null
+                    ? SlotsViewModel.KindLabelFor(slot.OutputTemplate)
+                    : $"{row.KindLabel} · {row.StatusLabel}"));
         }
     }
 
@@ -399,8 +424,13 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private void SelectVirtualMenuItem(string slotId)
+    private void SelectVirtualMenuItem(string? slotId)
     {
+        if (string.IsNullOrWhiteSpace(slotId))
+        {
+            return;
+        }
+
         OuterNavSelectedIndex = 2; // Devices tab
         DevicesSubTabIndex = 1;    // Virtual sub-tab
         var row = SlotsPanel.Slots.FirstOrDefault(s => string.Equals(s.Id, slotId, StringComparison.Ordinal));
@@ -916,18 +946,11 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         {
             if (value is null) { return; }
             var target = value.BrushValue;
-            if (string.Equals(PhysicalController.PanelBackgroundBrush, target,
-                              StringComparison.OrdinalIgnoreCase))
+            if (IsPanelBackgroundAppliedEverywhere(target))
             {
                 return;
             }
-            PhysicalController.PanelBackgroundBrush = target;
-            VirtualController.PanelBackgroundBrush  = target;
-            foreach (var panel in ControllerPanels)
-            {
-                panel.PhysicalVisual.PanelBackgroundBrush = target;
-                panel.VirtualVisual.PanelBackgroundBrush  = target;
-            }
+            ApplyPanelBackgroundToAll(target);
             OnPropertyChanged(nameof(SelectedPanelBackgroundOption));
 
             // Persist immediately. Previously the pick only reached the
@@ -935,14 +958,49 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
             // panels to the stored value ("blank" right after selecting) —
             // and a later sync resurrected a previously-applied chroma
             // ("green screen" after switching the app theme).
-            _ = PersistPanelBackgroundAsync(target);
+            pendingPanelBackgroundBrush = target;
+            var version = Interlocked.Increment(ref panelBackgroundPersistVersion);
+            _ = PersistPanelBackgroundAsync(target, version);
         }
     }
 
-    private async Task PersistPanelBackgroundAsync(string brushValue)
+    private bool IsPanelBackgroundAppliedEverywhere(string brushValue) =>
+        BackgroundEquals(PhysicalController.PanelBackgroundBrush, brushValue)
+        && BackgroundEquals(VirtualController.PanelBackgroundBrush, brushValue)
+        && BackgroundEquals(SlotConfigurationController.PanelBackgroundBrush, brushValue)
+        && ControllerPanels.All(panel =>
+            BackgroundEquals(panel.PhysicalVisual.PanelBackgroundBrush, brushValue)
+            && BackgroundEquals(panel.VirtualVisual.PanelBackgroundBrush, brushValue));
+
+    private static bool BackgroundEquals(string? left, string? right) =>
+        string.Equals(left ?? string.Empty, right ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
+    private void ApplyPanelBackgroundToAll(string? brushValue)
     {
+        var normalized = brushValue ?? string.Empty;
+        PhysicalController.PanelBackgroundBrush = normalized;
+        VirtualController.PanelBackgroundBrush = normalized;
+        SlotConfigurationController.PanelBackgroundBrush = normalized;
+        foreach (var panel in ControllerPanels)
+        {
+            panel.PhysicalVisual.PanelBackgroundBrush = normalized;
+            panel.VirtualVisual.PanelBackgroundBrush = normalized;
+        }
+    }
+
+    private async Task PersistPanelBackgroundAsync(string brushValue, int version)
+    {
+        await panelBackgroundSaveGate.WaitAsync();
         try
         {
+            // A later picker change superseded this queued write. Skipping
+            // it prevents rapid green/blue/default changes from completing
+            // out of order and restoring the wrong colour on next startup.
+            if (version != Volatile.Read(ref panelBackgroundPersistVersion))
+            {
+                return;
+            }
+
             var current = profileSession.CurrentProfile;
             var updated = current with
             {
@@ -953,6 +1011,14 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Persisting controller panel background failed.");
+        }
+        finally
+        {
+            if (version == Volatile.Read(ref panelBackgroundPersistVersion))
+            {
+                pendingPanelBackgroundBrush = null;
+            }
+            panelBackgroundSaveGate.Release();
         }
     }
 
@@ -1128,6 +1194,20 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         // ── Fast path: always ─────────────────────────────────────────────────
         PhysicalController.Update("physical", PhysicalInputLabel, snapshot.PhysicalSnapshot, physicalStyle);
         VirtualController.Update("virtual",   VirtualOutputLabel,  snapshot.VirtualSnapshot,  virtualStyle);
+
+        var selectedSlotId = SlotsPanel.SelectedSlot?.Id;
+        var selectedSlot = string.IsNullOrWhiteSpace(selectedSlotId)
+            ? null
+            : slotRegistry.GetSlot(selectedSlotId);
+        if (selectedSlot is not null)
+        {
+            var selectedPair = slotSnapshotStore.Get(selectedSlot.Id);
+            SlotConfigurationController.Update(
+                selectedSlot.Id + ":virtual",
+                "Virtual output · click a control to map it",
+                selectedPair.Virtual,
+                ResolveSlotVirtualStyle(selectedSlot));
+        }
 
         // Per-slot dashboard panels (live state for each running controller).
         // Each side gets its own clear title — "Physical Input" / "Virtual
@@ -1652,8 +1732,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         ApplyVariantPreferenceForStyle(VirtualController,  profile.Ui.VirtualControllerStyle,  profile.Ui);
 
         // Background brush — applies to both panels uniformly.
-        PhysicalController.PanelBackgroundBrush = profile.Ui.ControllerPanelBackground;
-        VirtualController.PanelBackgroundBrush  = profile.Ui.ControllerPanelBackground;
+        ApplyPanelBackgroundToAll(pendingPanelBackgroundBrush ?? profile.Ui.ControllerPanelBackground);
         OnPropertyChanged(nameof(SelectedPanelBackgroundOption));
     }
 
@@ -1938,10 +2017,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         selectedControlKey = selectionKey;
         ApplySelection(selectionKey, runtimeSnapshotStore.Current);
 
-        if (selectionKey.StartsWith("physical:", StringComparison.OrdinalIgnoreCase))
-        {
-            OpenControlEditor(selectionKey);
-        }
+        OpenControlEditor(selectionKey);
     }
 
     private void ApplySelection(string selectionKey, RuntimeSnapshot snapshot)
@@ -2009,10 +2085,10 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
 
     private void ResetSelectionInspector()
     {
-        SelectedControlTitle = "Click any control on the physical controller surface.";
+        SelectedControlTitle = "Click any control on either controller surface.";
         SelectedControlValue = "The inspector shows the current live state of the selected element.";
         SelectedControlRules = "Matching rules for the selected control will appear here.";
-        SelectedControlHint  = "Clicking a physical control opens its dedicated configuration window.";
+        SelectedControlHint  = "Physical controls configure input behavior; virtual controls create output mappings.";
     }
 
     // ─── Localised text refresh ───────────────────────────────────────────────
@@ -2449,6 +2525,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         MappingEditor.Dispose();
         DevicesPanel.Dispose();
         rulesSaveGate.Dispose();
+        panelBackgroundSaveGate.Dispose();
     }
 
     private void ThrowIfDisposed()

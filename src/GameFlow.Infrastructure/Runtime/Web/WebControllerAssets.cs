@@ -36,7 +36,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0b0f16;color:#e6edf
 #dot{width:8px;height:8px;border-radius:50%;background:#e5534b;transition:background .2s}
 #dot.on{background:#3fb950}
 #pad-label{color:#ff7a1a;font-weight:600;letter-spacing:.5px}
-#bar select{margin-left:auto;background:#131a26;color:#e6edf3;border:1px solid #263041;border-radius:6px;padding:4px 8px;font-size:12px}
+#bar button{background:#131a26;color:#e6edf3;border:1px solid #263041;border-radius:6px;padding:4px 10px;font-size:12px;margin-left:auto}
+#bar button:disabled{color:#3fb950;border-color:#1f3d29}
+#bar select{background:#131a26;color:#e6edf3;border:1px solid #263041;border-radius:6px;padding:4px 8px;font-size:12px}
 #surface{position:relative;flex:1 1 auto}
 .zone{position:absolute}
 .btn{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:50%;
@@ -64,6 +66,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0b0f16;color:#e6edf
     <div id="dot"></div>
     <span id="status">connecting…</span>
     <span id="pad-label"></span>
+    <button id="motion">Enable motion</button>
     <select id="layout">
       <option value="xbox">Xbox 360</option>
       <option value="ds4">DualShock 4</option>
@@ -87,7 +90,8 @@ var BIT = {
   up:11, down:12, left:13, right:14, touchpad:15
 };
 
-var state = { buttons:0, lx:0, ly:0, rx:0, ry:0, lt:0, rt:0 };
+var state = { buttons:0, lx:0, ly:0, rx:0, ry:0, lt:0, rt:0, touch:{},
+              gp:0, gy:0, gr:0, ax:0, ay:0, az:0, gyro:0 };
 var ws = null, connected = false, padIndex = -1, dirty = true;
 var surface = document.getElementById("surface");
 var msgEl = document.getElementById("msg");
@@ -154,6 +158,7 @@ function buildLayout(kind) {
   surface.innerHTML = "";
   pointerOwners = {};
   state.buttons = 0; state.lx = 0; state.ly = 0; state.rx = 0; state.ry = 0; state.lt = 0; state.rt = 0;
+  state.touch = {};
   dirty = true;
 
   layoutFor(kind).forEach(function (item) {
@@ -293,9 +298,29 @@ function makeTouchpad(item) {
   el.textContent = "TOUCHPAD";
   place(el, item);
   surface.appendChild(el);
+  function apply(ev) {
+    var r = el.getBoundingClientRect();
+    var x = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+    var y = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+    var pressure = typeof ev.pressure === "number" && ev.pressure > 0 ? ev.pressure : 1;
+    state.touch[ev.pointerId] = { i:ev.pointerId, x:x, y:y, p:Math.min(1, pressure) };
+    dirty = true;
+  }
+
   attach(el, {
-    down: function () { el.classList.add("on"); setBit(BIT.touchpad, true); },
-    up:   function () { el.classList.remove("on"); setBit(BIT.touchpad, false); }
+    down: function (ev) {
+      el.classList.add("on");
+      setBit(BIT.touchpad, true);
+      apply(ev);
+    },
+    move: apply,
+    up: function (ev) {
+      delete state.touch[ev.pointerId];
+      var stillDown = Object.keys(state.touch).length > 0;
+      el.classList.toggle("on", stillDown);
+      setBit(BIT.touchpad, stillDown);
+      dirty = true;
+    }
   });
 }
 
@@ -321,6 +346,60 @@ function attach(el, handlers) {
   el.addEventListener("pointerup", release);
   el.addEventListener("pointercancel", release);
 }
+
+// ---- Motion sensors ----
+// A phone has a real gyroscope and accelerometer, so it can drive the
+// same gyro pipeline a DualSense does. Browsers report rotation in
+// DEGREES/second while the desktop side expects SDL's convention of
+// RADIANS/second, so convert here rather than special-casing the phone
+// downstream. iOS 13+ additionally requires an explicit permission
+// prompt triggered by a user gesture — hence the button below.
+var DEG2RAD = Math.PI / 180;
+
+function onMotion(ev) {
+  var r = ev.rotationRate;
+  if (r) {
+    // Browser axes -> SDL axes. beta is rotation about the device's X
+    // (pitch), alpha about Z as held (yaw when the phone is upright in
+    // landscape), gamma about Y (roll).
+    state.gp = (r.beta  || 0) * DEG2RAD;
+    state.gy = (r.alpha || 0) * DEG2RAD;
+    state.gr = (r.gamma || 0) * DEG2RAD;
+    state.gyro = 1;
+  }
+  var g = ev.accelerationIncludingGravity;
+  if (g) {
+    state.ax = g.x || 0;
+    state.ay = g.y || 0;
+    state.az = g.z || 0;
+    state.gyro = 1;
+  }
+  dirty = true;
+}
+
+function startMotion() {
+  if (typeof DeviceMotionEvent === "undefined") { return; }
+  // iOS gates sensors behind an explicit permission request that MUST
+  // originate from a user gesture; Android and desktop just work.
+  if (typeof DeviceMotionEvent.requestPermission === "function") {
+    DeviceMotionEvent.requestPermission().then(function (result) {
+      if (result === "granted") {
+        window.addEventListener("devicemotion", onMotion);
+        motionBtn.textContent = "Motion on";
+        motionBtn.disabled = true;
+      } else {
+        motionBtn.textContent = "Motion denied";
+      }
+    }).catch(function () { motionBtn.textContent = "Motion failed"; });
+  } else {
+    window.addEventListener("devicemotion", onMotion);
+    motionBtn.textContent = "Motion on";
+    motionBtn.disabled = true;
+  }
+}
+
+var motionBtn = document.getElementById("motion");
+motionBtn.addEventListener("click", startMotion);
 
 // ---- Transport ----
 function connect() {
@@ -374,7 +453,14 @@ function pump() {
       b: state.buttons,
       lx: +state.lx.toFixed(3), ly: +state.ly.toFixed(3),
       rx: +state.rx.toFixed(3), ry: +state.ry.toFixed(3),
-      lt: +state.lt.toFixed(3), rt: +state.rt.toFixed(3)
+      lt: +state.lt.toFixed(3), rt: +state.rt.toFixed(3),
+      touch: Object.keys(state.touch).slice(0, 5).map(function (id) {
+        var c = state.touch[id];
+        return { i:c.i, x:+c.x.toFixed(4), y:+c.y.toFixed(4), p:+c.p.toFixed(3) };
+      }),
+      gyro: state.gyro,
+      gp: +state.gp.toFixed(4), gy: +state.gy.toFixed(4), gr: +state.gr.toFixed(4),
+      ax: +state.ax.toFixed(3), ay: +state.ay.toFixed(3), az: +state.az.toFixed(3)
     }));
     dirty = false;
   }

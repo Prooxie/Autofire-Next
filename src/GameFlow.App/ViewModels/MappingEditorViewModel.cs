@@ -556,7 +556,9 @@ public sealed class MappingEditorViewModel : ViewModelBase, IDisposable
         var normalizedKey = ControlRuleMatcher.NormalizeSelectionKey(selectionKey);
 
         return ControlRuleMatcher.TryResolveButtonId(normalizedKey, out _)
-            ? RuleKind.ButtonAutofire
+            ? selectionKey.StartsWith("virtual:", StringComparison.OrdinalIgnoreCase)
+                ? RuleKind.ButtonRemap
+                : RuleKind.ButtonAutofire
             : ControlRuleMatcher.TryResolveStickId(normalizedKey, out _)
             ? RuleKind.StickThreshold
             : normalizedKey switch
@@ -570,6 +572,10 @@ public sealed class MappingEditorViewModel : ViewModelBase, IDisposable
     {
         return
         [
+            new RuleKindOption(RuleKind.ButtonRemap,
+                Localized("RuleKindButtonRemapLabel",            "Button Remap"),
+                Localized("RuleKindButtonRemapDescription",      "Route one physical button to the selected virtual output."),
+                "#4F8CFF"),
             new RuleKindOption(RuleKind.ButtonAutofire,
                 Localized("RuleKindButtonAutofireLabel",         "Button Autofire / Turbo"),
                 Localized("RuleKindButtonAutofireDescription",   "Rapid-fire a button at a configurable rate."),

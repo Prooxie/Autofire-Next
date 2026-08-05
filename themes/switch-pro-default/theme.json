@@ -1,269 +1,158 @@
 {
- "name": "Switch Pro \u2014 Default",
- "width": 1485,
- "height": 1079,
- "version": 1,
- "children": [
-  {
-   "type": "image",
-   "image": "assets/base.png",
-   "x": 0,
-   "y": 0,
-   "width": 1485,
-   "height": 1079
-  },
-  {
-   "type": "showhide",
-   "input": "triggers:l",
-   "children": [
+  "name": "Black",
+  "width": 955,
+  "height": 695,
+  "version": 1,
+  "children": [
     {
-     "type": "image",
-     "image": "assets/zl.png",
-     "x": 300,
-     "y": 70,
-     "center": true
+      "type": "image",
+      "image": "assets/base.png",
+      "x": 481,
+      "y": 347,
+      "width": 930,
+      "height": 676,
+      "center": true,
+      "children": [
+        {
+          "type": "showhide",
+          "input": "quad_right:s",
+          "children": [
+            { "type": "image", "image": "assets/face.png", "x": 244, "y": -59, "width": 70, "height": 72, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_right:e",
+          "children": [
+            { "type": "image", "image": "assets/face.png", "x": 317, "y": -122, "width": 70, "height": 72, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_right:w",
+          "children": [
+            { "type": "image", "image": "assets/face.png", "x": 172, "y": -122, "width": 70, "height": 72, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_right:n",
+          "children": [
+            { "type": "image", "image": "assets/face.png", "x": 244, "y": -186, "width": 70, "height": 72, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_left:s",
+          "children": [
+            { "type": "image", "image": "assets/dpad_down.png", "x": -142, "y": 41, "width": 58, "height": 75, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_left:e",
+          "children": [
+            { "type": "image", "image": "assets/dpad_right.png", "x": -108, "y": 6, "width": 73, "height": 56, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_left:w",
+          "children": [
+            { "type": "image", "image": "assets/dpad_left.png", "x": -177, "y": 6, "width": 73, "height": 56, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "quad_left:n",
+          "children": [
+            { "type": "image", "image": "assets/dpad_up.png", "x": -142, "y": -31, "width": 58, "height": 77, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "home",
+          "children": [
+            { "type": "image", "image": "assets/home.png", "x": 65, "y": -123, "width": 44, "height": 45, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "menu:r",
+          "children": [
+            { "type": "image", "image": "assets/plusminus.png", "x": 114, "y": -193, "width": 46, "height": 47, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "menu:l",
+          "children": [
+            { "type": "image", "image": "assets/plusminus.png", "x": -114, "y": -193, "width": 46, "height": 47, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "bumpers:l",
+          "children": [
+            { "type": "image", "image": "assets/l_bumper.png", "x": -247, "y": -279, "width": 232, "height": 82, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "bumpers:r",
+          "children": [
+            { "type": "image", "image": "assets/r_bumper.png", "x": 245, "y": -279, "width": 232, "height": 81, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "triggers:l:stage2 OR If(triggers:l:analog > 0, 1, 0)",
+          "children": [
+            { "type": "image", "image": "assets/zl.png", "x": -258, "y": -307, "width": 164, "height": 66, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "triggers:r:stage2 OR If(triggers:r:analog > 0, 1, 0)",
+          "children": [
+            { "type": "image", "image": "assets/zr.png", "x": 255, "y": -308, "width": 163, "height": 65, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "stick_left:click",
+          "children": [
+            { "type": "image", "image": "assets/stick_click.png", "x": -257, "y": -123, "width": 127, "height": 125, "center": true }
+          ]
+        },
+        {
+          "type": "slider",
+          "x": -256,
+          "y": -123,
+          "inputX": "stick_left:x * 18",
+          "inputY": "stick_left:y * 18",
+          "children": [
+            { "type": "image", "image": "assets/stick_left.png", "x": 0, "y": 0, "width": 108, "height": 109, "center": true }
+          ]
+        },
+        {
+          "type": "showhide",
+          "input": "stick_right:click",
+          "children": [
+            { "type": "image", "image": "assets/stick_click.png", "x": 121, "y": 7, "width": 127, "height": 125, "center": true }
+          ]
+        },
+        {
+          "type": "slider",
+          "x": 121,
+          "y": 7,
+          "inputX": "stick_right:x * 18",
+          "inputY": "stick_right:y * 18",
+          "children": [
+            { "type": "image", "image": "assets/stick_right.png", "x": 0, "y": 0, "width": 108, "height": 110, "center": true }
+          ]
+        }
+      ]
     }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "triggers:r",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/zr.png",
-     "x": 1185,
-     "y": 70,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "bumpers:l",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/l_bumper.png",
-     "x": 330,
-     "y": 150,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "bumpers:r",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/r_bumper.png",
-     "x": 1155,
-     "y": 150,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:n",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/dpad_up.png",
-     "x": 610,
-     "y": 645,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:s",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/dpad_down.png",
-     "x": 610,
-     "y": 760,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:w",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/dpad_left.png",
-     "x": 550,
-     "y": 700,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_left:e",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/dpad_right.png",
-     "x": 672,
-     "y": 700,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "menu:l",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/plusminus.png",
-     "x": 640,
-     "y": 285,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "menu:r",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/plusminus.png",
-     "x": 845,
-     "y": 285,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "home",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/home.png",
-     "x": 830,
-     "y": 390,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:n",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/face.png",
-     "x": 1090,
-     "y": 355,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:s",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/face.png",
-     "x": 1090,
-     "y": 575,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:w",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/face.png",
-     "x": 980,
-     "y": 465,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "showhide",
-   "input": "quad_right:e",
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/face.png",
-     "x": 1200,
-     "y": 465,
-     "center": true
-    }
-   ]
-  },
-  {
-   "type": "slider",
-   "inputX": "stick_left:x * 22",
-   "inputY": "stick_left:y * -22",
-   "x": 395,
-   "y": 470,
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/stick_left.png",
-     "x": 0,
-     "y": 0,
-     "center": true
-    },
-    {
-     "type": "showhide",
-     "input": "stick_left:click",
-     "children": [
-      {
-       "type": "image",
-       "image": "assets/stick_click.png",
-       "x": 0,
-       "y": 0,
-       "center": true
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "type": "slider",
-   "inputX": "stick_right:x * 22",
-   "inputY": "stick_right:y * -22",
-   "x": 875,
-   "y": 700,
-   "children": [
-    {
-     "type": "image",
-     "image": "assets/stick_right.png",
-     "x": 0,
-     "y": 0,
-     "center": true
-    },
-    {
-     "type": "showhide",
-     "input": "stick_right:click",
-     "children": [
-      {
-       "type": "image",
-       "image": "assets/stick_click.png",
-       "x": 0,
-       "y": 0,
-       "center": true
-      }
-     ]
-    }
-   ]
-  }
- ]
+  ]
 }

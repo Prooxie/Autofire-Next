@@ -14,7 +14,11 @@ public sealed class ControlMappingDialogViewModel : ViewModelBase, IDisposable
     {
         SelectionKey = ControlRuleMatcher.EnsurePhysicalSelectionKey(selectionKey);
         SelectionTitle = ControlRuleMatcher.GetTitle(SelectionKey);
-        SelectionHint = ControlRuleMatcher.GetHint(SelectionKey);
+        IsVirtualTarget = SelectionKey.StartsWith("virtual:", StringComparison.OrdinalIgnoreCase);
+        SelectionScopeLabel = IsVirtualTarget ? "VIRTUAL OUTPUT TARGET" : "PHYSICAL INPUT";
+        SelectionHint = IsVirtualTarget
+            ? $"Choose the physical source that should produce {SelectionTitle}. The target is already selected."
+            : ControlRuleMatcher.GetHint(SelectionKey);
 
         backgroundRules = [.. profile.Rules.Where(rule => !ControlRuleMatcher.Matches(SelectionKey, rule))];
 
@@ -42,6 +46,10 @@ public sealed class ControlMappingDialogViewModel : ViewModelBase, IDisposable
     public string SelectionTitle { get; }
 
     public string SelectionHint { get; }
+
+    public bool IsVirtualTarget { get; }
+
+    public string SelectionScopeLabel { get; }
 
     public MappingEditorViewModel Editor { get; }
 

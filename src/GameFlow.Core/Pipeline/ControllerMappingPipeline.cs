@@ -3,16 +3,6 @@ using GameFlow.Core.Models;
 using GameFlow.Core.Models.Rules;
 using GameFlow.Core.Scripting;
 using Microsoft.Extensions.Logging.Abstractions;
-// Both GameFlow.Core.Enums and GameFlow.Core.Models.Rules are imported
-// above. A separate, independently-built implementation of this same
-// feature (MultiSourceCombineRule.cs / MultiSourceCombineExecutor.cs,
-// with its own CombineMode in the Enums namespace) exists on-disk
-// alongside this one and is NOT part of anything generated here — it
-// collides with the canonical CombineMode below. This alias keeps this
-// file resolving correctly regardless; the actual fix is removing the
-// duplicate files, since two parallel implementations of the same
-// feature is the real instability, not just this one ambiguity.
-using CombineMode = GameFlow.Core.Models.Rules.CombineMode;
 
 namespace GameFlow.Core.Pipeline;
 
@@ -96,6 +86,156 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
     private TouchAnchorState GetOrCreateTouchAnchor(string ruleId) =>
         touchAnchors.TryGetValue(ruleId, out var state) ? state : touchAnchors[ruleId] = new TouchAnchorState();
+
+    /// <summary>Per-rule gesture recognizer, keyed by rule id. Stateful across ticks — a stroke spans many.</summary>
+    private readonly Dictionary<string, TouchGestureEngine> touchGestureEngines = [];
+
+    private TouchGestureEngine GetOrCreateGestureEngine(string ruleId) =>
+        touchGestureEngines.TryGetValue(ruleId, out var engine)
+            ? engine
+            : touchGestureEngines[ruleId] = new TouchGestureEngine();
+
+    /// <summary>
+    /// Buttons a gesture is currently holding down, and when each hold
+    /// expires. A gesture is an instantaneous event but has to present to
+    /// the game as a press with duration, so firing one schedules an
+    /// expiry here and every subsequent tick re-asserts the button until
+    /// that time passes.
+    /// </summary>
+    private readonly Dictionary<ButtonId, DateTimeOffset> gestureHoldsUntil = [];
+
+    /// <summary>
+    /// Scratch buffer for the contact list handed to the recognizer.
+    /// Reused because this is rebuilt every tick at up to 1000 Hz per
+    /// slot, and a fresh list each time is pure garbage.
+    /// </summary>
+    private readonly List<TouchContact> gestureContactBuffer = [];
+
+    /// <summary>
+    /// The frame's contacts as the recognizer should see them.
+    ///
+    /// <para>
+    /// Sources that track every finger (SDL, and so every DualSense /
+    /// DualShock 4) fill <see cref="ControllerSnapshot.TouchContacts"/>
+    /// and are passed through untouched. Sources that report only a
+    /// primary contact get a single synthetic finger built from
+    /// <c>TouchX</c>/<c>TouchY</c> — enough for swipes, taps, long
+    /// presses and shapes, all of which only ever follow one finger.
+    /// Pinch, rotate and the two-to-five-finger gestures simply never
+    /// fire there, which is the honest outcome: the position data they
+    /// need was never reported. Note this deliberately does NOT consult
+    /// <c>TouchContactCount</c> — a source can count fingers it cannot
+    /// place, and inventing positions to match the count would fabricate
+    /// pinches out of nothing.
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<TouchContact> ResolveGestureContacts(ControllerSnapshot physical)
+    {
+        if (physical.TouchContacts.Count > 0)
+        {
+            return physical.TouchContacts;
+        }
+
+        gestureContactBuffer.Clear();
+        if (physical.TouchDown)
+        {
+            gestureContactBuffer.Add(new TouchContact(0, physical.TouchX, physical.TouchY));
+        }
+        return gestureContactBuffer;
+    }
+
+    /// <summary>
+    /// Runs one rule's gesture recognizer for this tick and schedules a
+    /// timed press for every binding the emitted gestures satisfy.
+    ///
+    /// <para>
+    /// One gesture can satisfy several bindings, and several gestures can
+    /// land on the same tick (a pinch and a rotate often do), so this
+    /// walks the full cross product rather than stopping at the first
+    /// hit. When two bindings target the SAME button, the longer hold
+    /// wins — extending an in-flight press is harmless, whereas letting a
+    /// shorter one overwrite it would cut the first gesture's press
+    /// short.
+    /// </para>
+    /// </summary>
+    private void ProcessGestures(
+        TouchpadMapRule rule, ControllerSnapshot physical,
+        Dictionary<ButtonId, bool> buttons, DateTimeOffset now)
+    {
+        if (!rule.GesturesEnabled || rule.Gestures.Count == 0 || rule.Mode == RuleMode.DoNothing)
+        {
+            return;
+        }
+
+        var engine = GetOrCreateGestureEngine(rule.Id);
+        var gestures = engine.Tick(ResolveGestureContacts(physical), rule, now);
+        if (gestures.Count == 0)
+        {
+            return;
+        }
+
+        for (var g = 0; g < gestures.Count; g++)
+        {
+            for (var b = 0; b < rule.Gestures.Count; b++)
+            {
+                var binding = rule.Gestures[b];
+                if (binding.TargetButton == ButtonId.None
+                    || !TouchGestureEngine.Matches(binding, gestures[g]))
+                {
+                    continue;
+                }
+
+                var until = now.AddMilliseconds(Math.Max(1, binding.HoldMilliseconds));
+                if (!gestureHoldsUntil.TryGetValue(binding.TargetButton, out var existing) || until > existing)
+                {
+                    gestureHoldsUntil[binding.TargetButton] = until;
+                }
+
+                // Press on the firing tick too, not just from the next
+                // one. At a low polling rate a tick is several
+                // milliseconds, and deferring would shave that off the
+                // front of every gesture press for no reason.
+                buttons[binding.TargetButton] = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Holds down every button with an unexpired gesture press and drops
+    /// the entries that have run out. Expired holds are removed rather
+    /// than set to false: the button may be genuinely held by the
+    /// player's own thumb, and forcing it false would fight them.
+    /// </summary>
+    private void ApplyGestureHolds(Dictionary<ButtonId, bool> buttons, DateTimeOffset now)
+    {
+        if (gestureHoldsUntil.Count == 0)
+        {
+            return;
+        }
+
+        List<ButtonId>? expired = null;
+        foreach (var (button, until) in gestureHoldsUntil)
+        {
+            if (now < until)
+            {
+                buttons[button] = true;
+            }
+            else
+            {
+                // Collected rather than removed in place — mutating a
+                // dictionary while enumerating it throws.
+                (expired ??= []).Add(button);
+            }
+        }
+
+        if (expired is not null)
+        {
+            foreach (var button in expired)
+            {
+                gestureHoldsUntil.Remove(button);
+            }
+        }
+    }
 
     /// <summary>
     /// Buckets an anchor-relative touch vector into D-pad button(s) and
@@ -742,6 +882,14 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
         {
             if (!IsActive(rule))
             {
+                // A rule switched off mid-stroke must not resume that
+                // stroke when it comes back — its start timestamp would
+                // by then be arbitrarily old, and the finger still resting
+                // on the pad would classify as an enormous long press.
+                if (touchGestureEngines.TryGetValue(rule.Id, out var idleEngine))
+                {
+                    idleEngine.Reset();
+                }
                 continue;
             }
 
@@ -749,6 +897,8 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             {
                 continue;
             }
+
+            ProcessGestures(rule, physical, buttons, now);
 
             var state = GetOrCreateTouchAnchor(rule.Id);
             var down = rule.Mode != RuleMode.DoNothing && physical.TouchDown;
@@ -823,6 +973,14 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
             state.WasDown = down;
         }
+
+        // Re-assert every gesture-driven button that hasn't expired.
+        // Done AFTER the touchpad rules so a gesture bound to a D-pad
+        // direction wins over the wedge D-pad's own writes for the length
+        // of its pulse — the gesture is the more deliberate act — and
+        // BEFORE multi-source rows and scripts, so both can read
+        // gesture-driven buttons as ordinary sources.
+        ApplyGestureHolds(buttons, now);
 
         // Multi-source mapping rows: many inputs, one output, a combine
         // mode (or formula) deciding how they fold together. Sources

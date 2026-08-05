@@ -7,6 +7,24 @@
        swap them at runtime without reloading the XAML tree.
 
        Fallback hardcoded values match the Cyber Blue default palette.
+
+       ── A NOTE ON /template/ SELECTORS ─────────────────────────────
+       Avalonia 12's Fluent theme compiles its control templates, so a
+       `/template/ X#SomeName` rule only matches if that exact part name
+       still exists — and a rule that matches nothing fails silently.
+       Several rules here used to name parts Fluent dropped
+       (PART_LayoutRoot, TrackBackground, PART_SelectingPart,
+       ProgressBarIndicator, Border#Root, TabStrip), which is why
+       sliders, progress bars, scroll bars and tab items never picked up
+       the app palette. Every named part used below was checked against
+       the shipped Avalonia.Themes.Fluent assembly; prefer type
+       selectors (`/template/ ContentPresenter`) when unsure, since
+       those cannot go stale the same way.
+
+       Stock controls that this file does NOT re-template — ComboBox
+       popups, scroll bar tracks, check glyphs, slider fills, tool tips,
+       menus — follow the theme through the System*Color palette that
+       AppThemeService writes. See ApplySystemPalette there.
   ═══════════════════════════════════════════════════════════════════ -->
 
   <!-- ── Global font + text defaults ────────────────────────────── -->
@@ -19,18 +37,121 @@
   <!-- ── Window ───────────────────────────────────────────────────── -->
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
+    <Setter Property="FontFamily" Value="Segoe UI Variable,Segoe UI,Inter,system-ui,sans-serif" />
+  </Style>
+
+  <!-- ═══ REUSABLE SURFACE CLASSES ═══════════════════════════════════
+       Hoisted out of the views, where the same four attributes were
+       repeated on well over fifty Borders and had already drifted
+       apart (corner radii of 6/8/10/12/14/16 all appeared for the same
+       kind of container). -->
+
+  <!-- Border.card — a content card sitting on the page background. -->
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource AppSurface1}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorder0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <!-- Border.panel — a top-level page section; slightly softer corner. -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource AppSurface1}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorder0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+  </Style>
+
+  <!-- Border.inset — a card nested inside another card, so it reads as
+       recessed rather than stacked. -->
+  <Style Selector="Border.inset">
+    <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorder0}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+
+  <!-- Border.divider — replaces the hand-rolled
+       `<Border Height="1" Background="AppBorder0" />` hairline. -->
+  <Style Selector="Border.divider">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource AppBorder0}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- Border.chip — pill-shaped count/status badge. -->
+  <Style Selector="Border.chip">
+    <Setter Property="Background" Value="{DynamicResource AppAccentSoft}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- TextBlock.sectionLabel — the small all-caps heading above a group
+       of fields. Was previously spelled out ~20 times as FontSize=10 +
+       SemiBold + Opacity=0.5 + LetterSpacing=0.8; the opacity dropped
+       it under the readable contrast floor, so this paints the dim
+       foreground role at full opacity instead. -->
+  <Style Selector="TextBlock.sectionLabel">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="0.8" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+  </Style>
+
+  <!-- TextBlock.sectionHeading — the heading that opens a dialog
+       section. Accent-coloured so a long settings form reads as a set of
+       named groups rather than one continuous column of fields. -->
+  <Style Selector="TextBlock.sectionHeading">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentHover}" />
+  </Style>
+
+  <!-- TextBlock.fieldLabel — the caption immediately above an input.
+       Replaces an inline `FontSize=11 Opacity=0.6` that appeared on ~25
+       labels. Opacity is the wrong tool for de-emphasis here: it applies
+       to the whole element rather than its colour, so it compounds with
+       any opacity on an ancestor and drifts as containers are nested.
+       Painting the dim foreground role keeps one predictable value that
+       also re-resolves when the palette changes. -->
+  <Style Selector="TextBlock.fieldLabel">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+  </Style>
+
+  <!-- TextBlock.hint — explanatory copy under a field or heading. -->
+  <Style Selector="TextBlock.hint">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!-- TextBlock.mono — device ids, hex, live telemetry. Always paired
+       with a reserved height at the call site so a value that changes
+       length cannot reflow the page around it. -->
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono,Cascadia Code,Consolas,monospace" />
+    <Setter Property="FontSize" Value="12" />
   </Style>
 
   <!-- ── ScrollBar ────────────────────────────────────────────────── -->
+  <Style Selector="ScrollBar">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
   <Style Selector="ScrollBar /template/ Thumb">
     <Setter Property="Background" Value="{DynamicResource AppBorder1}" />
-    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="ScrollBar /template/ Thumb:pointerover">
-    <Setter Property="Background" Value="{DynamicResource AppAccentSoft}" />
-  </Style>
-  <Style Selector="ScrollBar /template/ Border#Root">
-    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Background" Value="{DynamicResource AppAccent}" />
   </Style>
 
   <!-- ── TextBox ──────────────────────────────────────────────────── -->
@@ -44,12 +165,23 @@
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10,8" />
     <Setter Property="FontSize" Value="13" />
+    <Setter Property="MinHeight" Value="34" />
+  </Style>
+  <Style Selector="TextBox /template/ Border#PART_BorderElement">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorder1}" />
   </Style>
   <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
   </Style>
-  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
-    <Setter Property="BorderBrush" Value="{DynamicResource AppBorder1}" />
+  <Style Selector="TextBox:disabled">
+    <Setter Property="Opacity" Value="0.45" />
   </Style>
   <Style Selector="TextBox.code">
     <Setter Property="FontFamily" Value="Cascadia Code,Consolas,Fira Code,monospace" />
@@ -68,6 +200,15 @@
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="10,8" />
     <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="34" />
+  </Style>
+  <Style Selector="ComboBox /template/ Border#Background">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="ComboBox:pointerover /template/ Border#Background">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
@@ -76,10 +217,14 @@
   <Style Selector="ComboBox:focus /template/ Border#Background">
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
   </Style>
+  <Style Selector="ComboBox:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
   <Style Selector="ComboBoxItem">
-    <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="Padding" Value="10,7" />
+    <Setter Property="CornerRadius" Value="6" />
   </Style>
   <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
@@ -89,14 +234,10 @@
   </Style>
 
   <!-- ── Slider ───────────────────────────────────────────────────── -->
-  <Style Selector="Slider /template/ Border#TrackBackground">
-    <Setter Property="Background" Value="{DynamicResource AppBorder0}" />
-    <Setter Property="CornerRadius" Value="3" />
-  </Style>
-  <Style Selector="Slider /template/ Border#PART_SelectingPart">
-    <Setter Property="Background" Value="{DynamicResource AppAccent}" />
-    <Setter Property="CornerRadius" Value="3" />
-  </Style>
+  <!-- The track/fill colours come from the System*Color palette (see
+       the header note); only the thumb is worth overriding, because a
+       filled accent circle reads better against dark surfaces than
+       Fluent's stock hollow one. -->
   <Style Selector="Slider /template/ Thumb">
     <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
@@ -104,26 +245,39 @@
     <Setter Property="Width" Value="16" />
     <Setter Property="Height" Value="16" />
     <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="Slider /template/ Thumb:pointerover">
-    <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
+    <Setter Property="Background" Value="{DynamicResource AppAccent}" />
+  </Style>
+  <Style Selector="Slider:disabled">
+    <Setter Property="Opacity" Value="0.45" />
   </Style>
 
   <!-- ── ProgressBar ──────────────────────────────────────────────── -->
   <Style Selector="ProgressBar">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
-    <Setter Property="CornerRadius" Value="2" />
-    <Setter Property="Height" Value="4" />
+    <Setter Property="Foreground" Value="{DynamicResource AppAccent}" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Height" Value="6" />
+    <Setter Property="MinHeight" Value="0" />
   </Style>
-  <Style Selector="ProgressBar /template/ Border#ProgressBarIndicator">
-    <Setter Property="CornerRadius" Value="2" />
-    <Setter Property="Background" Value="{DynamicResource AppAccent}" />
+  <Style Selector="ProgressBar /template/ Border#PART_Indicator">
+    <Setter Property="CornerRadius" Value="3" />
   </Style>
 
   <!-- ── Button — base ────────────────────────────────────────────── -->
+  <!-- Foreground is the full-strength text role, not the dim one: dim
+       slate on the surface-2 fill sat around 3.7:1, under the 4.5:1
+       readable floor, which is why ordinary buttons looked switched
+       off. Ghost buttons keep the quieter treatment on purpose. -->
   <Style Selector="Button">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
-    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppBorder0}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
@@ -131,14 +285,41 @@
     <Setter Property="FontSize" Value="13" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border BorderBrush="{DynamicResource AppAccent}" BorderThickness="2"
+                CornerRadius="10" Margin="-3" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <!-- Colour changes are animated on the presenter rather than snapped,
+       so a pointer crossing a dense toolbar reads as one surface
+       responding instead of a row of hard flickers. -->
+  <Style Selector="Button /template/ ContentPresenter">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.08" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.08" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="Button:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppBorder0}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppBorder1}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AppForeground}" />
   </Style>
   <Style Selector="Button:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
     <Setter Property="Opacity" Value="0.92" />
+  </Style>
+  <!-- Disabled commands are everywhere in this app (Save with no
+       pending edit, Delete on the last profile, device Add while demo
+       preview owns the slot). Without a disabled treatment they looked
+       identical to live ones and simply did nothing when clicked. -->
+  <Style Selector="Button:disabled">
+    <Setter Property="Opacity" Value="0.40" />
+    <Setter Property="Cursor" Value="Arrow" />
   </Style>
 
   <!-- Button.primary — accent CTA -->
@@ -152,39 +333,111 @@
   <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppAccentHover}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccentHover}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AppPrimaryBtn}" />
   </Style>
   <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppAccent}" />
     <Setter Property="Opacity" Value="0.85" />
   </Style>
 
-  <!-- Button.ghost -->
+  <!-- Button.ghost — secondary action; quieter until hovered. -->
   <Style Selector="Button.ghost">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppBorder0}" />
   </Style>
   <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
+    <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppBorder1}" />
   </Style>
 
-  <!-- Button.danger -->
+  <!-- Button.danger — destructive action. -->
   <Style Selector="Button.danger">
-    <Setter Property="Background" Value="{DynamicResource Semantic.DangerSoft}" />
-    <Setter Property="Foreground" Value="{DynamicResource Semantic.Danger}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Semantic.Danger}" />
+    <Setter Property="Background" Value="{DynamicResource AppDangerSoft}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppDanger}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppDanger}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource Semantic.DangerSoft}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource Semantic.Danger}" />
+    <Setter Property="Background" Value="{DynamicResource AppDanger}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppDanger}" />
+    <Setter Property="TextElement.Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <!-- Button.link — keyboard-focusable inline action used where a raw
+       pointer-only TextBlock would be inaccessible. -->
+  <Style Selector="Button.link">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentHover}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="2,3" />
+    <Setter Property="MinHeight" Value="28" />
+  </Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AppAccent}" />
+  </Style>
+
+  <!-- Button.nav — sidebar row: full-width, left-aligned, borderless
+       until hovered. The sidebar used to spell these attributes out on
+       every item, which meant the hover state came from the base Button
+       rule and painted a bordered pill inside a borderless list. -->
+  <Style Selector="Button.nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.nav /template/ ContentPresenter">
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="Button.nav:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.nav:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppAccentSoft}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- Button.iconOnly — a glyph affordance living inside another row
+       (the sidebar pin toggle). Square, no chrome, no inherited padding
+       that would push the row taller. -->
+  <Style Selector="Button.iconOnly">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="Padding" Value="5,3" />
+    <Setter Property="MinWidth" Value="28" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+  </Style>
+  <Style Selector="Button.iconOnly:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppBorder0}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource AppAccent}" />
   </Style>
 
   <!-- ── List selection follows the app accent (theme-swapped) ─────── -->
+  <Style Selector="ListBoxItem">
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+  </Style>
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppAccentSoft}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
-    <Setter Property="BorderThickness" Value="0,0,0,0" />
+    <Setter Property="BorderThickness" Value="0" />
   </Style>
   <Style Selector="ListBoxItem:selected:focus /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppAccentSoft}" />
@@ -194,6 +447,12 @@
   </Style>
   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
+  </Style>
+  <!-- Selected rows also take the accent for their text, so selection
+       survives on a palette where AppAccentSoft is barely distinct from
+       the surface behind it (Neon Green and Solar Red both are). -->
+  <Style Selector="ListBoxItem:selected TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccent}" />
   </Style>
 
   <!-- ── TabControl ───────────────────────────────────────────────── -->
@@ -205,37 +464,44 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
-  <Style Selector="TabControl /template/ TabStrip">
-    <Setter Property="Background" Value="{DynamicResource AppSurface1}" />
-  </Style>
   <Style Selector="TabItem">
     <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="Margin" Value="0" />
     <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
     <Setter Property="FontSize" Value="13.5" />
     <Setter Property="Cursor" Value="Hand" />
   </Style>
-  <Style Selector="TabItem /template/ Border#PART_LayoutRoot">
+  <!-- Fluent 12 names the tab item's root border `LayoutRoot`; the old
+       `PART_LayoutRoot` spelling matched nothing, so tab backgrounds
+       and hover states never rendered. -->
+  <Style Selector="TabItem /template/ Border#LayoutRoot">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="CornerRadius" Value="8,8,0,0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
   </Style>
   <Style Selector="TabItem:pointerover">
     <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
   </Style>
-  <Style Selector="TabItem:pointerover /template/ Border#PART_LayoutRoot">
+  <Style Selector="TabItem:pointerover /template/ Border#LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
   </Style>
   <Style Selector="TabItem:selected">
     <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
   </Style>
-  <Style Selector="TabItem:selected /template/ Border#PART_LayoutRoot">
+  <Style Selector="TabItem:selected /template/ Border#LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
   </Style>
   <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
-    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Background" Value="{DynamicResource AppAccent}" />
+    <Setter Property="CornerRadius" Value="999" />
   </Style>
   <Style Selector="Border.navAccent">
     <Setter Property="Opacity" Value="0" />
@@ -260,8 +526,29 @@
   </Style>
 
   <!-- ── CheckBox ─────────────────────────────────────────────────── -->
+  <!-- The box and check glyph take their colour from the accent ramp in
+       the System*Color palette, so only layout and text need setting. -->
   <Style Selector="CheckBox">
     <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="CheckBox:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+    <Setter Property="Cursor" Value="Arrow" />
+  </Style>
+
+  <!-- ── ToolTip ──────────────────────────────────────────────────── -->
+  <Style Selector="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource AppSurface2}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppBorder1}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="MaxWidth" Value="380" />
   </Style>
 
 </Styles>
