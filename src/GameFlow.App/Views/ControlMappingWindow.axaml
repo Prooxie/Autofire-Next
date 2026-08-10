@@ -4,7 +4,7 @@
         xmlns:vm="using:GameFlow.App.ViewModels"
         x:Class="GameFlow.App.Views.ControlMappingWindow"
         x:DataType="vm:ControlMappingDialogViewModel"
-        x:CompileBindings="False"
+        x:CompileBindings="True"
         Width="1320"
         Height="900"
         MinWidth="1120"

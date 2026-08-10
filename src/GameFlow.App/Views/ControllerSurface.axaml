@@ -4,7 +4,7 @@
              xmlns:vm="using:GameFlow.App.ViewModels"
              x:Class="GameFlow.App.Views.ControllerSurface"
              x:DataType="vm:ControllerVisualStateViewModel"
-             x:CompileBindings="False">
+             x:CompileBindings="True">
 
     <!--
         Outer Border background is bound to the VM so the user can flip

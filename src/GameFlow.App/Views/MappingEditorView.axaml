@@ -4,10 +4,10 @@
              xmlns:vm="using:GameFlow.App.ViewModels"
              x:Class="GameFlow.App.Views.MappingEditorView"
              x:DataType="vm:MappingEditorViewModel"
-             x:CompileBindings="False">
+             x:CompileBindings="True">
 
   <UserControl.Resources>
-    <DataTemplate x:Key="RuleKindTemplate">
+    <DataTemplate x:Key="RuleKindTemplate" x:DataType="vm:RuleKindOption">
       <StackPanel Margin="0,3" Spacing="2">
         <TextBlock Text="{Binding Label}" FontWeight="SemiBold"
                    Foreground="{DynamicResource AppForeground}" />

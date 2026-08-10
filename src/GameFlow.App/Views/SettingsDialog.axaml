@@ -1,6 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GameFlow.App.ViewModels"
         x:Class="GameFlow.App.Views.SettingsDialog"
+        x:DataType="vm:SettingsDialogViewModel"
         Width="640"
         Height="560"
         MinWidth="540"

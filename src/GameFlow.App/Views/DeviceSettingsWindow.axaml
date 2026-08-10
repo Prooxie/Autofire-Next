@@ -4,7 +4,7 @@
         xmlns:vm="using:GameFlow.App.ViewModels"
         x:Class="GameFlow.App.Views.DeviceSettingsWindow"
         x:DataType="vm:DeviceSettingsEditorViewModel"
-        x:CompileBindings="False"
+        x:CompileBindings="True"
         Title="Controller settings"
         Width="720" Height="620"
         MinWidth="560" MinHeight="460"

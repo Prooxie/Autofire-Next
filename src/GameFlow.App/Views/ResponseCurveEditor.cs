@@ -37,6 +37,17 @@ public sealed class ResponseCurveEditor : Control
     /// <summary>Which handle the pointer captured, if any.</summary>
     private Handle dragging = Handle.None;
 
+    // Cached draw resources — see EnsurePens. Rebuilt on theme change only.
+    private IBrush? cachedAccentSource;
+    private IBrush? surfaceBrush;
+    private IBrush? accentBrush;
+    private IPen? gridDashPen;
+    private IPen? borderPen;
+    private IPen? referencePen;
+    private IPen? curvePen;
+    private IPen? markerPen;
+    private IPen? handlePen;
+
     public static readonly StyledProperty<double> DeadzoneProperty =
         AvaloniaProperty.Register<ResponseCurveEditor, double>(nameof(Deadzone), defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
 
@@ -120,16 +131,18 @@ public sealed class ResponseCurveEditor : Control
             return;
         }
 
-        var grid = ResolveBrush("AppBorder0", Colors.Gray);
-        var accent = ResolveBrush("AppAccent", Color.FromRgb(0x4F, 0x9C, 0xFF));
-        var dim = ResolveBrush("AppForegroundDim", Colors.Gray);
-        var surface = ResolveBrush("AppSurface0", Color.FromRgb(0x11, 0x18, 0x22));
+        // Brushes and pens are resolved once per theme change, not per
+        // frame. Render runs on every live-input update, and both
+        // TryFindResource (which walks the visual tree) and allocating a
+        // fresh Pen per stroke are pure waste when neither result can
+        // change between frames.
+        EnsurePens();
 
-        context.FillRectangle(surface, plot);
+        context.FillRectangle(surfaceBrush!, plot);
 
         // Grid at quarters — enough to read a value off, few enough not to
         // compete with the curve itself.
-        var gridPen = new Pen(grid, 1, DashStyle.Dash) { LineCap = PenLineCap.Flat };
+        var gridPen = gridDashPen!;
         for (var i = 1; i < 4; i++)
         {
             var t = i / 4.0;
@@ -139,11 +152,11 @@ public sealed class ResponseCurveEditor : Control
             context.DrawLine(gridPen, new Point(plot.X, y), new Point(plot.Right, y));
         }
 
-        context.DrawRectangle(new Pen(grid, 1), plot);
+        context.DrawRectangle(borderPen!, plot);
 
         // 1:1 reference, so any shaping is visible as a departure from it.
         context.DrawLine(
-            new Pen(dim, 1, DashStyle.Dot),
+            referencePen!,
             new Point(plot.X, plot.Bottom),
             new Point(plot.Right, plot.Y));
 
@@ -176,27 +189,64 @@ public sealed class ResponseCurveEditor : Control
             }
         }
 
-        context.DrawGeometry(null, new Pen(accent, 2), geometry);
+        context.DrawGeometry(null, curvePen!, geometry);
 
         // Live marker. Drawn after the curve so it is never hidden by it.
         var live = Math.Clamp(LiveInput, 0, 1);
         if (live > 0.001)
         {
             var marker = ToPixel(plot, live, Sample(settings, live));
-            context.DrawEllipse(accent, null, marker, 4, 4);
+            context.DrawEllipse(accentBrush!, null, marker, 4, 4);
             context.DrawLine(
-                new Pen(accent, 1, DashStyle.Dash) { Thickness = 1 },
+                markerPen!,
                 new Point(marker.X, plot.Bottom),
                 marker);
         }
 
-        DrawHandle(context, accent, ToPixel(plot, Math.Clamp(Deadzone, 0, 1), 0));
-        DrawHandle(context, accent, ToPixel(plot, Math.Clamp(Deadzone, 0, 1), Math.Clamp(AntiDeadzone, 0, 1)));
-        DrawHandle(context, accent, ToPixel(plot, Math.Clamp(FullAt, 0.05, 1), 1));
+        DrawHandle(context, handlePen!, ToPixel(plot, Math.Clamp(Deadzone, 0, 1), 0));
+        DrawHandle(context, handlePen!, ToPixel(plot, Math.Clamp(Deadzone, 0, 1), Math.Clamp(AntiDeadzone, 0, 1)));
+        DrawHandle(context, handlePen!, ToPixel(plot, Math.Clamp(FullAt, 0.05, 1), 1));
     }
 
-    private static void DrawHandle(DrawingContext context, IBrush brush, Point centre) =>
-        context.DrawEllipse(Brushes.White, new Pen(brush, 2), centre, HandleRadius, HandleRadius);
+    private static void DrawHandle(DrawingContext context, IPen pen, Point centre) =>
+        context.DrawEllipse(Brushes.White, pen, centre, HandleRadius, HandleRadius);
+
+    /// <summary>
+    /// Builds the brushes and pens once, and again only when the app
+    /// theme changes.
+    ///
+    /// <para>
+    /// Everything here is immutable, which is what makes caching it safe:
+    /// an <see cref="ImmutableSolidColorBrush"/> and a frozen
+    /// <see cref="Pen"/> carry no change subscription, so the renderer
+    /// does not have to track them between frames.
+    /// </para>
+    /// </summary>
+    private void EnsurePens()
+    {
+        // The resolved accent doubles as the cache key. A theme switch
+        // changes it, which is exactly when these need rebuilding.
+        var accent = ResolveBrush("AppAccent", Color.FromRgb(0x4F, 0x9C, 0xFF));
+        if (curvePen is not null && ReferenceEquals(accent, cachedAccentSource))
+        {
+            return;
+        }
+
+        cachedAccentSource = accent;
+
+        var grid = ResolveBrush("AppBorder0", Colors.Gray);
+        var dim = ResolveBrush("AppForegroundDim", Colors.Gray);
+
+        surfaceBrush = ResolveBrush("AppSurface0", Color.FromRgb(0x11, 0x18, 0x22));
+        accentBrush = accent;
+
+        gridDashPen = new Pen(grid, 1, DashStyle.Dash) { LineCap = PenLineCap.Flat }.ToImmutable();
+        borderPen = new Pen(grid, 1).ToImmutable();
+        referencePen = new Pen(dim, 1, DashStyle.Dot).ToImmutable();
+        curvePen = new Pen(accent, 2).ToImmutable();
+        markerPen = new Pen(accent, 1, DashStyle.Dash).ToImmutable();
+        handlePen = new Pen(accent, 2).ToImmutable();
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

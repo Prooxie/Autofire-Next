@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:req="using:GameFlow.Infrastructure.Requirements"
         x:Class="GameFlow.App.Views.RequirementsDialog"
         Width="640"
         SizeToContent="Height"
@@ -38,7 +39,7 @@
                     VerticalScrollBarVisibility="Auto">
         <ItemsControl Name="RequirementsList">
           <ItemsControl.ItemTemplate>
-            <DataTemplate>
+            <DataTemplate x:DataType="req:RequirementStatus">
               <Border Classes="card" Margin="0,0,8,10" Padding="14,12">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                   <StackPanel Grid.Column="0" Spacing="4">

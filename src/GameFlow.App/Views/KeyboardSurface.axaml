@@ -1,8 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:GameFlow.App.Converters"
+             xmlns:vm="using:GameFlow.App.ViewModels"
              x:Class="GameFlow.App.Views.KeyboardSurface"
-             x:CompileBindings="False">
+             x:DataType="vm:DevicesViewModel"
+             x:CompileBindings="True">
 
   <UserControl.Resources>
     <conv:VkPressedToBrushConverter x:Key="VkBrush" />

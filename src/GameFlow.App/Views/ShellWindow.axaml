@@ -5,7 +5,7 @@
         x:Class="GameFlow.App.Views.ShellWindow"
         x:Name="ShellRoot"
         x:DataType="vm:ShellViewModel"
-        x:CompileBindings="False"
+        x:CompileBindings="True"
         Width="1280"
         Height="760"
         MinWidth="1100"
@@ -23,25 +23,25 @@
   -->
 
   <Window.Resources>
-    <DataTemplate x:Key="InputProviderTemplate">
+    <DataTemplate x:Key="InputProviderTemplate" x:DataType="vm:InputProviderOption">
       <StackPanel Margin="0,4" Spacing="3">
         <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Foreground="{DynamicResource AppForeground}" />
         <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppForegroundDim}" />
       </StackPanel>
     </DataTemplate>
 
-    <DataTemplate x:Key="ControllerStyleTemplate">
+    <DataTemplate x:Key="ControllerStyleTemplate" x:DataType="vm:ControllerStyleOption">
       <TextBlock Text="{Binding Label}" Foreground="{DynamicResource AppForeground}" />
     </DataTemplate>
 
-    <DataTemplate x:Key="DetectedControllerTemplate">
+    <DataTemplate x:Key="DetectedControllerTemplate" x:DataType="vm:DetectedControllerOption">
       <StackPanel Margin="0,4" Spacing="3">
         <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Foreground="{DynamicResource AppForeground}" />
         <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppForegroundDim}" />
       </StackPanel>
     </DataTemplate>
 
-    <DataTemplate x:Key="ProfileOptionTemplate">
+    <DataTemplate x:Key="ProfileOptionTemplate" x:DataType="vm:ProfileOption">
       <StackPanel Margin="0,4" Spacing="3">
         <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Foreground="{DynamicResource AppForeground}" />
         <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppForegroundDim}" />
@@ -1103,8 +1103,13 @@
                 <Border Grid.Row="1" BorderThickness="1" CornerRadius="6" Padding="12"
                         BorderBrush="{DynamicResource AppBorder}">
                   <Panel>
+                    <!-- IsVisible resolves against this control's OWN DataContext,
+                         which the line above has just set to the editor — so the
+                         path is HasDevice, not DeviceSettingsEditor.HasDevice.
+                         The longer path silently bound to nothing; compiled
+                         bindings turned that into a build error. -->
                     <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
-                                                    IsVisible="{Binding DeviceSettingsEditor.HasDevice}" />
+                                                    IsVisible="{Binding HasDevice}" />
                     <TextBlock Text="Select a physical device and a slot to begin tuning."
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Opacity="0.55"
@@ -1241,7 +1246,9 @@
                       </Border>
 
                       <Border Classes="panel" Padding="10" MinHeight="330" ClipToBounds="True">
-                        <views:ControllerSurface DataContext="{Binding #ShellRoot.DataContext.SlotConfigurationController}" />
+                        <!-- #ShellRoot.DataContext is typed object, so a compiled
+                             binding needs the cast to walk any further. -->
+                        <views:ControllerSurface DataContext="{Binding #ShellRoot.((vm:ShellViewModel)DataContext).SlotConfigurationController}" />
                       </Border>
 
                       <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">

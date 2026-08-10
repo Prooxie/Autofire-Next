@@ -4,7 +4,7 @@
              xmlns:views="using:GameFlow.App.Views"
              x:Class="GameFlow.App.Views.DeviceSettingsEditorView"
              x:DataType="vm:DeviceSettingsEditorViewModel"
-             x:CompileBindings="False">
+             x:CompileBindings="True">
 
   <UserControl.Styles>
     <Style Selector="TextBlock.rowLabel">

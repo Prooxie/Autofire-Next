@@ -5,7 +5,43 @@
     <AssemblyName>GameFlow.App</AssemblyName>
     <UseWindowsForms>false</UseWindowsForms>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
-    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <!--
+        Compiled bindings everywhere. Reflection bindings resolve their
+        property path at runtime on every evaluation, which the dashboard
+        does for every bound property on every controller panel on every
+        UI tick. Compiling them removes that work and the allocation with
+        it.
+
+        The safety win turned out to matter as much as the speed: turning
+        this on surfaced two bindings that had been silently resolving to
+        nothing at runtime, including the tuning editor's visibility. A
+        reflection binding that cannot resolve just does nothing; a
+        compiled one is a build error.
+    -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <!--
+        Dynamic PGO. This app has a hot, extremely repetitive tick loop
+        (the mapping pipeline and the dashboard redraw), which is the
+        shape tiered PGO is built for: the same paths run often enough
+        for the runtime to profile them and re-JIT with real branch and
+        devirtualisation data.
+    -->
+    <TieredPGO>true</TieredPGO>
+
+    <!--
+        Workstation, concurrent GC. This is an interactive desktop app,
+        not a throughput server: server GC would allocate a heap and a
+        dedicated collector thread per core to optimise for throughput at
+        the cost of latency, and a collection pause is precisely what a
+        user feels as input lag.
+
+        NOTE: InvariantGlobalization is deliberately NOT set. It would cut
+        startup and size, but the app ships eight languages and relies on
+        real culture data to switch between them.
+    -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>
