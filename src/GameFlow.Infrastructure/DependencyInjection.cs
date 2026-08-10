@@ -124,6 +124,13 @@ public static class DependencyInjection
         _ = services.AddSingleton<Runtime.Effects.ControllerEffectsService>();
         _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Effects.ControllerEffectsService>());
 
+        // The producer is what turns saved settings into output. Without
+        // it the whole effects chain is present and inert — which is the
+        // state it shipped in once, so it is registered right beside the
+        // consumer it feeds.
+        _ = services.AddSingleton<Runtime.Effects.ControllerEffectProducer>();
+        _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Effects.ControllerEffectProducer>());
+
         // DSU / Cemuhook motion server. Same two-line shape as the web
         // controller above and for the same reason: the Dashboard reads
         // IsRunning / ConnectedClientCount off this instance, so it has to

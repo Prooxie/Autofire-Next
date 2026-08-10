@@ -1495,7 +1495,18 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             return;
         }
 
-        nextPowerRefreshUtc = utcNow.AddSeconds(5);
+        // Poll fast until every known device has answered once, then back
+        // off. A charge level changes over minutes, so 5 s is plenty for
+        // steady state — but that interval also governed the FIRST
+        // reading, so a freshly connected pad showed nothing for up to
+        // five seconds, which reads as the feature being broken. The
+        // catch-up rate costs one cheap call per device.
+        var everyoneAnswered = powerByDeviceId.Count > 0
+            && inputDeviceCatalog.Devices
+                .Where(d => d.IsGamepad || d.Category == DeviceCategory.Joystick)
+                .All(d => powerByDeviceId.ContainsKey(d.Id));
+
+        nextPowerRefreshUtc = utcNow.AddMilliseconds(everyoneAnswered ? 5000 : 400);
 
         var opened = new Dictionary<string, OpenedDevice>(StringComparer.OrdinalIgnoreCase);
         if (openedDevice is not null)
