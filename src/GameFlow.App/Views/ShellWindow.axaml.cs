@@ -15,6 +15,15 @@ public partial class ShellWindow : Window
     /// <summary>The rate the user asked for; a ceiling, not a promise. See <see cref="AdaptTickRate"/>.</summary>
     private int configuredRefreshHz = 30;
 
+    /// <summary>When the dispatcher last overran its budget. Drives recovery.</summary>
+    private DateTime lastOverrunUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// How long the UI must go without a single overrun before the tick
+    /// steps back up. Long enough that recovery cannot chase a transient.
+    /// </summary>
+    private static readonly TimeSpan RecoveryQuietPeriod = TimeSpan.FromSeconds(8);
+
     private ShellViewModel? shellViewModel;
     private bool isRefreshing;
     private bool isClosing;
@@ -268,27 +277,53 @@ public partial class ShellWindow : Window
     private void AdaptTickRate(TimeSpan gap)
     {
         var current = refreshTimer.Interval;
+        var nowUtc = DateTime.UtcNow;
 
         // Only react to a real overrun — more than double the budget —
-        // so ordinary jitter does not trigger a permanent downgrade.
-        if (gap <= current + current)
+        // so ordinary jitter does not trigger a downgrade.
+        if (gap > current + current)
+        {
+            lastOverrunUtc = nowUtc;
+
+            // Floor of 10 Hz. The dashboard is a visualisation: a slow one
+            // still works, an unresponsive window does not.
+            var slower = TimeSpan.FromMilliseconds(Math.Min(current.TotalMilliseconds * 2, 100));
+            if (slower > current)
+            {
+                refreshTimer.Interval = slower;
+                Log.Warning(
+                    "Dashboard tick throttled to {Hz:F0} Hz — the UI thread could not keep up at {Was:F0} Hz.",
+                    1000d / slower.TotalMilliseconds, 1000d / current.TotalMilliseconds);
+            }
+
+            return;
+        }
+
+        // Recovery, on a QUIET-PERIOD basis rather than a run of fast
+        // frames. An earlier version counted consecutive in-budget ticks
+        // and oscillated: it would step up, immediately re-saturate, and
+        // step down again, and since every change restarts the
+        // DispatcherTimer the renegotiation was itself a source of
+        // stutter. Requiring a long stretch with no overrun at all makes
+        // stepping up rare and, once taken, usually durable.
+        //
+        // Recovery has to exist. Without it a single stall during startup
+        // — when themes are still loading — pinned the dashboard at 10 Hz
+        // for the rest of the session, which reads as permanently choppy
+        // even after the cause has passed.
+        var wanted = TimeSpan.FromMilliseconds(1000d / Math.Clamp(configuredRefreshHz, 30, 1000));
+        if (current <= wanted || nowUtc - lastOverrunUtc < RecoveryQuietPeriod)
         {
             return;
         }
 
-        // Floor of 10 Hz. The dashboard is a visualisation: a slow one
-        // still works, an unresponsive window does not.
-        var slower = TimeSpan.FromMilliseconds(Math.Min(current.TotalMilliseconds * 2, 100));
-        if (slower <= current)
-        {
-            return;
-        }
+        var faster = TimeSpan.FromMilliseconds(Math.Max(current.TotalMilliseconds / 2, wanted.TotalMilliseconds));
+        refreshTimer.Interval = faster;
 
-        refreshTimer.Interval = slower;
-        Log.Warning(
-            "Dashboard tick throttled to {Hz:F0} Hz — the UI thread could not keep up at {Was:F0} Hz. "
-            + "The dominant cost is the number of image layers a controller theme composites per frame.",
-            1000d / slower.TotalMilliseconds, 1000d / current.TotalMilliseconds);
+        // Counts as activity, so the next step up needs another full quiet
+        // period rather than following immediately.
+        lastOverrunUtc = nowUtc;
+        Log.Information("Dashboard tick restored to {Hz:F0} Hz after a quiet period.", 1000d / faster.TotalMilliseconds);
     }
 
     private async void RefreshTimerOnTick(object? sender, EventArgs e)

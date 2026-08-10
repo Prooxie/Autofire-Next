@@ -578,6 +578,28 @@ public sealed class ThemeSurface : Control
         var offsetX = (Bounds.Width - renderedW) / 2;
         var offsetY = (Bounds.Height - renderedH) / 2;
 
+        // Snap the origin to a whole DEVICE pixel.
+        //
+        // Centring produces a fractional offset almost always, and a
+        // fractional origin means every bitmap in the theme is resampled
+        // across pixel boundaries and every thin outline lands between two
+        // pixels — so the art looks soft and the outlines look slightly
+        // misplaced. It varies with DPI, resolution and aspect ratio
+        // because all three change how a fractional control coordinate
+        // maps onto the device grid: at 125% scaling an offset of x.5
+        // control units is x.625 device pixels, which cannot be drawn
+        // crisply at any filter quality.
+        //
+        // Rounding in DEVICE space and converting back is what makes this
+        // correct at fractional scalings; rounding the control coordinate
+        // alone would still leave a fractional device offset.
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+        if (scaling > 0)
+        {
+            offsetX = Math.Round(offsetX * scaling, MidpointRounding.AwayFromZero) / scaling;
+            offsetY = Math.Round(offsetY * scaling, MidpointRounding.AwayFromZero) / scaling;
+        }
+
         // Capture transform so OnPointerPressed can invert it without
         // re-walking the document. Stored in display (control) pixels.
         lastTransform = (uniform, offsetX, offsetY);

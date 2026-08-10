@@ -238,6 +238,25 @@
        the header note); only the thumb is worth overriding, because a
        filled accent circle reads better against dark surfaces than
        Fluent's stock hollow one. -->
+  <!--
+      A Slider's track is inset by half a thumb so the thumb can reach the
+      ends without being clipped, which means its track does NOT start
+      where a neighbouring TextBox or ComboBox starts. Left unstyled it
+      reads as misaligned against every other control in the same column,
+      and vertically it sits off-centre from the value box beside it.
+
+      The horizontal margin cancels that inset so the track lines up with
+      the fields above and below, and centring fixes the pairing with the
+      value box. Set once here rather than per call site — there are four
+      of these in the slot editor alone, and each new one would otherwise
+      have to remember.
+  -->
+  <Style Selector="Slider">
+    <Setter Property="Margin" Value="-8,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="MinHeight" Value="32" />
+  </Style>
+
   <Style Selector="Slider /template/ Thumb">
     <Setter Property="Background" Value="{DynamicResource AppSurface0}" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
