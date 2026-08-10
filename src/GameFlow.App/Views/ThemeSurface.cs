@@ -11,6 +11,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.VisualTree;
 using Serilog;
 
 namespace GameFlow.App.Views;
@@ -52,6 +53,16 @@ public sealed class ThemeSurface : Control
     /// </summary>
     private static readonly ConcurrentDictionary<string, byte> ResolveFailureCache = new();
 
+    /// <summary>Paths currently being decoded, so concurrent surfaces queue one decode between them.</summary>
+    private static readonly ConcurrentDictionary<string, byte> DecodesInFlight = new();
+
+    /// <summary>
+    /// Raised on the UI thread when a background decode lands, so surfaces
+    /// that drew without the art can pick it up. Static because the cache
+    /// is: one decode serves every surface using that image.
+    /// </summary>
+    private static event Action? BitmapDecoded;
+
     private readonly ControllerStateSymbols symbols = new();
 
     private InstalledTheme? activeTheme;
@@ -68,6 +79,12 @@ public sealed class ThemeSurface : Control
     // reaching the surface gets a single Info-level log line —
     // useful for diagnosing "no feedback" reports.
     private bool firstButtonPressLogged;
+
+    /// <summary>
+    /// Whether the last <see cref="UpdateState"/> found this surface on
+    /// screen. Used to force a repaint on the transition back into view.
+    /// </summary>
+    private bool wasOnScreen;
 
     // Throttled feedback-diagnostic state. Once per second per surface
     // we dump the snapshot's pressed-button count + the eval result of
@@ -160,6 +177,35 @@ public sealed class ThemeSurface : Control
     /// when it left until the next state change — which, for a pad sitting
     /// still, could be a long time.
     /// </summary>
+    /// <summary>
+    /// Subscribes to background decode completions while attached.
+    /// Unsubscribed on detach — the event is static, so a surface that
+    /// stayed subscribed would be kept alive by it for the life of the
+    /// process, and every closed dashboard would leave another one behind
+    /// repainting itself.
+    /// </summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        BitmapDecoded += OnBitmapDecoded;
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        BitmapDecoded -= OnBitmapDecoded;
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnBitmapDecoded()
+    {
+        // Only the surfaces actually on screen need the repaint; the rest
+        // will pick the art up whenever they next come into view.
+        if (activeTheme is not null && IsEffectivelyVisible)
+        {
+            InvalidateVisual();
+        }
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -170,6 +216,58 @@ public sealed class ThemeSurface : Control
         {
             InvalidateVisual();
         }
+    }
+
+    /// <summary>
+    /// True when any part of this surface is actually inside the clip the
+    /// renderer will apply — i.e. it is on screen, not merely present.
+    ///
+    /// <para>
+    /// <see cref="Visual.IsEffectivelyVisible"/> is not enough. The
+    /// dashboard lists every slot in a ScrollViewer, and a panel scrolled
+    /// out of view is still "visible" by that definition: it is in the
+    /// tree, its parents are visible, and nothing about it is collapsed.
+    /// It just is not on screen. With a stack of controllers that is most
+    /// of them, and each one was repainting tens of megapixel-scale layers
+    /// per tick for nothing — which is how the dispatcher ended up 8.7
+    /// seconds behind.
+    /// </para>
+    ///
+    /// <para>
+    /// Cost scales with the number of slots, so this is the difference
+    /// between paying for what is on screen and paying for everything the
+    /// user has ever added.
+    /// </para>
+    /// </summary>
+    private bool IsWithinViewport()
+    {
+        // Walk up to the nearest scroll viewport and test against it.
+        // Avalonia's own TransformedBounds/Clip is not public API here, so
+        // the intersection is computed directly.
+        var bounds = Bounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            // Never laid out; nothing is on screen yet.
+            return false;
+        }
+
+        var viewport = this.FindAncestorOfType<ScrollViewer>();
+        if (viewport is null)
+        {
+            // Not inside a scroller, so visibility alone decided it.
+            return true;
+        }
+
+        var topLeft = this.TranslatePoint(default, viewport);
+        if (topLeft is null)
+        {
+            return false;
+        }
+
+        var inViewport = new Rect(topLeft.Value, bounds.Size);
+        var visible = new Rect(viewport.Bounds.Size);
+
+        return inViewport.Intersects(visible);
     }
 
     public void UpdateState(ControllerSnapshot newSnapshot)
@@ -188,8 +286,23 @@ public sealed class ThemeSurface : Control
         //
         // The snapshot is still stored, so becoming visible again paints
         // current state rather than a stale frame.
-        if (!IsEffectivelyVisible)
+        var onScreen = IsEffectivelyVisible && IsWithinViewport();
+        if (!onScreen)
         {
+            wasOnScreen = false;
+            return;
+        }
+
+        // Coming back on screen forces one repaint, bypassing the dirty
+        // check below. While off screen we deliberately stopped
+        // invalidating, so the composition layer still holds whatever was
+        // drawn when it left — and for a pad sitting still the dirty check
+        // would agree nothing changed and leave that stale frame up.
+        if (!wasOnScreen)
+        {
+            wasOnScreen = true;
+            lastRenderedSnapshot = newSnapshot;
+            InvalidateVisual();
             return;
         }
 
@@ -1190,27 +1303,78 @@ public sealed class ThemeSurface : Control
         }
 
         var absolute = resolved;
-        absolute = Path.GetFullPath(absolute);
-        return BitmapCache.GetOrAdd(absolute, p =>
+        return GetOrBeginDecode(Path.GetFullPath(absolute));
+    }
+
+    /// <summary>
+    /// Returns a decoded theme bitmap, or <see langword="null"/> while one
+    /// is still being decoded on a background thread.
+    ///
+    /// <para>
+    /// Decoding used to happen inline, inside <see cref="Render"/>, on the
+    /// UI thread. That is fine for one small image and catastrophic at the
+    /// scale this app actually runs at: a themed slot references ~47
+    /// images, several of them ~1467x816 PNGs, and a dashboard with eight
+    /// slots spanning six controller kinds faults in the better part of
+    /// three hundred of them. Measured, that blocked the dispatcher for
+    /// 7.9 SECONDS in one stretch — the "one refresh per several seconds"
+    /// stall, and the reason opening the tab appeared to hang.
+    /// </para>
+    ///
+    /// <para>
+    /// Returning null for the first frame or two costs a partially drawn
+    /// controller that completes a moment later. Blocking the UI thread
+    /// costs the whole application. The art streams in instead.
+    /// </para>
+    /// </summary>
+    private static Bitmap? GetOrBeginDecode(string absolute)
+    {
+        if (BitmapCache.TryGetValue(absolute, out var cached))
         {
+            return cached;
+        }
+
+        // One decode per path, however many surfaces ask for it at once.
+        // Eight slots sharing a theme would otherwise each queue the same
+        // work, which is how a shared cache turns into eight times the I/O.
+        if (!DecodesInFlight.TryAdd(absolute, 0))
+        {
+            return null;
+        }
+
+        _ = Task.Run(() =>
+        {
+            Bitmap? decoded = null;
             try
             {
-                if (!File.Exists(p))
+                if (File.Exists(absolute))
                 {
-                    Log.Warning("Theme image not found on disk: {Path}", p);
-                    return null;
+                    decoded = new Bitmap(absolute);
                 }
-                var bmp = new Bitmap(p);
-                Log.Debug("Loaded theme image {Path} ({W}x{H}).",
-                    p, bmp.PixelSize.Width, bmp.PixelSize.Height);
-                return bmp;
+                else
+                {
+                    Log.Warning("Theme image not found on disk: {Path}", absolute);
+                }
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Could not load theme image {Path}.", p);
-                return null;
+                Log.Warning(ex, "Could not load theme image {Path}.", absolute);
+            }
+
+            // Cached even on failure, so a broken file is attempted once
+            // rather than re-queued on every frame.
+            BitmapCache[absolute] = decoded;
+            _ = DecodesInFlight.TryRemove(absolute, out _);
+
+            if (decoded is not null)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(
+                    static () => BitmapDecoded?.Invoke(),
+                    Avalonia.Threading.DispatcherPriority.Background);
             }
         });
+
+        return null;
     }
 
 

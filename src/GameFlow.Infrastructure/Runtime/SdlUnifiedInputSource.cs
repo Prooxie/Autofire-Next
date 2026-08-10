@@ -61,6 +61,24 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> requestedSlotDeviceIds =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> openRetryNotBefore = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// When each open handle first went missing from enumeration. See
+    /// <see cref="PruneStaleSlotHandles"/> — a handle is only released
+    /// after the absence persists, because a momentary gap in SDL's device
+    /// list is normal and closing on it caused a permanent reopen loop.
+    /// </summary>
+    private readonly Dictionary<string, DateTime> missingSince = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How long a device must stay absent before its handle is released.</summary>
+    private static readonly TimeSpan StaleHandleGrace = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Device ids already reported as unknown, so a slot pointing at a pad
+    /// that no longer exists warns once rather than on every tick.
+    /// Cleared when the device reappears.
+    /// </summary>
+    private readonly HashSet<string> unknownDeviceWarned = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> loggedNonSdlSkips = new(StringComparer.OrdinalIgnoreCase);
 
     public SdlUnifiedInputSource(ILogger<SdlUnifiedInputSource> logger, InputDeviceCatalog inputDeviceCatalog, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.Web.WebControllerHub webControllerHub)
@@ -388,6 +406,34 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             return null;
         }
 
+        // Do not open what enumeration does not list.
+        //
+        // A slot keeps the device id it was configured with, and those ids
+        // are derived from the enumeration signature — so a pad that was
+        // unplugged, or that now enumerates differently, leaves a slot
+        // pointing at an id the catalog no longer has. SDL will still
+        // happily open the raw instance, so the open SUCCEEDS, and then
+        // PruneStaleSlotHandles releases it again because it is not in the
+        // catalog. Open, release, open, release, forever — visible in the
+        // log as one device cycling every few seconds and, before the
+        // grace period was added, four times a second.
+        //
+        // The catalog is the authority on what exists. If it does not list
+        // the device, there is nothing to open, and saying so once is far
+        // better than rediscovering it on every tick.
+        if (!inputDeviceCatalog.TryGetById(deviceId, out _))
+        {
+            if (unknownDeviceWarned.Add(deviceId))
+            {
+                logger.LogWarning(
+                    "Slot references device {DeviceId}, which is not present. It will be ignored until it "
+                    + "reappears — reassign the slot if the pad was replaced.",
+                    deviceId);
+            }
+
+            return null;
+        }
+
         // Failed opens back off so a device that refuses to open (or is
         // mid-Bluetooth-handshake) isn't hammered at 250 Hz.
         if (openRetryNotBefore.TryGetValue(deviceId, out var notBefore) && DateTime.UtcNow < notBefore)
@@ -396,7 +442,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         }
 
         currentOperation = "opening " + deviceId;
-        logger.LogInformation("Opening SDL device {DeviceId} (kind {Kind})…", deviceId, kind);
+        logger.LogDebug("Opening SDL device {DeviceId} (kind {Kind})…", deviceId, kind);
         var openTimer = System.Diagnostics.Stopwatch.StartNew();
 
         var handle = kind == DeviceKind.Gamepad
@@ -422,7 +468,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         }
 
         _ = openRetryNotBefore.Remove(deviceId);
-        logger.LogInformation("SDL device {DeviceId} opened in {ElapsedMs} ms.", deviceId, openTimer.ElapsedMilliseconds);
+        logger.LogDebug("SDL device {DeviceId} opened in {ElapsedMs} ms.", deviceId, openTimer.ElapsedMilliseconds);
 
         // Motion sensors are OPT-IN in SDL — without this call every
         // SDL_GetGamepadSensorData read returns nothing, even on a pad
@@ -504,7 +550,27 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             accelOk ? accel[0] : 0f, accelOk ? accel[1] : 0f, accelOk ? accel[2] : 0f);
     }
 
-    /// <summary>Closes cached slot handles for devices no longer present.</summary>
+    /// <summary>
+    /// Closes cached slot handles for devices that have been gone long
+    /// enough to count as unplugged.
+    ///
+    /// <para>
+    /// The absence must be SUSTAINED. This previously closed a handle the
+    /// instant its device was missing from the catalog, and the catalog is
+    /// rebuilt from a live SDL enumeration that is briefly incomplete
+    /// around any hotplug event. A single such gap closed a perfectly good
+    /// handle, the next tick reopened it, and the cycle repeated for as
+    /// long as the app ran: measured at four open/close pairs per second,
+    /// 5326 of them in one session, which is both real work on the runtime
+    /// thread and 4.6% of the log file.
+    /// </para>
+    ///
+    /// <para>
+    /// A genuinely unplugged pad is still released, just a couple of
+    /// seconds later — which no user can perceive, and which costs far
+    /// less than reopening a live device four times a second.
+    /// </para>
+    /// </summary>
     private void PruneStaleSlotHandles()
     {
         if (slotHandles.Count == 0)
@@ -514,10 +580,39 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
         var live = new HashSet<string>(
             inputDeviceCatalog.Devices.Select(d => d.Id), StringComparer.OrdinalIgnoreCase);
-        var stale = slotHandles.Keys.Where(id => !live.Contains(id)).ToList();
-        foreach (var id in stale)
+
+        // An empty enumeration is never trustworthy: SDL reports no devices
+        // for a moment while it re-scans. Treating that as "everything was
+        // unplugged" would close every handle at once.
+        if (live.Count == 0)
         {
-            CloseSlotHandle(id);
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var id in slotHandles.Keys.ToList())
+        {
+            if (live.Contains(id))
+            {
+                _ = missingSince.Remove(id);
+                _ = unknownDeviceWarned.Remove(id);
+                continue;
+            }
+
+            if (!missingSince.TryGetValue(id, out var firstMissedUtc))
+            {
+                missingSince[id] = now;
+                continue;
+            }
+
+            if (now - firstMissedUtc >= StaleHandleGrace)
+            {
+                _ = missingSince.Remove(id);
+                logger.LogInformation(
+                    "Releasing SDL device {DeviceId}: absent from enumeration for {Seconds:F0} s.",
+                    id, (now - firstMissedUtc).TotalSeconds);
+                CloseSlotHandle(id);
+            }
         }
     }
 
