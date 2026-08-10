@@ -102,6 +102,22 @@ public static class DependencyInjection
         _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Web.WebControllerServer>());
         _ = services.AddHostedService<Runtime.Web.WebControllerEnumerationService>();
 
+        // Controller effects (rumble / lighting / adaptive triggers).
+        // The service is registered even where no backend exists: it parks
+        // itself when the writer reports unsupported, and producers can
+        // publish unconditionally rather than null-checking everywhere.
+        //
+        // The writer is Null for now. The queue, the thread and the
+        // dispatch policy are done and covered by tests; binding them to
+        // SDL's effect calls is the remaining step and needs validating
+        // against real Bluetooth hardware, because holding SDL's device
+        // lock across a blocking HID transfer is what froze the runtime
+        // when effects were previously wired up.
+        _ = services.AddSingleton<Runtime.Effects.IControllerEffectWriter,
+                                  Runtime.Effects.NullControllerEffectWriter>();
+        _ = services.AddSingleton<Runtime.Effects.ControllerEffectsService>();
+        _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Effects.ControllerEffectsService>());
+
         // DSU / Cemuhook motion server. Same two-line shape as the web
         // controller above and for the same reason: the Dashboard reads
         // IsRunning / ConnectedClientCount off this instance, so it has to

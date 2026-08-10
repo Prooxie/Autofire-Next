@@ -263,7 +263,7 @@ Shift layers resolve first each tick, gating which rules are active. Every slot'
 
 Documented here rather than discovered by surprise:
 
-* **Rumble, RGB/lighting, and adaptive triggers save and reload correctly, but don't reach physical hardware yet.** They need a dedicated effects thread — direct SDL writes were found to block the runtime tick over Bluetooth, so this is deliberately not wired in until that thread exists.
+* **Rumble, RGB/lighting, and adaptive triggers save and reload correctly, but don't reach physical hardware yet.** The dedicated effects thread now exists (`ControllerEffectsService`) — a long-running thread with a latest-wins dispatch queue that coalesces redundant writes, rate-limits to ~60 Hz per device, and exempts "stop" from that limit so a motor never keeps running. What's left is the backend: `IControllerEffectWriter` is still the null implementation, because binding it to SDL's effect calls has to be validated against real Bluetooth hardware — SDL holds its device lock across the blocking HID transfer, and that is exactly what froze the runtime when effects were previously wired in.
 * **No virtual *gamepad* output on Linux or macOS.** Mouse output is real on both; a real virtual controller (via `uinput`'s gamepad mode, or DriverKit on macOS) is future work.
 * **Bundled controller theme placement is known-imperfect** on some skins — several were generated from asset-pack sprites without authoritative layout data. Fixing this properly needs template-matching each sprite against its base image; tracked, not yet done.
 * **CGEventTap (macOS) has no per-device keyboard/mouse distinction** — one aggregate stream for the whole system, not per-physical-device like Windows/Linux.
