@@ -153,11 +153,45 @@ public sealed class ThemeSurface : Control
     /// re-composite was interfering with the variant-picker ComboBox's
     /// popup hover state ("flickering over the choice").
     /// </summary>
+    /// <summary>
+    /// Repaints once on becoming visible again. <see cref="UpdateState"/>
+    /// suppresses invalidation while hidden, so without this a surface
+    /// returning to view would keep showing whatever frame was current
+    /// when it left until the next state change — which, for a pad sitting
+    /// still, could be a long time.
+    /// </summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property == Visual.IsVisibleProperty &&
+            change.GetNewValue<bool>() &&
+            activeTheme is not null)
+        {
+            InvalidateVisual();
+        }
+    }
+
     public void UpdateState(ControllerSnapshot newSnapshot)
     {
         if (ReferenceEquals(snapshot, newSnapshot)) { return; }
         snapshot = newSnapshot;
         if (activeTheme is null) { return; }
+
+        // A surface the user cannot see must not ask to be repainted.
+        // Several of these live in the tree at once — the dashboard's
+        // physical and virtual panels plus the tuning tab's — and every
+        // one of them is fed by the same runtime tick regardless of which
+        // tab is on top. Each repaint composites tens of megapixel-scale
+        // layers, so invalidating the hidden ones spends most of the
+        // frame budget on pixels that are never shown.
+        //
+        // The snapshot is still stored, so becoming visible again paints
+        // current state rather than a stale frame.
+        if (!IsEffectivelyVisible)
+        {
+            return;
+        }
 
         // Value-based dirty check. The runtime hands us a fresh snapshot
         // object every tick (new Timestamp) even when the pad is at rest, and

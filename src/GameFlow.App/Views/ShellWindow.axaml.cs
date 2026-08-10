@@ -15,8 +15,6 @@ public partial class ShellWindow : Window
     /// <summary>The rate the user asked for; a ceiling, not a promise. See <see cref="AdaptTickRate"/>.</summary>
     private int configuredRefreshHz = 30;
 
-    /// <summary>Consecutive in-budget ticks, used to decide when it is safe to speed back up.</summary>
-    private int sustainedFastFrames;
     private ShellViewModel? shellViewModel;
     private bool isRefreshing;
     private bool isClosing;
@@ -243,72 +241,54 @@ public partial class ShellWindow : Window
     }
 
     /// <summary>
-    /// Backs the UI tick off when the dispatcher cannot keep up, and
-    /// restores it once it can.
+    /// Backs the UI tick off when the dispatcher cannot keep up.
     ///
     /// <para>
-    /// Without this the app could be configured into a state it could not
+    /// Without this the app can be configured into a state it cannot
     /// recover from. If a repaint costs more than the frame budget, each
     /// tick queues more work than it retires, the dispatcher backs up, and
-    /// the window stops responding — which is the freeze that was reported
-    /// after opening a tab with several controller surfaces on it. Asking
-    /// for MORE frames than the machine can paint does not produce more
-    /// frames; it only starves input handling.
+    /// the window stops responding — the freeze reported after opening a
+    /// tab with several controller surfaces on it. Asking for MORE frames
+    /// than the machine can paint does not produce more frames; it only
+    /// starves input handling.
     /// </para>
     ///
     /// <para>
-    /// The configured rate is treated as a ceiling rather than a promise.
-    /// Recovery is deliberately slower than backoff — a single fast frame
-    /// should not undo the throttle and start the cycle again.
+    /// Backoff is MONOTONE within a session: the rate only ever drops, and
+    /// is restored solely when the window reopens or the setting changes.
+    /// An earlier version tried to climb back up after a run of fast
+    /// frames, which oscillated — it would speed up, immediately
+    /// re-saturate, and throttle again. Every one of those transitions
+    /// restarts the DispatcherTimer, so the oscillation was itself a
+    /// source of the stutter it was supposed to cure. A dashboard that
+    /// settles at a lower rate is fine; one that constantly renegotiates
+    /// is not.
     /// </para>
     /// </summary>
     private void AdaptTickRate(TimeSpan gap)
     {
-        var wanted = TimeSpan.FromMilliseconds(1000d / Math.Clamp(configuredRefreshHz, 30, 1000));
         var current = refreshTimer.Interval;
 
-        // Overran the budget by more than half: halve the rate, to a floor
-        // of 10 Hz. The dashboard is a visualisation — a slow one still
-        // works, an unresponsive window does not.
-        if (gap > current + current)
-        {
-            var slower = TimeSpan.FromMilliseconds(Math.Min(current.TotalMilliseconds * 2, 100));
-            if (slower > current)
-            {
-                refreshTimer.Interval = slower;
-                sustainedFastFrames = 0;
-                Log.Warning(
-                    "Dashboard tick throttled to {Hz:F0} Hz — the UI thread could not keep up at {Was:F0} Hz. "
-                    + "Large theme bitmaps under software rendering are the usual cause.",
-                    1000d / slower.TotalMilliseconds, 1000d / current.TotalMilliseconds);
-            }
-
-            return;
-        }
-
-        if (current <= wanted)
+        // Only react to a real overrun — more than double the budget —
+        // so ordinary jitter does not trigger a permanent downgrade.
+        if (gap <= current + current)
         {
             return;
         }
 
-        // Comfortably inside budget. Require a sustained run before
-        // speeding up, so recovery cannot oscillate against backoff.
-        if (gap < current)
+        // Floor of 10 Hz. The dashboard is a visualisation: a slow one
+        // still works, an unresponsive window does not.
+        var slower = TimeSpan.FromMilliseconds(Math.Min(current.TotalMilliseconds * 2, 100));
+        if (slower <= current)
         {
-            sustainedFastFrames++;
-        }
-        else
-        {
-            sustainedFastFrames = 0;
+            return;
         }
 
-        if (sustainedFastFrames >= 120)
-        {
-            sustainedFastFrames = 0;
-            var faster = TimeSpan.FromMilliseconds(Math.Max(current.TotalMilliseconds / 2, wanted.TotalMilliseconds));
-            refreshTimer.Interval = faster;
-            Log.Information("Dashboard tick restored to {Hz:F0} Hz.", 1000d / faster.TotalMilliseconds);
-        }
+        refreshTimer.Interval = slower;
+        Log.Warning(
+            "Dashboard tick throttled to {Hz:F0} Hz — the UI thread could not keep up at {Was:F0} Hz. "
+            + "The dominant cost is the number of image layers a controller theme composites per frame.",
+            1000d / slower.TotalMilliseconds, 1000d / current.TotalMilliseconds);
     }
 
     private async void RefreshTimerOnTick(object? sender, EventArgs e)
