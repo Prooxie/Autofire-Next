@@ -1,4 +1,0 @@
-Derived from VSCView (https://github.com/Nielk1/VSCView)
-Copyright (c) 2018-2021 John Klein — MIT License.
-Source layout: xboxwirelesscontroller/default/Xbox Series X/XBSeries (Black).json
-Art from the Gamepad Asset Pack (MIT).

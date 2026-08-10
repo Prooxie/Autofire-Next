@@ -330,7 +330,14 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 }
                 return GameFlow.Infrastructure.Runtime.Input.KeyboardGamepadSynthesizer
                     .Synthesize(info.DisplayName ?? deviceId, pressed)
-                    with { Timestamp = DateTimeOffset.UtcNow };
+                    with
+                    {
+                        Timestamp = DateTimeOffset.UtcNow,
+                        // Carried unreduced so a full-layout keyboard theme
+                        // can light every key — the synthesized Buttons above
+                        // only cover the handful that map onto a ButtonId.
+                        PressedKeys = pressed
+                    };
             }
             if (info?.Category == DeviceCategory.Mouse)
             {

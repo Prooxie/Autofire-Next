@@ -116,6 +116,15 @@ public sealed class ControllerStateSymbols : IFleeSymbols
         {
             return ResolveTrigger(rest);
         }
+        // key:<name> — any keyboard key by name (key:a, key:f1, key:lshift,
+        // key:space...). Reads the raw pressed-key set, so a full-layout
+        // keyboard theme can light every key rather than only the handful
+        // that happen to map onto a ButtonId.
+        if (head.Equals("key", StringComparison.Ordinal))
+        {
+            return ResolveKey(rest);
+        }
+
         if (head.Equals("stick_left", StringComparison.Ordinal))
         {
             return ResolveStick(rest, Snapshot.LeftStick, ButtonId.LeftStick);
@@ -220,6 +229,80 @@ public sealed class ControllerStateSymbols : IFleeSymbols
             if (side.Equals("r", StringComparison.Ordinal)) { return Snapshot.RightTrigger > 0.95f ? 1 : 0; }
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Maps a theme's key name to its Windows virtual-key code. Names are
+    /// the lowercase forms a theme author would reasonably write; the
+    /// table is the single place a full-layout keyboard theme and the
+    /// renderer agree on spelling.
+    /// </summary>
+    private static readonly Dictionary<string, int> KeyNameToVirtualKey = BuildKeyNames();
+
+    private static Dictionary<string, int> BuildKeyNames()
+    {
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        for (var c = 'a'; c <= 'z'; c++)
+        {
+            map[c.ToString()] = 0x41 + (c - 'a');       // VK_A..VK_Z
+        }
+        for (var d = 0; d <= 9; d++)
+        {
+            map[d.ToString()] = 0x30 + d;               // VK_0..VK_9
+        }
+        for (var f = 1; f <= 12; f++)
+        {
+            map["f" + f] = 0x70 + (f - 1);              // VK_F1..VK_F12
+        }
+
+        map["escape"] = 0x1B; map["esc"] = 0x1B;
+        map["tab"] = 0x09; map["capslock"] = 0x14;
+        map["lshift"] = 0xA0; map["rshift"] = 0xA1;
+        map["lctrl"] = 0xA2; map["rctrl"] = 0xA3;
+        map["lalt"] = 0xA4; map["ralt"] = 0xA5;
+        map["lwin"] = 0x5B; map["rwin"] = 0x5C; map["menu"] = 0x5D;
+        map["space"] = 0x20; map["enter"] = 0x0D; map["backspace"] = 0x08;
+        map["insert"] = 0x2D; map["delete"] = 0x2E;
+        map["home"] = 0x24; map["end"] = 0x23;
+        map["pageup"] = 0x21; map["pagedown"] = 0x22;
+        map["up"] = 0x26; map["down"] = 0x28; map["left"] = 0x25; map["right"] = 0x27;
+        map["printscreen"] = 0x2C; map["scrolllock"] = 0x91; map["pause"] = 0x13;
+        map["numlock"] = 0x90;
+
+        map["minus"] = 0xBD; map["equals"] = 0xBB;
+        map["lbracket"] = 0xDB; map["rbracket"] = 0xDD;
+        map["semicolon"] = 0xBA; map["apostrophe"] = 0xDE;
+        map["grave"] = 0xC0; map["backslash"] = 0xDC;
+        map["comma"] = 0xBC; map["period"] = 0xBE; map["slash"] = 0xBF;
+
+        for (var n = 0; n <= 9; n++)
+        {
+            map["num" + n] = 0x60 + n;                  // VK_NUMPAD0..9
+        }
+        map["nummultiply"] = 0x6A; map["numadd"] = 0x6B;
+        map["numsubtract"] = 0x6D; map["numdecimal"] = 0x6E;
+        map["numdivide"] = 0x6F; map["numenter"] = 0x0D;
+
+        return map;
+    }
+
+    private double ResolveKey(ReadOnlySpan<char> tail)
+    {
+        if (tail.IsEmpty || Snapshot.PressedKeys.Count == 0)
+        {
+            return 0;
+        }
+
+        // Numeric form (key:65) is accepted too, so a theme can address a
+        // key this table hasn't named.
+        if (int.TryParse(tail, out var directVk))
+        {
+            return Snapshot.PressedKeys.Contains(directVk) ? 1 : 0;
+        }
+
+        return KeyNameToVirtualKey.TryGetValue(tail.ToString(), out var vk)
+            && Snapshot.PressedKeys.Contains(vk) ? 1 : 0;
     }
 
     private double ResolveStick(ReadOnlySpan<char> tail, StickVector stick, ButtonId clickButton)

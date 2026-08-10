@@ -279,6 +279,56 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
     public string Title => PanelTitle;
 
     /// <summary>
+    /// True for the emitted (virtual) half of a physical/virtual pair.
+    /// Drives the panel's interaction affordance: hovering shows an
+    /// outline like the physical side, but clicking the VIRTUAL panel
+    /// opens that slot's settings editor. Set by whoever builds the
+    /// pair; defaults false so a lone physical panel is never clickable
+    /// by accident.
+    /// </summary>
+    public bool IsVirtualPanel
+    {
+        get => isVirtualPanel;
+        set
+        {
+            if (SetProperty(ref isVirtualPanel, value))
+            {
+                OnPropertyChanged(nameof(IsEditable));
+            }
+        }
+    }
+    private bool isVirtualPanel;
+
+    /// <summary>Slot this panel belongs to, so a click knows which slot to open. Empty for the top-level (non-slot) pipeline.</summary>
+    public string SlotId
+    {
+        get => slotId;
+        set
+        {
+            if (SetProperty(ref slotId, value))
+            {
+                OnPropertyChanged(nameof(IsEditable));
+            }
+        }
+    }
+    private string slotId = string.Empty;
+
+    /// <summary>Only a virtual panel that actually belongs to a slot can be opened for editing.</summary>
+    public bool IsEditable => IsVirtualPanel && !string.IsNullOrEmpty(SlotId);
+
+    /// <summary>Raised when the user clicks an editable virtual panel; the shell opens the slot's settings.</summary>
+    public event EventHandler<string>? EditRequested;
+
+    /// <summary>Invoked by the view on click. No-op unless <see cref="IsEditable"/>.</summary>
+    public void RequestEdit()
+    {
+        if (IsEditable)
+        {
+            EditRequested?.Invoke(this, SlotId);
+        }
+    }
+
+    /// <summary>
     /// Single-line at-a-glance summary used by the minimal (no-shell)
     /// layout, where there's no controller silhouette to look at.
     /// Concatenates the device name with the trigger summary and the

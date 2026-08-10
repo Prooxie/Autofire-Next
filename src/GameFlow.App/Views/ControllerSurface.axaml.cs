@@ -54,6 +54,33 @@ public partial class ControllerSurface : UserControl
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
+    /// <summary>
+    /// Click-to-edit on the VIRTUAL panel. Delegates the decision to the
+    /// view model (<see cref="ControllerVisualStateViewModel.RequestEdit"/>),
+    /// which no-ops unless this really is an editable virtual panel — so a
+    /// stray click on a physical panel can never open an editor for the
+    /// wrong thing.
+    /// </summary>
+    private void OnPanelPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (DataContext is ControllerVisualStateViewModel viewModel && viewModel.IsEditable)
+        {
+            viewModel.RequestEdit();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Hand cursor on editable panels only, so the affordance matches the behaviour.</summary>
+    private void ApplyEditableCursor(ControllerVisualStateViewModel? viewModel)
+    {
+        if (this.FindControl<Border>("PanelRoot") is { } root)
+        {
+            root.Cursor = viewModel?.IsEditable == true
+                ? new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                : Avalonia.Input.Cursor.Default;
+        }
+    }
+
     private static ThemeRegistry CreateAndRefresh()
     {
         var registry = new ThemeRegistry();
@@ -115,6 +142,10 @@ public partial class ControllerSurface : UserControl
         // Detach any handlers from a previous binding so the registry
         // doesn't end up wired into two VMs.
         boundViewModel = DataContext as ControllerVisualStateViewModel;
+
+        // Reflect this panel's editability in the cursor as soon as it's
+        // bound — otherwise the hand cursor would lag a panel swap.
+        ApplyEditableCursor(boundViewModel);
 
         // Hand the registry over to the VM so its
         // AvailableThemeVariants list populates and SelectedThemeVariant

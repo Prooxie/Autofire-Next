@@ -511,10 +511,19 @@
       </Transitions>
     </Setter>
   </Style>
+  <!--
+      Hover is scoped with :not(:selected) rather than left to declaration
+      order. Avalonia resolves equal-specificity styles last-one-wins, so a
+      bare TabItem:pointerover declared after :selected DIMMED the selected
+      tab's accent from 1 to 0.30 while the pointer was over it, and
+      restored it on exit — which reads as the hover effect firing when you
+      move OFF the tab rather than onto it. Being explicit means the two
+      rules can no longer fight, whatever order they end up in.
+  -->
   <Style Selector="TabItem:selected Border.navAccent">
     <Setter Property="Opacity" Value="1" />
   </Style>
-  <Style Selector="TabItem:pointerover Border.navAccent">
+  <Style Selector="TabItem:pointerover:not(:selected) Border.navAccent">
     <Setter Property="Opacity" Value="0.30" />
   </Style>
 

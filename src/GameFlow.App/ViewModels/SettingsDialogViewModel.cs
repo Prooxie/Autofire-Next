@@ -87,6 +87,21 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     [ObservableProperty]
     private string statusMessage = string.Empty;
 
+    /// <summary>
+    /// DSU / Cemuhook motion server controls. The shared singleton, so the
+    /// live status line here is the same one the runtime is updating — and
+    /// so the toggle is a single global switch. The server reads whichever
+    /// slots are enabled; it is not a per-controller setting, which is why
+    /// it lives in Settings rather than on a virtual controller.
+    ///
+    /// <para>
+    /// This panel owns its own persistence (it writes on change rather
+    /// than on Apply), so it is deliberately NOT part of
+    /// <see cref="ApplyAsync"/> / <see cref="RestoreDefaults"/>.
+    /// </para>
+    /// </summary>
+    public MotionServerPanelViewModel MotionServer { get; }
+
     // ─── Localised labels ─────────────────────────────────────────────────────
 
     /// <summary>Window title.</summary>
@@ -127,10 +142,12 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     public SettingsDialogViewModel(
         IUserSettingsService userSettings,
         ILocalizationService localization,
+        MotionServerPanelViewModel motionServer,
         ILogger<SettingsDialogViewModel> logger)
     {
         this.userSettings = userSettings ?? throw new ArgumentNullException(nameof(userSettings));
         this.localization = localization ?? throw new ArgumentNullException(nameof(localization));
+        MotionServer = motionServer ?? throw new ArgumentNullException(nameof(motionServer));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Subscribe to culture changes so the dialog's labels follow

@@ -54,6 +54,23 @@ public sealed record ControllerSnapshot
     /// <summary>True when the source pad actually reports gyro data — distinguishes "not moving" from "no sensor", which read identically as all-zero otherwise.</summary>
     public bool HasGyro { get; init; }
 
+    /// <summary>
+    /// Raw Windows virtual-key codes currently held, for sources that
+    /// are actual keyboards. Empty for gamepads.
+    ///
+    /// <para>
+    /// Kept ALONGSIDE <see cref="Buttons"/> rather than replacing it: the
+    /// mapping pipeline works in <see cref="ButtonId"/> terms (a keyboard
+    /// mapped to a virtual pad), but a keyboard has ~104 keys and
+    /// ButtonId has ~24 values, so collapsing to ButtonId throws away
+    /// most of the keyboard. A full-layout keyboard visual needs the
+    /// unreduced set, which is what this carries.
+    /// </para>
+    /// </summary>
+    public IReadOnlySet<int> PressedKeys { get; init; } = EmptyKeys;
+
+    private static readonly IReadOnlySet<int> EmptyKeys = new HashSet<int>();
+
     public int TouchContactCount { get; init; }
 
     /// <summary>

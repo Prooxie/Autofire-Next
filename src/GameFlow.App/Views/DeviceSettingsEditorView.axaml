@@ -1,0 +1,277 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:GameFlow.App.ViewModels"
+             x:Class="GameFlow.App.Views.DeviceSettingsEditorView"
+             x:DataType="vm:DeviceSettingsEditorViewModel"
+             x:CompileBindings="False">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.rowLabel">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.sectionHead">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+      <Setter Property="Margin" Value="0,10,0,4" />
+    </Style>
+    <Style Selector="TextBlock.readout">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Opacity" Value="0.75" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- Header -->
+    <StackPanel Grid.Row="0" Margin="0,0,0,6" Spacing="2">
+      <TextBlock Text="{Binding DeviceName}" FontWeight="Bold" FontSize="15"
+                 Foreground="{DynamicResource AppForeground}" />
+      <TextBlock Text="Tuning applies to this device on this slot only."
+                 FontSize="11" Opacity="0.7"
+                 Foreground="{DynamicResource AppForeground}" />
+    </StackPanel>
+
+    <!-- Honest status about what reaches hardware today -->
+    <Border Grid.Row="1" Padding="8,6" CornerRadius="4" Margin="0,0,0,8"
+            Background="#22FFAA33" BorderBrush="#55FFAA33" BorderThickness="1">
+      <TextBlock Text="{Binding EffectsPendingNote}" TextWrapping="Wrap"
+                 FontSize="11" Foreground="{DynamicResource AppForeground}" />
+    </Border>
+
+    <TabControl Grid.Row="2" IsEnabled="{Binding HasDevice}">
+
+      <!-- ── Sticks ── -->
+      <TabItem Header="Sticks">
+        <ScrollViewer>
+          <StackPanel Margin="4,2" Spacing="2">
+
+            <TextBlock Classes="sectionHead" Text="Left stick" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                      Value="{Binding LeftDeadzone}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftDeadzone, StringFormat='{}{0:P0}'}" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.6" SmallChange="0.01"
+                      Value="{Binding LeftAntiDeadzone}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftAntiDeadzone, StringFormat='{}{0:P0}'}" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+              <Slider Grid.Row="2" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
+                      Value="{Binding LeftFullAt}" />
+              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftFullAt, StringFormat='{}{0:P0}'}" />
+
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
+              <Slider Grid.Row="3" Grid.Column="1" Minimum="0.1" Maximum="3.0" SmallChange="0.05"
+                      Value="{Binding LeftSensitivity}" />
+              <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftSensitivity, StringFormat='{}{0:F2}x'}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+              <ComboBox ItemsSource="{Binding CurveOptions}" SelectedItem="{Binding LeftCurve}" Width="150" />
+              <CheckBox Content="Invert X" IsChecked="{Binding LeftInvertX}" />
+              <CheckBox Content="Invert Y" IsChecked="{Binding LeftInvertY}" />
+            </StackPanel>
+
+            <TextBlock Classes="sectionHead" Text="Right stick" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                      Value="{Binding RightDeadzone}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightDeadzone, StringFormat='{}{0:P0}'}" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.6" SmallChange="0.01"
+                      Value="{Binding RightAntiDeadzone}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightAntiDeadzone, StringFormat='{}{0:P0}'}" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+              <Slider Grid.Row="2" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
+                      Value="{Binding RightFullAt}" />
+              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightFullAt, StringFormat='{}{0:P0}'}" />
+
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
+              <Slider Grid.Row="3" Grid.Column="1" Minimum="0.1" Maximum="3.0" SmallChange="0.05"
+                      Value="{Binding RightSensitivity}" />
+              <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightSensitivity, StringFormat='{}{0:F2}x'}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
+              <ComboBox ItemsSource="{Binding CurveOptions}" SelectedItem="{Binding RightCurve}" Width="150" />
+              <CheckBox Content="Invert X" IsChecked="{Binding RightInvertX}" />
+              <CheckBox Content="Invert Y" IsChecked="{Binding RightInvertY}" />
+            </StackPanel>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ── Triggers ── -->
+      <TabItem Header="Triggers">
+        <ScrollViewer>
+          <StackPanel Margin="4,2" Spacing="2">
+            <TextBlock Classes="sectionHead" Text="Left trigger" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                      Value="{Binding LeftTriggerDeadzone}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftTriggerDeadzone, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
+                      Value="{Binding LeftTriggerFullAt}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftTriggerFullAt, StringFormat='{}{0:P0}'}" />
+            </Grid>
+
+            <TextBlock Classes="sectionHead" Text="Right trigger" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                      Value="{Binding RightTriggerDeadzone}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightTriggerDeadzone, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
+                      Value="{Binding RightTriggerFullAt}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightTriggerFullAt, StringFormat='{}{0:P0}'}" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ── Rumble ── -->
+      <TabItem Header="Rumble">
+        <ScrollViewer>
+          <StackPanel Margin="4,2" Spacing="4">
+            <CheckBox Content="Rumble enabled" IsChecked="{Binding RumbleEnabled}" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Overall gain" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
+                      Value="{Binding RumbleGain}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding RumbleGain, StringFormat='{}{0:F2}x'}" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Low motor" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
+                      Value="{Binding RumbleLowGain}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding RumbleLowGain, StringFormat='{}{0:F2}x'}" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="High motor" />
+              <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
+                      Value="{Binding RumbleHighGain}" />
+              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
+                         Text="{Binding RumbleHighGain, StringFormat='{}{0:F2}x'}" />
+            </Grid>
+            <CheckBox Content="Swap left/right motors" IsChecked="{Binding RumbleSwapMotors}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ── Lighting ── -->
+      <TabItem Header="Lighting">
+        <ScrollViewer>
+          <StackPanel Margin="4,2" Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Classes="rowLabel" Text="Lightbar mode" Width="120" />
+              <ComboBox ItemsSource="{Binding LightbarModeOptions}"
+                        SelectedItem="{Binding LightbarMode}" Width="190" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Classes="rowLabel" Text="Colour (hex)" Width="120" />
+              <TextBox Text="{Binding LightbarColor}" Width="120" />
+            </StackPanel>
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Brightness" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                      Value="{Binding LightbarBrightness}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding LightbarBrightness, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Player LEDs" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                      Value="{Binding IndicatorBrightness}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding IndicatorBrightness, StringFormat='{}{0:P0}'}" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ── Adaptive triggers ── -->
+      <TabItem Header="Adaptive">
+        <ScrollViewer>
+          <StackPanel Margin="4,2" Spacing="2">
+
+            <TextBlock Classes="sectionHead" Text="Left adaptive trigger" />
+            <ComboBox ItemsSource="{Binding AdaptiveModeOptions}"
+                      SelectedItem="{Binding LeftAdaptiveMode}" Width="230" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Start" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                      Value="{Binding LeftAdaptiveStart}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftAdaptiveStart, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="End" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                      Value="{Binding LeftAdaptiveEnd}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftAdaptiveEnd, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Strength" />
+              <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                      Value="{Binding LeftAdaptiveStrength}" />
+              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftAdaptiveStrength, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Frequency (Hz)" />
+              <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="60" SmallChange="1"
+                      Value="{Binding LeftAdaptiveFrequency}" />
+              <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
+                         Text="{Binding LeftAdaptiveFrequency}" />
+            </Grid>
+
+            <TextBlock Classes="sectionHead" Text="Right adaptive trigger" />
+            <ComboBox ItemsSource="{Binding AdaptiveModeOptions}"
+                      SelectedItem="{Binding RightAdaptiveMode}" Width="230" />
+            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
+              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Start" />
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                      Value="{Binding RightAdaptiveStart}" />
+              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightAdaptiveStart, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="End" />
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                      Value="{Binding RightAdaptiveEnd}" />
+              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightAdaptiveEnd, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Strength" />
+              <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                      Value="{Binding RightAdaptiveStrength}" />
+              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightAdaptiveStrength, StringFormat='{}{0:P0}'}" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Frequency (Hz)" />
+              <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="60" SmallChange="1"
+                      Value="{Binding RightAdaptiveFrequency}" />
+              <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
+                         Text="{Binding RightAdaptiveFrequency}" />
+            </Grid>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+    </TabControl>
+  </Grid>
+</UserControl>

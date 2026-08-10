@@ -1,0 +1,1472 @@
+{
+ "name": "Keyboard \u2014 100% (ANSI 104)",
+ "width": 1458,
+ "height": 421,
+ "version": 1,
+ "children": [
+  {
+   "type": "image",
+   "image": "Image Assets/body.png",
+   "x": 0,
+   "y": 0,
+   "width": 1458,
+   "height": 421
+  },
+  {
+   "type": "showhide",
+   "input": "key:escape",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 26,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f1",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 144,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f2",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 203,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f3",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 262,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f4",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 321,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f5",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 409.5,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f6",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 468.5,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f7",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 527.5,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f8",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 586.5,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f9",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 675.0,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f10",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 734.0,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f11",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 793.0,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f12",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 852.0,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:grave",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 26,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:1",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 85,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:2",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 144,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:3",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 203,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:4",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 262,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:5",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 321,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:6",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 380,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:7",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 439,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:8",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 498,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:9",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 557,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:0",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 616,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:minus",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 675,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:equals",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 734,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:backspace",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 793,
+     "y": 100,
+     "width": 113,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:tab",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 26,
+     "y": 159,
+     "width": 83.5,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:q",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 114.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:w",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 173.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:e",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 232.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:r",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 291.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:t",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 350.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:y",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 409.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:u",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 468.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:i",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 527.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:o",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 586.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:p",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 645.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:lbracket",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 704.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:rbracket",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 763.5,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:backslash",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 822.5,
+     "y": 159,
+     "width": 83.5,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:capslock",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 26,
+     "y": 218,
+     "width": 98.2,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:a",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 129.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:s",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 188.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:d",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 247.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:f",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 306.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:g",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 365.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:h",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 424.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:j",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 483.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:k",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 542.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:l",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 601.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:semicolon",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 660.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:apostrophe",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 719.2,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:enter",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 778.2,
+     "y": 218,
+     "width": 127.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:lshift",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 26,
+     "y": 277,
+     "width": 127.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:z",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 158.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:x",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 217.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:c",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 276.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:v",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 335.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:b",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 394.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:n",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 453.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:m",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 512.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:comma",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 571.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:period",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 630.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:slash",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 689.8,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:rshift",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 748.8,
+     "y": 277,
+     "width": 157.2,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:lctrl",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 26,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:lwin",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 99.8,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:lalt",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 173.5,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:space",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 247.2,
+     "y": 336,
+     "width": 363.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:ralt",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 616.0,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:rwin",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 689.8,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:menu",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 763.5,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:rctrl",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 837.2,
+     "y": 336,
+     "width": 68.8,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:printscreen",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 965,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:scrolllock",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1024,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:pause",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1083,
+     "y": 26,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:insert",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 965,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:home",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1024,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:pageup",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1083,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:delete",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 965,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:end",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1024,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:pagedown",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1083,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:up",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1024,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:left",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 965,
+     "y": 336,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:down",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1024,
+     "y": 336,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:right",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1083,
+     "y": 336,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:numlock",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1196,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:numdivide",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1255,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:nummultiply",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1314,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:numsubtract",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1373,
+     "y": 100,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num7",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1196,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num8",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1255,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num9",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1314,
+     "y": 159,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:numadd",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1373,
+     "y": 159,
+     "width": 54,
+     "height": 113
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num4",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1196,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num5",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1255,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num6",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1314,
+     "y": 218,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num1",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1196,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num2",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1255,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num3",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1314,
+     "y": 277,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:numenter",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1373,
+     "y": 277,
+     "width": 54,
+     "height": 113
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:num0",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1196,
+     "y": 336,
+     "width": 113,
+     "height": 54
+    }
+   ]
+  },
+  {
+   "type": "showhide",
+   "input": "key:numdecimal",
+   "children": [
+    {
+     "type": "image",
+     "image": "Image Assets/key_glow.png",
+     "x": 1314,
+     "y": 336,
+     "width": 54,
+     "height": 54
+    }
+   ]
+  }
+ ]
+}

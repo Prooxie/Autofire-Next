@@ -144,4 +144,28 @@ public sealed record AppSettings
     /// to <see langword="false"/> by the "Don't ask again" choice.
     /// </summary>
     public bool CheckRequirementsOnStartup { get; init; } = true;
+
+    // ---------------------------------------------------------------------
+    // DSU / Cemuhook motion server.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// When <see langword="true"/>, the DSU / Cemuhook server listens for
+    /// emulator clients and streams gyro/accelerometer for the enabled slots.
+    ///
+    /// <para>
+    /// Off by default, deliberately. This opens a UDP listener, and a network
+    /// service the user never asked for should not appear the first time the
+    /// app runs — the same reasoning behind
+    /// <see cref="GameFlow.Infrastructure.Overlay.OverlayOptions.Enabled"/>.
+    /// </para>
+    /// </summary>
+    public bool MotionServerEnabled { get; init; }
+
+    /// <summary>
+    /// UDP port the DSU / Cemuhook server binds. 26760 is the port every
+    /// consumer (Cemu, Dolphin, Yuzu, Ryujinx) probes by default, so changing
+    /// it means reconfiguring the emulator to match.
+    /// </summary>
+    public int MotionServerPort { get; init; } = 26760;
 }

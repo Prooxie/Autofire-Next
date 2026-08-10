@@ -164,6 +164,36 @@
                       Foreground="{DynamicResource AppForeground}" />
           </StackPanel>
 
+          <Border Classes="divider" />
+
+          <!-- Motion server (DSU / Cemuhook). A single global switch, not a
+               per-controller one: the server streams whichever slots are
+               enabled, and emulators address pads by DSU slot index, so
+               there is nothing meaningful to turn on for one controller and
+               off for another. Saves immediately rather than on Apply,
+               matching the toggle's own behaviour. -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="Motion server" Classes="sectionHeading" />
+            <CheckBox IsChecked="{Binding MotionServer.IsEnabled, Mode=TwoWay}"
+                      Content="Enable DSU / Cemuhook motion server"
+                      Foreground="{DynamicResource AppForeground}" />
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Streams gyroscope and accelerometer over UDP so Cemu, Dolphin, Yuzu and Ryujinx can use real motion." />
+            <Grid ColumnDefinitions="180,Auto" VerticalAlignment="Center">
+              <TextBlock Grid.Column="0" Text="UDP port"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource AppForeground}" />
+              <TextBox Grid.Column="1" Width="100"
+                       Text="{Binding MotionServer.Port, Mode=TwoWay}" />
+            </Grid>
+            <TextBlock Classes="hint"
+                       Text="Port must be between 1024 and 65535."
+                       IsVisible="{Binding MotionServer.HasPortError}"
+                       Foreground="{DynamicResource AppDanger}" />
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="{Binding MotionServer.Status}" />
+          </StackPanel>
+
           <Border Height="8" />
 
         </StackPanel>

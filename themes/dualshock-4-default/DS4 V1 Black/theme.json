@@ -1,0 +1,297 @@
+{
+  "_comment": "DualShock 4 V1 (the original black PS4 controller). V1 has no front lightbar.",
+  "name": "DualShock 4 V1 (Black)",
+  "version": 1,
+  "width": 1466,
+  "height": 783,
+  "children": [
+    {
+      "type": "image",
+      "x": 0,
+      "y": 0,
+      "image": "\\ds4\\Templates\\DS4 V1\\DualShock 4 Controller Overlay - No Thumbstick, Triggers and Lightbar Rear.png",
+      "width": 1466,
+      "height": 783
+    },
+    {
+      "type": "image",
+      "x": 217,
+      "y": 0,
+      "image": "\\ds4\\Image Assets\\DS4 V2 Active Button\\DS4_V2_L2.png",
+      "width": 164,
+      "height": 94
+    },
+    {
+      "type": "image",
+      "x": 1085,
+      "y": 0,
+      "image": "\\ds4\\Image Assets\\DS4 V2 Active Button\\DS4_V2_R2.png",
+      "width": 164,
+      "height": 94
+    },
+    {
+      "type": "pbar",
+      "x": 217,
+      "y": 0,
+      "input": "triggers:l:analog",
+      "direction": "up",
+      "image": "\\ds4\\Image Assets\\DS4_L2-Active.png",
+      "width": 164,
+      "height": 94
+    },
+    {
+      "type": "pbar",
+      "x": 1085,
+      "y": 0,
+      "input": "triggers:r:analog",
+      "direction": "up",
+      "image": "\\ds4\\Image Assets\\DS4_R2-Active.png",
+      "width": 164,
+      "height": 94
+    },
+    {
+      "type": "showhide",
+      "input": "bumpers:l",
+      "children": [
+        {
+          "type": "image",
+          "x": 190,
+          "y": 71,
+          "image": "\\ds4\\Image Assets\\DS4_L1-Active.png",
+          "width": 199,
+          "height": 99
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "bumpers:r",
+      "children": [
+        {
+          "type": "image",
+          "x": 1076,
+          "y": 70,
+          "image": "\\ds4\\Image Assets\\DS4_R1-Active.png",
+          "width": 199,
+          "height": 99
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "home",
+      "children": [
+        {
+          "type": "image",
+          "x": 688,
+          "y": 519,
+          "image": "\\ds4\\Image Assets\\DS4_Home_Button.png",
+          "width": 87,
+          "height": 60
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "menu:l",
+      "children": [
+        {
+          "type": "image",
+          "x": 416,
+          "y": 229,
+          "image": "\\ds4\\Image Assets\\DS4_OptionsShare_Button.png",
+          "width": 53,
+          "height": 85
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "menu:r",
+      "children": [
+        {
+          "type": "image",
+          "x": 996,
+          "y": 229,
+          "image": "\\ds4\\Image Assets\\DS4_OptionsShare_Button.png",
+          "width": 53,
+          "height": 85
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_right:s",
+      "children": [
+        {
+          "type": "image",
+          "x": 1124,
+          "y": 445,
+          "image": "\\ds4\\Image Assets\\DS4_Face_Button.png",
+          "width": 99,
+          "height": 90
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_right:e",
+      "children": [
+        {
+          "type": "image",
+          "x": 1230,
+          "y": 355,
+          "image": "\\ds4\\Image Assets\\DS4_Face_Button.png",
+          "width": 99,
+          "height": 90
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_right:w",
+      "children": [
+        {
+          "type": "image",
+          "x": 1022,
+          "y": 354,
+          "image": "\\ds4\\Image Assets\\DS4_Face_Button.png",
+          "width": 99,
+          "height": 90
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_right:n",
+      "children": [
+        {
+          "type": "image",
+          "x": 1124,
+          "y": 263,
+          "image": "\\ds4\\Image Assets\\DS4_Face_Button.png",
+          "width": 99,
+          "height": 90
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_left:n",
+      "children": [
+        {
+          "type": "image",
+          "x": 250,
+          "y": 292,
+          "image": "\\ds4\\Image Assets\\DS4_D-PAD_Up.png",
+          "width": 82,
+          "height": 90
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_left:s",
+      "children": [
+        {
+          "type": "image",
+          "x": 250,
+          "y": 413,
+          "image": "\\ds4\\Image Assets\\DS4_D-PAD_Down.png",
+          "width": 82,
+          "height": 95
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_left:w",
+      "children": [
+        {
+          "type": "image",
+          "x": 175,
+          "y": 361,
+          "image": "\\ds4\\Image Assets\\DS4_D-PAD_Left.png",
+          "width": 101,
+          "height": 79
+        }
+      ]
+    },
+    {
+      "type": "showhide",
+      "input": "quad_left:e",
+      "children": [
+        {
+          "type": "image",
+          "x": 308,
+          "y": 361,
+          "image": "\\ds4\\Image Assets\\DS4_D-PAD_Right.png",
+          "width": 101,
+          "height": 78
+        }
+      ]
+    },
+    {
+      "type": "slider",
+      "x": 427,
+      "y": 530,
+      "inputX": "stick_left:x * 25",
+      "inputY": "stick_left:y * 25",
+      "children": [
+        {
+          "type": "image",
+          "x": 0,
+          "y": 0,
+          "image": "\\ds4\\Image Assets\\DS4 V2 Active Button\\DS4_V2_LeftAnalogStick.png",
+          "width": 165,
+          "height": 147
+        },
+        {
+          "type": "showhide",
+          "input": "stick_left:click",
+          "children": [
+            {
+              "type": "image",
+              "x": 0,
+              "y": 0,
+              "image": "\\ds4\\Image Assets\\DS4_AnalogStick_Click.png",
+              "width": 165,
+              "height": 147
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "slider",
+      "x": 874,
+      "y": 530,
+      "inputX": "stick_right:x * 25",
+      "inputY": "stick_right:y * 25",
+      "children": [
+        {
+          "type": "image",
+          "x": 0,
+          "y": 0,
+          "image": "\\ds4\\Image Assets\\DS4 V2 Active Button\\DS4_V2_RightAnalogStick.png",
+          "width": 165,
+          "height": 147
+        },
+        {
+          "type": "showhide",
+          "input": "stick_right:click",
+          "children": [
+            {
+              "type": "image",
+              "x": 0,
+              "y": 0,
+              "image": "\\ds4\\Image Assets\\DS4_AnalogStick_Click.png",
+              "width": 165,
+              "height": 147
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

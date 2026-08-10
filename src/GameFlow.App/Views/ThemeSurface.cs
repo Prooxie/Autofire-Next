@@ -1065,50 +1065,36 @@ public sealed class ThemeSurface : Control
         if (string.IsNullOrWhiteSpace(imagePath)) { return null; }
 
         var baseDir = owner.Document.BaseDirectory;
-        string? absolute;
-        if (imagePath.StartsWith('\\') || imagePath.StartsWith('/'))
+        if (string.IsNullOrEmpty(baseDir))
         {
-            var root = owner.Document.ThemesRootDirectory;
-            var relative = imagePath.TrimStart('\\', '/');
-            absolute = string.IsNullOrEmpty(root) ? null : Path.Combine(root, relative);
+            return TryLoadAvares(imagePath);
+        }
 
-            // VSCView themes address art root-relatively
-            // ("\dualsense\default\ThemeAssets\x.png"), which only
-            // resolves when the ENTIRE VSCView folder tree was copied
-            // verbatim. Users overwhelmingly install a single theme
-            // folder, breaking every such path — invisible sticks,
-            // missing touchpads. Fall back to the theme's own folder:
-            // most copies keep ThemeAssets right next to the json.
-            if ((absolute is null || !File.Exists(Path.GetFullPath(absolute))) && !string.IsNullOrEmpty(baseDir))
+        // Resolution lives in ThemeAssetResolver (Infrastructure) so it can
+        // be tested against real folder layouts. Its fallbacks exist
+        // because shipped packs disagree with their own manifests about
+        // where the art sits — exactly the kind of rule that regresses
+        // silently while it has no coverage, which is how every non-Generic
+        // controller ended up rendering blank.
+        var resolved = ThemeAssetResolver.Resolve(
+            imagePath, baseDir, owner.Document.ThemesRootDirectory);
+
+        if (resolved is null)
+        {
+            // Nothing on disk anywhere in the pack; the art may still ship
+            // as an embedded app asset.
+            var embedded = TryLoadAvares(imagePath);
+            if (embedded is null)
             {
-                var segments = relative.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-                var fileName = segments[^1];
-                string?[] candidates =
-                [
-                    Path.Combine(baseDir, relative),
-                    segments.Length >= 2 ? Path.Combine(baseDir, segments[^2], fileName) : null,
-                    Path.Combine(baseDir, fileName),
-                ];
-                foreach (var candidate in candidates)
-                {
-                    if (candidate is not null && File.Exists(Path.GetFullPath(candidate)))
-                    {
-                        Log.Information(
-                            "Theme image {Image} resolved via theme-local fallback ({Resolved}) — the root-relative path was broken.",
-                            imagePath, candidate);
-                        absolute = candidate;
-                        break;
-                    }
-                }
+                Log.Warning(
+                    "Theme image not found on disk or anywhere in its pack: {Image} (theme {Theme}).",
+                    imagePath, owner.Id);
             }
-            if (absolute is null) { return null; }
-        }
-        else
-        {
-            if (string.IsNullOrEmpty(baseDir)) { return TryLoadAvares(imagePath); }
-            absolute = Path.Combine(baseDir, imagePath);
+
+            return embedded;
         }
 
+        var absolute = resolved;
         absolute = Path.GetFullPath(absolute);
         return BitmapCache.GetOrAdd(absolute, p =>
         {
@@ -1131,6 +1117,7 @@ public sealed class ThemeSurface : Control
             }
         });
     }
+
 
     private static Bitmap? TryLoadAvares(string relative)
     {

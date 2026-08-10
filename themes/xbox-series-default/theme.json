@@ -19,7 +19,7 @@
      "children": [
       {
        "type": "image",
-       "image": "assets/XBSeries_LeftTrigger.png",
+       "image": "Image Assets/XBSeries_LeftTrigger.png",
        "x": 0.0,
        "y": 0.0,
        "width": 118.0,
@@ -34,7 +34,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_LeftTrigger_Active.png",
+         "image": "Image Assets/XBSeries_LeftTrigger_Active.png",
          "x": 0.0,
          "y": 0.0,
          "width": 118.0,
@@ -58,7 +58,7 @@
      "children": [
       {
        "type": "image",
-       "image": "assets/XBSeries_RightTrigger.png",
+       "image": "Image Assets/XBSeries_RightTrigger.png",
        "x": 0.0,
        "y": 0.0,
        "width": 116.0,
@@ -73,7 +73,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_RightTrigger_Active.png",
+         "image": "Image Assets/XBSeries_RightTrigger_Active.png",
          "x": 0.0,
          "y": 0.0,
          "width": 120.0,
@@ -90,7 +90,7 @@
   },
   {
    "type": "image",
-   "image": "assets/XBSeries_base.png",
+   "image": "Image Assets/XBSeries_base.png",
    "x": 547.0,
    "y": 340.0,
    "width": 1074.0,
@@ -109,7 +109,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_A_Button.png",
+         "image": "Image Assets/XBSeries_A_Button.png",
          "x": 287.0,
          "y": 25.0,
          "width": 80.0,
@@ -126,7 +126,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_B_Button.png",
+         "image": "Image Assets/XBSeries_B_Button.png",
          "x": 363.0,
          "y": -49.0,
          "width": 83.0,
@@ -143,7 +143,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_X_Button.png",
+         "image": "Image Assets/XBSeries_X_Button.png",
          "x": 212.0,
          "y": -41.0,
          "width": 85.0,
@@ -160,7 +160,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_Y_Button.png",
+         "image": "Image Assets/XBSeries_Y_Button.png",
          "x": 290.0,
          "y": -117.0,
          "width": 87.0,
@@ -183,7 +183,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_D-PAD_Down.png",
+         "image": "Image Assets/XBSeries_D-PAD_Down.png",
          "x": -147.0,
          "y": 174.0,
          "width": 53.0,
@@ -200,7 +200,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_D-PAD_Right.png",
+         "image": "Image Assets/XBSeries_D-PAD_Right.png",
          "x": -92.0,
          "y": 127.0,
          "width": 61.0,
@@ -217,7 +217,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_D-PAD_Left.png",
+         "image": "Image Assets/XBSeries_D-PAD_Left.png",
          "x": -201.0,
          "y": 128.0,
          "width": 62.0,
@@ -234,7 +234,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_D-PAD_Up.png",
+         "image": "Image Assets/XBSeries_D-PAD_Up.png",
          "x": -147.0,
          "y": 80.0,
          "width": 54.0,
@@ -257,7 +257,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_HomeButton.png",
+         "image": "Image Assets/XBSeries_HomeButton.png",
          "x": -0.6,
          "y": -147.7,
          "width": 97.0,
@@ -274,7 +274,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_ShareButton.png",
+         "image": "Image Assets/XBSeries_ShareButton.png",
          "x": 0.0,
          "y": 19.0,
          "width": 66.0,
@@ -291,7 +291,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_MenuButton.png",
+         "image": "Image Assets/XBSeries_MenuButton.png",
          "x": 81.0,
          "y": -41.0,
          "width": 58.0,
@@ -308,7 +308,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_ViewButton.png",
+         "image": "Image Assets/XBSeries_ViewButton.png",
          "x": -83.0,
          "y": -40.0,
          "width": 58.0,
@@ -331,7 +331,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_LeftBumper_Active.png",
+         "image": "Image Assets/XBSeries_LeftBumper_Active.png",
          "x": -278.0,
          "y": -250.0,
          "width": 249.0,
@@ -348,7 +348,7 @@
        "children": [
         {
          "type": "image",
-         "image": "assets/XBSeries_RightBumper_Active.png",
+         "image": "Image Assets/XBSeries_RightBumper_Active.png",
          "x": 277.0,
          "y": -250.0,
          "width": 249.0,
@@ -367,7 +367,7 @@
      "children": [
       {
        "type": "image",
-       "image": "assets/XBSeries_LeftStick_Click.png",
+       "image": "Image Assets/XBSeries_LeftStick_Click.png",
        "x": -290.0,
        "y": -42.0,
        "width": 148.0,
@@ -387,7 +387,7 @@
      "children": [
       {
        "type": "image",
-       "image": "assets/XBSeries_LeftStick.png",
+       "image": "Image Assets/XBSeries_LeftStick.png",
        "x": 0.0,
        "y": 0.0,
        "width": 124.0,
@@ -404,7 +404,7 @@
      "children": [
       {
        "type": "image",
-       "image": "assets/XBSeries_RightStick_Click.png",
+       "image": "Image Assets/XBSeries_RightStick_Click.png",
        "x": 145.0,
        "y": 119.0,
        "width": 147.0,
@@ -424,7 +424,7 @@
      "children": [
       {
        "type": "image",
-       "image": "assets/XBSeries_RightStick.png",
+       "image": "Image Assets/XBSeries_RightStick.png",
        "x": 0.0,
        "y": 0.0,
        "width": 126.0,

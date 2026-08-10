@@ -69,6 +69,7 @@ public partial class ShellWindow : Window
         if (shellViewModel is not null)
         {
             shellViewModel.ControlMappingRequested -= OnControlMappingRequested;
+            shellViewModel.DeviceSettingsRequested -= OnDeviceSettingsRequested;
         }
 
         base.OnDataContextChanged(e);
@@ -77,6 +78,49 @@ public partial class ShellWindow : Window
         if (shellViewModel is not null)
         {
             shellViewModel.ControlMappingRequested += OnControlMappingRequested;
+            shellViewModel.DeviceSettingsRequested += OnDeviceSettingsRequested;
+        }
+    }
+
+    /// <summary>
+    /// Click on a slot's VIRTUAL panel opens that slot's tuning editor.
+    /// The slot id rides on the Border's Tag, so the handler doesn't need
+    /// to walk the visual tree to work out which panel was hit.
+    /// </summary>
+    private void OnVirtualPanelPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (sender is not Border { Tag: string slotId } || string.IsNullOrWhiteSpace(slotId))
+        {
+            return;
+        }
+
+        // Left button only — a right-click here shouldn't hijack any
+        // future context menu on the panel.
+        if (!e.GetCurrentPoint(sender as Control).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        (DataContext as ShellViewModel)?.OpenDeviceSettingsCommand.Execute(slotId);
+    }
+
+    private async void OnDeviceSettingsRequested(object? sender, DeviceSettingsRequestedEventArgs e)
+    {
+        if (isClosing)
+        {
+            return;
+        }
+
+        var window = new DeviceSettingsWindow { DataContext = e.EditorViewModel };
+        try
+        {
+            await window.ShowDialog(this);
+        }
+        catch (Exception exception)
+        {
+            // Settings persist on every change, so a failure to SHOW the
+            // dialog costs nothing already saved — log and carry on.
+            Log.Error(exception, "Device settings window failed to open.");
         }
     }
 
@@ -143,6 +187,10 @@ public partial class ShellWindow : Window
             // Same reason as OnDataContextChanged above: `?.` is not
             // valid for event unsubscription.
             shellViewModel.ControlMappingRequested -= OnControlMappingRequested;
+            // Subscribed alongside the above in OnDataContextChanged, so
+            // it has to be released here too — otherwise the shell view
+            // model keeps this window alive after it closes.
+            shellViewModel.DeviceSettingsRequested -= OnDeviceSettingsRequested;
         }
         shellViewModel = null;
 

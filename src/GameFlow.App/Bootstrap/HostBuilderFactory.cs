@@ -104,6 +104,18 @@ public static class HostBuilderFactory
                 _ = services.AddSingleton<IProfileFileDialogService, ProfileFileDialogService>();
                 _ = services.AddSingleton<StartupChecksCoordinator>();
                 _ = services.AddTransient<SettingsDialogViewModel>();
+
+                // Per-device tuning editor. Transient: each slot/device
+                // pairing gets its own editor instance pointed at the
+                // shared DeviceSettingsStore singleton.
+                _ = services.AddTransient<DeviceSettingsEditorViewModel>();
+
+                // Motion-server panel. Singleton to match the shell that
+                // holds it: its enable/port state is the persisted user
+                // setting, so a second instance would be a second, stale
+                // view of the same thing.
+                _ = services.AddSingleton<MotionServerPanelViewModel>();
+
                 _ = services.AddSingleton<ShellViewModel>();
                 _ = services.AddSingleton<ShellWindow>();
             });

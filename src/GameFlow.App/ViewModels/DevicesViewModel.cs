@@ -50,7 +50,9 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<ButtonId, int> capturedMap = new();
     private HashSet<int> lastPressedRaw = [];
 
-    public DevicesViewModel(InputDeviceCatalog catalog, ILocalizationService localization, GameFlow.Infrastructure.Runtime.Templates.DeviceTemplateStore templateStore, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog, DeviceCategoryOverrideStore categoryOverrides)
+    public DevicesViewModel(InputDeviceCatalog catalog, ILocalizationService localization, GameFlow.Infrastructure.Runtime.Templates.DeviceTemplateStore templateStore, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog, DeviceCategoryOverrideStore categoryOverrides,
+        GameFlow.Infrastructure.Runtime.DeviceSettingsStore deviceSettingsStore,
+        GameFlow.Infrastructure.Runtime.Slots.SlotRegistry slotRegistry)
     {
         this.catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         this.localization = localization ?? throw new ArgumentNullException(nameof(localization));
@@ -58,6 +60,12 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         this.keyboardStateSource = keyboardStateSource ?? throw new ArgumentNullException(nameof(keyboardStateSource));
         this.mouseStateSource = mouseStateSource ?? throw new ArgumentNullException(nameof(mouseStateSource));
         this.categoryOverrides = categoryOverrides ?? throw new ArgumentNullException(nameof(categoryOverrides));
+        this.slotRegistry = slotRegistry ?? throw new ArgumentNullException(nameof(slotRegistry));
+        DeviceSettingsEditor = new DeviceSettingsEditorViewModel(
+            deviceSettingsStore ?? throw new ArgumentNullException(nameof(deviceSettingsStore)));
+        ResetTuningCommand = new RelayCommand(() => DeviceSettingsEditor.ResetAll());
+        RefreshTuningSlots();
+
         TemplateEditor = new DeviceTemplateEditorViewModel(
             templateStore ?? throw new ArgumentNullException(nameof(templateStore)),
             localization,
@@ -283,6 +291,56 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     /// <summary>Editor for the selected device's HidMaestro output template.</summary>
     public DeviceTemplateEditorViewModel TemplateEditor { get; }
 
+    /// <summary>Per-device tuning editor (sticks, triggers, rumble, lighting, adaptive triggers).</summary>
+    public DeviceSettingsEditorViewModel DeviceSettingsEditor { get; }
+
+    /// <summary>Slots the selected device can be tuned for — tuning is per slot AND per device.</summary>
+    public ObservableCollection<GameFlow.Infrastructure.Runtime.Slots.ControllerSlot> TuningSlotOptions { get; } = [];
+
+    public IRelayCommand ResetTuningCommand { get; }
+
+    private readonly GameFlow.Infrastructure.Runtime.Slots.SlotRegistry slotRegistry;
+    private GameFlow.Infrastructure.Runtime.Slots.ControllerSlot? selectedTuningSlot;
+
+    public GameFlow.Infrastructure.Runtime.Slots.ControllerSlot? SelectedTuningSlot
+    {
+        get => selectedTuningSlot;
+        set
+        {
+            if (SetProperty(ref selectedTuningSlot, value))
+            {
+                LoadTuningForSelection();
+            }
+        }
+    }
+
+    /// <summary>Repopulates the slot picker, keeping the current pick when it still exists.</summary>
+    private void RefreshTuningSlots()
+    {
+        var previousId = selectedTuningSlot?.Id;
+        TuningSlotOptions.Clear();
+        foreach (var slot in slotRegistry.GetSlots())
+        {
+            TuningSlotOptions.Add(slot);
+        }
+        selectedTuningSlot = TuningSlotOptions.FirstOrDefault(s => s.Id == previousId)
+            ?? TuningSlotOptions.FirstOrDefault();
+        OnPropertyChanged(nameof(SelectedTuningSlot));
+    }
+
+    /// <summary>Points the tuning editor at the current device + slot pair.</summary>
+    private void LoadTuningForSelection()
+    {
+        // Both halves are required: settings are keyed by slot AND
+        // device, so neither alone identifies an entry.
+        if (SelectedDevice is null || selectedTuningSlot is null)
+        {
+            DeviceSettingsEditor.Load(string.Empty, string.Empty, string.Empty);
+            return;
+        }
+        DeviceSettingsEditor.Load(selectedTuningSlot.Id, SelectedDevice.Id, SelectedDevice.DisplayName);
+    }
+
     /// <summary>Axes of the inspected device (raw, live).</summary>
     public ObservableCollection<RawAxisRowViewModel> RawAxes { get; } = [];
 
@@ -330,6 +388,8 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
             UpdateInspectionTarget();
             TemplateEditor.LoadFor(value?.Id, value?.Category ?? DeviceCategory.Unknown);
+            RefreshTuningSlots();
+            LoadTuningForSelection();
             if (IsCalibrating)
             {
                 CancelCalibration();

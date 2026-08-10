@@ -17,7 +17,27 @@
         (the "Theme default" preset) lets the themed base show through, so
         switching the app theme recolours the panel immediately.
     -->
-    <Border Classes="panel">
+    <!--
+        Classes="panel" carries the chrome (surface, border, 14px corner) so
+        it tracks the app theme centrally. Name and the pressed handler stay:
+        ControllerSurface.axaml.cs looks PanelRoot up by name to set the hand
+        cursor, and routes the click through to the view model's RequestEdit.
+    -->
+    <Border Classes="panel"
+            Name="PanelRoot"
+            PointerPressed="OnPanelPointerPressed">
+      <Border.Styles>
+        <!--
+            Hover outline on the VIRTUAL panel only. The physical side
+            already outlines on hover; matching it here signals the panel
+            is interactive, and on this side a click opens the slot's
+            settings editor.
+        -->
+        <Style Selector="Border#PanelRoot:pointerover">
+          <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
+          <Setter Property="BorderThickness" Value="2" />
+        </Style>
+      </Border.Styles>
       <Border Padding="18,14" CornerRadius="14"
               Background="{Binding PanelOverlayBrush}">
         <!--

@@ -102,6 +102,15 @@ public static class DependencyInjection
         _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Web.WebControllerServer>());
         _ = services.AddHostedService<Runtime.Web.WebControllerEnumerationService>();
 
+        // DSU / Cemuhook motion server. Same two-line shape as the web
+        // controller above and for the same reason: the Dashboard reads
+        // IsRunning / ConnectedClientCount off this instance, so it has to
+        // resolve to the SAME object the host is running. Registering it
+        // with AddHostedService<T>() alone would give the UI a second,
+        // permanently-idle instance to report on.
+        _ = services.AddSingleton<Runtime.Motion.DsuServer>();
+        _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Motion.DsuServer>());
+
         // Step 3 of the roadmap: requirement & update checks.
         _ = services.AddSingleton<IRequirementChecker, DefaultRequirementChecker>();
         _ = services.AddSingleton<IUpdateChecker, GitHubUpdateChecker>();

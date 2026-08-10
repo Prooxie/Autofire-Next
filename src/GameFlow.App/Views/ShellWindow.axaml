@@ -494,7 +494,23 @@
                             <views:ControllerSurface DataContext="{Binding PhysicalVisual}" />
                           </Border>
                           <Border Grid.Column="1"
-                                  IsVisible="{Binding ShowVirtual}">
+                                  IsVisible="{Binding ShowVirtual}"
+                                  Name="VirtualPanelBorder"
+                                  Cursor="Hand"
+                                  BorderThickness="2"
+                                  CornerRadius="6"
+                                  BorderBrush="Transparent"
+                                  ToolTip.Tip="Open this controller's tuning (sticks, triggers, rumble, lighting, adaptive)"
+                                  PointerPressed="OnVirtualPanelPressed"
+                                  Tag="{Binding SlotId}">
+                            <Border.Styles>
+                              <!-- Hover outline: same affordance the physical
+                                   panel gives, but here it means "editable"
+                                   rather than "selectable". -->
+                              <Style Selector="Border#VirtualPanelBorder:pointerover">
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
+                              </Style>
+                            </Border.Styles>
                             <views:ControllerSurface DataContext="{Binding VirtualVisual}" />
                             <!--
                                 Badge lives in the same cell as the virtual
@@ -1059,6 +1075,44 @@
               </Border>
             </Grid>
           </Grid>
+            </TabItem>
+
+            <!-- Per-device tuning: sticks, triggers, rumble, lighting,
+                 adaptive triggers. Lives here rather than under Virtual
+                 controllers because the settings belong to a PHYSICAL
+                 device (as used by a slot), and this is where physical
+                 devices are already selected. -->
+            <TabItem Header="Tuning">
+              <Grid Margin="20,16" DataContext="{Binding DevicesPanel}" RowDefinitions="Auto,*" RowSpacing="12">
+
+                <StackPanel Grid.Row="0" Spacing="6">
+                  <TextBlock Text="Device tuning" FontSize="18" FontWeight="SemiBold" />
+                  <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
+                             Text="Select a physical device on the Physical tab, then choose which slot's tuning to edit. The same pad can be tuned differently per slot." />
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="Slot" VerticalAlignment="Center" />
+                    <ComboBox ItemsSource="{Binding TuningSlotOptions}"
+                              SelectedItem="{Binding SelectedTuningSlot}"
+                              DisplayMemberBinding="{Binding Name}"
+                              MinWidth="220" />
+                    <Button Content="Reset to defaults"
+                            Command="{Binding ResetTuningCommand}" Padding="10,4" />
+                  </StackPanel>
+                </StackPanel>
+
+                <Border Grid.Row="1" BorderThickness="1" CornerRadius="6" Padding="12"
+                        BorderBrush="{DynamicResource AppBorder}">
+                  <Panel>
+                    <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
+                                                    IsVisible="{Binding DeviceSettingsEditor.HasDevice}" />
+                    <TextBlock Text="Select a physical device and a slot to begin tuning."
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Opacity="0.55"
+                               IsVisible="{Binding !DeviceSettingsEditor.HasDevice}" />
+                  </Panel>
+                </Border>
+
+              </Grid>
             </TabItem>
 
             <TabItem Header="{Binding DevicesVirtualTabHeader}">
