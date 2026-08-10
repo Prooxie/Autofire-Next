@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:GameFlow.App.ViewModels"
+             xmlns:views="using:GameFlow.App.Views"
              x:Class="GameFlow.App.Views.DeviceSettingsEditorView"
              x:DataType="vm:DeviceSettingsEditorViewModel"
              x:CompileBindings="False">
@@ -48,70 +49,157 @@
       <!-- ── Sticks ── -->
       <TabItem Header="Sticks">
         <ScrollViewer>
-          <StackPanel Margin="4,2" Spacing="2">
+          <StackPanel Margin="4,2" Spacing="14">
 
-            <TextBlock Classes="sectionHead" Text="Left stick" />
-            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto,Auto">
-              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
-              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
-                      Value="{Binding LeftDeadzone}" />
-              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
-                         Text="{Binding LeftDeadzone, StringFormat='{}{0:P0}'}" />
+            <!--
+                One block per stick: the curve is the primary control and
+                the numbers sit beside it, because a deadzone figure means
+                nothing on its own. Drag the handles on the graph or type
+                an exact value — both edit the same properties, so they
+                stay in step without any extra plumbing.
+            -->
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="sectionHead" Margin="0" Text="Left stick"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Default"
+                          Command="{Binding ApplyLeftDefaultCommand}" />
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Precision"
+                          Command="{Binding ApplyLeftPrecisionCommand}" />
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Aggressive"
+                          Command="{Binding ApplyLeftAggressiveCommand}" />
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Worn pad"
+                          Command="{Binding ApplyLeftWornCommand}" />
+                </StackPanel>
+              </Grid>
 
-              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
-              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.6" SmallChange="0.01"
-                      Value="{Binding LeftAntiDeadzone}" />
-              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
-                         Text="{Binding LeftAntiDeadzone, StringFormat='{}{0:P0}'}" />
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Border Grid.Column="0" Classes="inset" Padding="6" Width="210" Height="180">
+                  <views:ResponseCurveEditor
+                      Deadzone="{Binding LeftDeadzone, Mode=TwoWay}"
+                      AntiDeadzone="{Binding LeftAntiDeadzone, Mode=TwoWay}"
+                      FullAt="{Binding LeftFullAt, Mode=TwoWay}"
+                      Sensitivity="{Binding LeftSensitivity}"
+                      Curve="{Binding LeftCurve}"
+                      LiveInput="{Binding LeftStickLive}" />
+                </Border>
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
-              <Slider Grid.Row="2" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
-                      Value="{Binding LeftFullAt}" />
-              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
-                         Text="{Binding LeftFullAt, StringFormat='{}{0:P0}'}" />
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                        ColumnSpacing="8" RowSpacing="6">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+                    <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.9"
+                                   Increment="0.01" FormatString="0.00"
+                                   Value="{Binding LeftDeadzone, Mode=TwoWay}" />
 
-              <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
-              <Slider Grid.Row="3" Grid.Column="1" Minimum="0.1" Maximum="3.0" SmallChange="0.05"
-                      Value="{Binding LeftSensitivity}" />
-              <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
-                         Text="{Binding LeftSensitivity, StringFormat='{}{0:F2}x'}" />
-            </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
-              <ComboBox ItemsSource="{Binding CurveOptions}" SelectedItem="{Binding LeftCurve}" Width="150" />
-              <CheckBox Content="Invert X" IsChecked="{Binding LeftInvertX}" />
-              <CheckBox Content="Invert Y" IsChecked="{Binding LeftInvertY}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
+                    <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.95"
+                                   Increment="0.01" FormatString="0.00"
+                                   Value="{Binding LeftAntiDeadzone, Mode=TwoWay}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+                    <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0.05" Maximum="1"
+                                   Increment="0.01" FormatString="0.00"
+                                   Value="{Binding LeftFullAt, Mode=TwoWay}" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Curve" />
+                    <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding CurveOptions}"
+                              SelectedItem="{Binding LeftCurve, Mode=TwoWay}" />
+                  </Grid>
+
+                  <Expander Header="Advanced" FontSize="12">
+                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto"
+                          ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0">
+                      <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
+                      <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="5"
+                                     Increment="0.05" FormatString="0.00"
+                                     Value="{Binding LeftSensitivity, Mode=TwoWay}" />
+
+                      <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                        <CheckBox Content="Invert X" IsChecked="{Binding LeftInvertX, Mode=TwoWay}"
+                                  Foreground="{DynamicResource AppForeground}" />
+                        <CheckBox Content="Invert Y" IsChecked="{Binding LeftInvertY, Mode=TwoWay}"
+                                  Foreground="{DynamicResource AppForeground}" />
+                      </StackPanel>
+                    </Grid>
+                  </Expander>
+                </StackPanel>
+              </Grid>
             </StackPanel>
 
-            <TextBlock Classes="sectionHead" Text="Right stick" />
-            <Grid ColumnDefinitions="130,*,54" RowDefinitions="Auto,Auto,Auto,Auto">
-              <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
-              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
-                      Value="{Binding RightDeadzone}" />
-              <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
-                         Text="{Binding RightDeadzone, StringFormat='{}{0:P0}'}" />
+            <Border Classes="divider" />
 
-              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
-              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.6" SmallChange="0.01"
-                      Value="{Binding RightAntiDeadzone}" />
-              <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
-                         Text="{Binding RightAntiDeadzone, StringFormat='{}{0:P0}'}" />
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Classes="sectionHead" Margin="0" Text="Right stick"
+                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Default"
+                          Command="{Binding ApplyRightDefaultCommand}" />
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Precision"
+                          Command="{Binding ApplyRightPrecisionCommand}" />
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Aggressive"
+                          Command="{Binding ApplyRightAggressiveCommand}" />
+                  <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Worn pad"
+                          Command="{Binding ApplyRightWornCommand}" />
+                </StackPanel>
+              </Grid>
 
-              <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
-              <Slider Grid.Row="2" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
-                      Value="{Binding RightFullAt}" />
-              <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
-                         Text="{Binding RightFullAt, StringFormat='{}{0:P0}'}" />
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <Border Grid.Column="0" Classes="inset" Padding="6" Width="210" Height="180">
+                  <views:ResponseCurveEditor
+                      Deadzone="{Binding RightDeadzone, Mode=TwoWay}"
+                      AntiDeadzone="{Binding RightAntiDeadzone, Mode=TwoWay}"
+                      FullAt="{Binding RightFullAt, Mode=TwoWay}"
+                      Sensitivity="{Binding RightSensitivity}"
+                      Curve="{Binding RightCurve}"
+                      LiveInput="{Binding RightStickLive}" />
+                </Border>
 
-              <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
-              <Slider Grid.Row="3" Grid.Column="1" Minimum="0.1" Maximum="3.0" SmallChange="0.05"
-                      Value="{Binding RightSensitivity}" />
-              <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
-                         Text="{Binding RightSensitivity, StringFormat='{}{0:F2}x'}" />
-            </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4,0,0">
-              <ComboBox ItemsSource="{Binding CurveOptions}" SelectedItem="{Binding RightCurve}" Width="150" />
-              <CheckBox Content="Invert X" IsChecked="{Binding RightInvertX}" />
-              <CheckBox Content="Invert Y" IsChecked="{Binding RightInvertY}" />
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                        ColumnSpacing="8" RowSpacing="6">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+                    <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.9"
+                                   Increment="0.01" FormatString="0.00"
+                                   Value="{Binding RightDeadzone, Mode=TwoWay}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
+                    <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.95"
+                                   Increment="0.01" FormatString="0.00"
+                                   Value="{Binding RightAntiDeadzone, Mode=TwoWay}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+                    <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0.05" Maximum="1"
+                                   Increment="0.01" FormatString="0.00"
+                                   Value="{Binding RightFullAt, Mode=TwoWay}" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Curve" />
+                    <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding CurveOptions}"
+                              SelectedItem="{Binding RightCurve, Mode=TwoWay}" />
+                  </Grid>
+
+                  <Expander Header="Advanced" FontSize="12">
+                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto"
+                          ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0">
+                      <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
+                      <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="5"
+                                     Increment="0.05" FormatString="0.00"
+                                     Value="{Binding RightSensitivity, Mode=TwoWay}" />
+
+                      <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                        <CheckBox Content="Invert X" IsChecked="{Binding RightInvertX, Mode=TwoWay}"
+                                  Foreground="{DynamicResource AppForeground}" />
+                        <CheckBox Content="Invert Y" IsChecked="{Binding RightInvertY, Mode=TwoWay}"
+                                  Foreground="{DynamicResource AppForeground}" />
+                      </StackPanel>
+                    </Grid>
+                  </Expander>
+                </StackPanel>
+              </Grid>
             </StackPanel>
 
           </StackPanel>

@@ -52,7 +52,8 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
     public DevicesViewModel(InputDeviceCatalog catalog, ILocalizationService localization, GameFlow.Infrastructure.Runtime.Templates.DeviceTemplateStore templateStore, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog, DeviceCategoryOverrideStore categoryOverrides,
         GameFlow.Infrastructure.Runtime.DeviceSettingsStore deviceSettingsStore,
-        GameFlow.Infrastructure.Runtime.Slots.SlotRegistry slotRegistry)
+        GameFlow.Infrastructure.Runtime.Slots.SlotRegistry slotRegistry,
+        GameFlow.Infrastructure.Runtime.Slots.SlotSnapshotStore slotSnapshotStore)
     {
         this.catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         this.localization = localization ?? throw new ArgumentNullException(nameof(localization));
@@ -62,7 +63,8 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         this.categoryOverrides = categoryOverrides ?? throw new ArgumentNullException(nameof(categoryOverrides));
         this.slotRegistry = slotRegistry ?? throw new ArgumentNullException(nameof(slotRegistry));
         DeviceSettingsEditor = new DeviceSettingsEditorViewModel(
-            deviceSettingsStore ?? throw new ArgumentNullException(nameof(deviceSettingsStore)));
+            deviceSettingsStore ?? throw new ArgumentNullException(nameof(deviceSettingsStore)),
+            slotSnapshotStore ?? throw new ArgumentNullException(nameof(slotSnapshotStore)));
         ResetTuningCommand = new RelayCommand(() => DeviceSettingsEditor.ResetAll());
         RefreshTuningSlots();
 

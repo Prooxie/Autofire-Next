@@ -174,7 +174,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         ControllerStyleOptions = CreateControllerStyleOptions();
         MappingEditor          = new MappingEditorViewModel(loggerFactory.CreateLogger<MappingEditorViewModel>(), localizationService);
         MappingEditor.RulesChanged += OnMappingRulesChanged;
-        DevicesPanel           = new DevicesViewModel(inputDeviceCatalog, localizationService, deviceTemplateStore, buttonMapStore, keyboardStateSource, mouseStateSource, hidMaestroCatalog, deviceCategoryOverrides, deviceSettingsStore, slotRegistry);
+        DevicesPanel           = new DevicesViewModel(inputDeviceCatalog, localizationService, deviceTemplateStore, buttonMapStore, keyboardStateSource, mouseStateSource, hidMaestroCatalog, deviceCategoryOverrides, deviceSettingsStore, slotRegistry, slotSnapshotStore);
         SlotsPanel             = new SlotsViewModel(slotRegistry, inputDeviceCatalog, deviceTemplateStore, profileSession, localizationService, hidMaestroCatalog);
 
         this.slotRegistry = slotRegistry;

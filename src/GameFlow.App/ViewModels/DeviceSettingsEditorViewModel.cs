@@ -34,13 +34,127 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     private string deviceId = string.Empty;
     private string deviceName = string.Empty;
 
-    public DeviceSettingsEditorViewModel(DeviceSettingsStore store)
+    private readonly GameFlow.Infrastructure.Runtime.Slots.SlotSnapshotStore snapshots;
+
+    public DeviceSettingsEditorViewModel(
+        DeviceSettingsStore store,
+        GameFlow.Infrastructure.Runtime.Slots.SlotSnapshotStore snapshots)
     {
         this.store = store;
+        this.snapshots = snapshots;
         CurveOptions = new ObservableCollection<StickCurve>(Enum.GetValues<StickCurve>());
         LightbarModeOptions = new ObservableCollection<LightbarMode>(Enum.GetValues<LightbarMode>());
         AdaptiveModeOptions = new ObservableCollection<AdaptiveTriggerMode>(Enum.GetValues<AdaptiveTriggerMode>());
     }
+
+    /// <summary>
+    /// Live magnitude of the left stick, 0–1, drawn as a marker on the
+    /// response curve. Reading the PHYSICAL snapshot deliberately: the
+    /// marker has to show what the hardware is sending, since the point of
+    /// watching it is to pick a deadzone that matches this particular
+    /// worn pad. Showing the post-shaping value would just trace the curve.
+    /// </summary>
+    public double LeftStickLive
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
+    /// <summary>Live right-stick magnitude. See <see cref="LeftStickLive"/>.</summary>
+    public double RightStickLive
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
+    /// <summary>
+    /// Re-reads the live stick magnitudes. Driven by the editor window's
+    /// timer rather than a timer of its own, so a closed editor costs
+    /// nothing.
+    /// </summary>
+    public void RefreshLive()
+    {
+        if (!HasDevice)
+        {
+            return;
+        }
+
+        var physical = snapshots.Get(slotId).Physical;
+        LeftStickLive = physical.LeftStick.Magnitude;
+        RightStickLive = physical.RightStick.Magnitude;
+    }
+
+    /// <summary>
+    /// Named starting points, so the common cases do not require
+    /// understanding five interacting numbers first. Each is a complete
+    /// stick configuration, not a partial nudge, so applying one always
+    /// lands somewhere predictable regardless of what was set before.
+    /// </summary>
+    public void ApplyStickPreset(string preset, bool leftStick)
+    {
+        var settings = preset switch
+        {
+            // A true pass-through. Matches DeviceSettings.Default, so the
+            // tick can skip conditioning entirely.
+            "default" => new StickSettings(),
+
+            // Finer control near centre for aiming; still reaches full.
+            "precision" => new StickSettings { Deadzone = 0.05f, FullAt = 1.0f, Curve = StickCurve.Precision },
+
+            // Reaches high output sooner — twitchier, for fast turns.
+            "aggressive" => new StickSettings { Deadzone = 0.05f, FullAt = 0.95f, Curve = StickCurve.Aggressive },
+
+            // For a pad that drifts and no longer reaches its corners.
+            "worn" => new StickSettings { Deadzone = 0.18f, AntiDeadzone = 0.05f, FullAt = 0.85f },
+
+            _ => new StickSettings()
+        };
+
+        if (leftStick)
+        {
+            LeftDeadzone = settings.Deadzone;
+            LeftAntiDeadzone = settings.AntiDeadzone;
+            LeftFullAt = settings.FullAt;
+            LeftSensitivity = settings.Sensitivity;
+            LeftCurve = settings.Curve;
+        }
+        else
+        {
+            RightDeadzone = settings.Deadzone;
+            RightAntiDeadzone = settings.AntiDeadzone;
+            RightFullAt = settings.FullAt;
+            RightSensitivity = settings.Sensitivity;
+            RightCurve = settings.Curve;
+        }
+    }
+
+    // Presets are exposed one command per (stick, preset) rather than one
+    // parameterised command, because Avalonia's CommandParameter cannot
+    // carry two values without a converter — and a converter for four
+    // fixed buttons is more machinery than the eight lambdas it replaces.
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyLeftDefaultCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("default", leftStick: true));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyLeftPrecisionCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("precision", leftStick: true));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyLeftAggressiveCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("aggressive", leftStick: true));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyLeftWornCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("worn", leftStick: true));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyRightDefaultCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("default", leftStick: false));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyRightPrecisionCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("precision", leftStick: false));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyRightAggressiveCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("aggressive", leftStick: false));
+
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ApplyRightWornCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => ApplyStickPreset("worn", leftStick: false));
 
     public ObservableCollection<StickCurve> CurveOptions { get; }
     public ObservableCollection<LightbarMode> LightbarModeOptions { get; }
@@ -55,8 +169,9 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     public bool HasDevice => !string.IsNullOrEmpty(deviceId);
 
     public string EffectsPendingNote =>
-        "Rumble, lighting and adaptive triggers are saved per slot, but writing them to the "
-        + "physical pad needs the effects thread (not built yet). Stick and trigger tuning is live now.";
+        "Rumble, lighting and adaptive triggers are saved per slot. The effects thread that "
+        + "delivers them now exists, but its hardware backend is not connected yet, so they "
+        + "still do not reach the pad. Stick and trigger tuning is live now.";
 
     /// <summary>Points the editor at one slot/device pair and loads its saved values.</summary>
     public void Load(string slotIdentifier, string deviceIdentifier, string displayName)
