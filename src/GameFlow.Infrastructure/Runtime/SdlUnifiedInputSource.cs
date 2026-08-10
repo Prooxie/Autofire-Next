@@ -35,6 +35,13 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// </summary>
     private readonly Dictionary<string, uint> liveInstanceIdByStableId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DevicePowerInfo> powerByDeviceId = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Handles opened purely to read battery for devices no slot has
+    /// opened. Held open rather than opened per poll — see
+    /// <see cref="RefreshPowerStateCache"/>.
+    /// </summary>
+    private readonly Dictionary<string, OpenedDevice> telemetryHandles = new(StringComparer.OrdinalIgnoreCase);
     private IntPtr rawInspectionHandle = IntPtr.Zero;
     private string? rawInspectionHandleId;
 
@@ -650,6 +657,32 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         foreach (var id in slotHandles.Keys.ToList())
         {
             CloseSlotHandle(id);
+        }
+
+        // Telemetry-only handles are opened by the battery poll and are
+        // not owned by any slot, so nothing else would ever release them.
+        foreach (var id in telemetryHandles.Keys.ToList())
+        {
+            if (!telemetryHandles.Remove(id, out var device))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (device.Kind == DeviceKind.Gamepad)
+                {
+                    SdlInterop.CloseGamepad(device.Handle);
+                }
+                else
+                {
+                    SdlInterop.CloseJoystick(device.Handle);
+                }
+            }
+            catch (Exception exception)
+            {
+                logger.LogDebug(exception, "Error closing telemetry handle {DeviceId} on shutdown.", id);
+            }
         }
     }
 
@@ -1365,6 +1398,56 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             opened[device.DeviceId] = device;
         }
 
+        // Battery for devices that are connected but not assigned to a
+        // slot.
+        //
+        // SDL only reports power through an OPEN handle — there is no
+        // query by instance id — and until now the only handles that
+        // existed were the ones slots had opened. So a pad sitting
+        // connected and unassigned reported no battery at all, which is
+        // every pad on a machine whose slots are demo previews. That is
+        // exactly the case the Devices page exists to show.
+        //
+        // The handles are opened once and KEPT. Opening per refresh would
+        // reintroduce the open/release churn that cost four SDL opens a
+        // second before it was fixed; SDL refcounts opens of the same
+        // instance, so holding one here does not disturb a slot opening
+        // the same pad.
+        foreach (var info in inputDeviceCatalog.Devices)
+        {
+            if (opened.ContainsKey(info.Id) || !(info.IsGamepad || info.Category == DeviceCategory.Joystick))
+            {
+                continue;
+            }
+
+            if (telemetryHandles.TryGetValue(info.Id, out var existing))
+            {
+                opened[info.Id] = existing;
+                continue;
+            }
+
+            if (!TryParseDeviceId(info.Id, out var telemetryKind, out var telemetryInstance))
+            {
+                continue;
+            }
+
+            var handle = telemetryKind == DeviceKind.Gamepad
+                ? SdlInterop.OpenGamepad(telemetryInstance)
+                : SdlInterop.OpenJoystick(telemetryInstance);
+
+            if (handle == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            var telemetry = new OpenedDevice(info.Id, info.DisplayName, telemetryInstance, telemetryKind, handle);
+            telemetryHandles[info.Id] = telemetry;
+            opened[info.Id] = telemetry;
+            logger.LogDebug("Opened {DeviceId} for battery telemetry (not assigned to a slot).", info.Id);
+        }
+
+        CloseOrphanedTelemetryHandles();
+
         foreach (var device in opened.Values)
         {
             try
@@ -1387,11 +1470,77 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                     ? percent
                     : state == DeviceBatteryState.Charged ? 100 : null;
 
+                // Log the first real reading per device, and any state
+                // change after that (on battery -> charging -> charged).
+                // Percentage alone is deliberately not logged on change:
+                // it moves constantly and would be noise.
+                var previous = GetCachedPower(device.DeviceId);
+                if (previous.State != state)
+                {
+                    logger.LogInformation(
+                        "Battery for {DeviceName}: {State}{Percent}.",
+                        device.DisplayName,
+                        state,
+                        percentage is null ? string.Empty : $" · {percentage}%");
+                }
+
                 powerByDeviceId[device.DeviceId] = new DevicePowerInfo(percentage, state);
             }
             catch (Exception exception)
             {
                 logger.LogDebug(exception, "SDL battery query failed for {DeviceId}.", device.DeviceId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Releases telemetry-only handles for devices that have left the
+    /// catalog, so unplugging a pad does not leak its handle for the life
+    /// of the process.
+    /// </summary>
+    private void CloseOrphanedTelemetryHandles()
+    {
+        if (telemetryHandles.Count == 0)
+        {
+            return;
+        }
+
+        var live = new HashSet<string>(
+            inputDeviceCatalog.Devices.Select(d => d.Id), StringComparer.OrdinalIgnoreCase);
+
+        // Same reasoning as PruneStaleSlotHandles: an empty enumeration is
+        // a re-scan in progress, not every device vanishing at once.
+        if (live.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var id in telemetryHandles.Keys.ToList())
+        {
+            if (live.Contains(id))
+            {
+                continue;
+            }
+
+            if (telemetryHandles.Remove(id, out var stale))
+            {
+                try
+                {
+                    if (stale.Kind == DeviceKind.Gamepad)
+                    {
+                        SdlInterop.CloseGamepad(stale.Handle);
+                    }
+                    else
+                    {
+                        SdlInterop.CloseJoystick(stale.Handle);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    logger.LogDebug(exception, "Error closing telemetry handle {DeviceId}.", id);
+                }
+
+                _ = powerByDeviceId.Remove(id);
             }
         }
     }
