@@ -31,15 +31,39 @@ public sealed class DeviceRowViewModel(InputDeviceInfo info) : ViewModelBase
     };
     public string BatteryIcon => info.BatteryState == DeviceBatteryState.Charging ? "⚡" : "▰";
 
-    /// <summary>Human-readable device type for the row tag.</summary>
-    public string KindLabel => info.Category switch
+    /// <summary>
+    /// True when this is one of GameFlow's own virtual pads rather than
+    /// real hardware. See <see cref="GameFlow.Infrastructure.Runtime.VirtualDeviceIdentity"/>.
+    /// </summary>
+    public bool IsVirtual => info.IsVirtual;
+
+    /// <summary>
+    /// Human-readable device type for the row tag.
+    ///
+    /// <para>
+    /// A virtual pad says so here. It impersonates real hardware down to
+    /// its VID/PID — that is what makes games accept it — so nothing else
+    /// in this row distinguishes it, and a user looking at the device list
+    /// otherwise cannot tell which entry is the controller they plugged in
+    /// and which is the one GameFlow created.
+    /// </para>
+    /// </summary>
+    public string KindLabel
     {
-        DeviceCategory.Gamepad => "Gamepad",
-        DeviceCategory.Joystick => "Generic / HID",
-        DeviceCategory.Keyboard => "Keyboard",
-        DeviceCategory.Mouse => "Mouse",
-        _ => info.IsGamepad ? "Gamepad" : "Generic / HID",
-    };
+        get
+        {
+            var kind = info.Category switch
+            {
+                DeviceCategory.Gamepad => "Gamepad",
+                DeviceCategory.Joystick => "Generic / HID",
+                DeviceCategory.Keyboard => "Keyboard",
+                DeviceCategory.Mouse => "Mouse",
+                _ => info.IsGamepad ? "Gamepad" : "Generic / HID",
+            };
+
+            return info.IsVirtual ? $"{kind} · VIRTUAL" : kind;
+        }
+    }
 
     /// <summary>Tag colour per device category.</summary>
     public string KindBrush => info.Category switch

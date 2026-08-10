@@ -217,9 +217,8 @@ public sealed class ResponseCurveEditor : Control
     ///
     /// <para>
     /// Everything here is immutable, which is what makes caching it safe:
-    /// an <see cref="ImmutableSolidColorBrush"/> and a frozen
-    /// <see cref="Pen"/> carry no change subscription, so the renderer
-    /// does not have to track them between frames.
+    /// a frozen <see cref="Pen"/> carries no change subscription, so the
+    /// renderer does not have to track it between frames.
     /// </para>
     /// </summary>
     private void EnsurePens()

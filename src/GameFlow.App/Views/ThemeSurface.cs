@@ -493,8 +493,17 @@ public sealed class ThemeSurface : Control
                 var avgMs = renderCostAccumMs / renderCostSamples;
                 if (avgMs > 15.0)
                 {
+                    // Measured 2026-08-10: neither the renderer nor the
+                    // interpolation filter moves this number. GPU (ANGLE)
+                    // vs software differed by ~6%, and HighQuality vs
+                    // LowQuality not at all. The cost is the SHEER COUNT of
+                    // large alpha-blended layers — a DualSense theme
+                    // composites ~47 roughly megapixel images every frame.
+                    // The fix is to stop redrawing the static ones; see
+                    // docs/known-issues.md P1.
                     Log.Warning(
-                        "ThemeSurface[{Mode}] repaint averaging {AvgMs:F1} ms over {Frames} frames — paint cost is throttling the UI (software rendering / large theme bitmaps).",
+                        "ThemeSurface[{Mode}] repaint averaging {AvgMs:F1} ms over {Frames} frames — paint cost is "
+                        + "throttling the UI. The layer count of this theme is the cost, not the renderer.",
                         isPhysicalView ? "physical" : "virtual", avgMs, renderCostSamples);
                 }
                 else
