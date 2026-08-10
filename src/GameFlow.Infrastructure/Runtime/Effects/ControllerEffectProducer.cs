@@ -144,6 +144,8 @@ public sealed class ControllerEffectProducer(
                     LowFrequencyRumble = low,
                     HighFrequencyRumble = high,
                     LedColor = color is { } c ? new EffectColor(c.R, c.G, c.B) : null,
+                    LeftTrigger = ToCommand(settings.LeftAdaptiveTrigger),
+                    RightTrigger = ToCommand(settings.RightAdaptiveTrigger),
                 });
 
                 if (publishedDevices.Add(deviceId))
@@ -219,6 +221,41 @@ public sealed class ControllerEffectProducer(
                 logger.LogInformation("{Device} battery recovered to {Percent}%.", info.DisplayName, percent);
             }
         }
+    }
+
+    /// <summary>
+    /// Turns saved adaptive-trigger settings into the device-neutral
+    /// command the queue carries.
+    ///
+    /// <para>
+    /// <see cref="AdaptiveTriggerMode.Off"/> returns null so the queue
+    /// treats the pad as silent on that channel; the backend still sends
+    /// an explicit release when the state changes, because the firmware
+    /// holds the last effect until told otherwise.
+    /// </para>
+    /// </summary>
+    private static AdaptiveTriggerCommand? ToCommand(AdaptiveTriggerSettings settings)
+    {
+        if (settings.Mode == AdaptiveTriggerMode.Off)
+        {
+            return null;
+        }
+
+        var effect = settings.Mode switch
+        {
+            AdaptiveTriggerMode.Weapon => AdaptiveTriggerEffect.Section,
+            AdaptiveTriggerMode.Vibration or AdaptiveTriggerMode.MultiplePositionVibration
+                => AdaptiveTriggerEffect.Vibration,
+            _ => AdaptiveTriggerEffect.Constant,
+        };
+
+        static byte Scale(float unit) => (byte)Math.Clamp(Math.Round(unit * 255), 0, 255);
+
+        return new AdaptiveTriggerCommand(
+            effect,
+            Scale(settings.StartPosition),
+            Scale(settings.EndPosition),
+            Scale(settings.Strength));
     }
 
     private bool IsLow(string deviceId)

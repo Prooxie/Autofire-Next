@@ -1439,6 +1439,10 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             return;
         }
 
+        // Allocated once for the whole pass, not per device: a stackalloc
+        // inside the loop would grow the frame with every controller.
+        Span<byte> effect = stackalloc byte[GameFlow.Core.Pipeline.DualSenseEffectEncoder.EffectStateLength];
+
         foreach (var write in writes)
         {
             if (!slotHandles.TryGetValue(write.DeviceId, out var device) &&
@@ -1459,6 +1463,32 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             try
             {
                 var state = write.State;
+
+                // Adaptive triggers force the device-specific path. That
+                // report carries rumble and the LED too, and its enable
+                // bits are per-report — so sending it alongside the
+                // portable calls would let one clear what the other set.
+                // It is all-or-nothing per device, per write.
+                if (state.LeftTrigger is not null || state.RightTrigger is not null)
+                {
+                    if (GameFlow.Core.Pipeline.DualSenseEffectEncoder.TryWrite(
+                            effect,
+                            ToTriggerSettings(state.LeftTrigger),
+                            ToTriggerSettings(state.RightTrigger),
+                            state.LedColor is { } c
+                                ? new GameFlow.Core.Pipeline.LightColor(c.R, c.G, c.B)
+                                : null,
+                            state.LowFrequencyRumble,
+                            state.HighFrequencyRumble)
+                        && SdlInterop.SendGamepadEffect(device.Handle, effect, effect.Length))
+                    {
+                        continue;
+                    }
+
+                    // Fell through: not a DualSense, or SDL rejected it.
+                    // Rumble and LED still work through the portable calls,
+                    // so degrade to those rather than dropping everything.
+                }
 
                 // Duration 0 means "until told otherwise" in SDL. That is
                 // what we want: the effects thread owns when this stops,
@@ -1483,6 +1513,34 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         }
 
         currentOperation = "idle";
+    }
+
+    /// <summary>
+    /// Converts the transport-level command back into the settings shape
+    /// the encoder takes. The queue carries a device-neutral command so
+    /// the effects thread need not know what a DualSense is.
+    /// </summary>
+    private static GameFlow.Core.Models.AdaptiveTriggerSettings? ToTriggerSettings(
+        Effects.AdaptiveTriggerCommand? command)
+    {
+        if (command is not { } c)
+        {
+            return null;
+        }
+
+        return new GameFlow.Core.Models.AdaptiveTriggerSettings
+        {
+            Mode = c.Effect switch
+            {
+                Effects.AdaptiveTriggerEffect.Constant => GameFlow.Core.Models.AdaptiveTriggerMode.Feedback,
+                Effects.AdaptiveTriggerEffect.Section => GameFlow.Core.Models.AdaptiveTriggerMode.Weapon,
+                Effects.AdaptiveTriggerEffect.Vibration => GameFlow.Core.Models.AdaptiveTriggerMode.Vibration,
+                _ => GameFlow.Core.Models.AdaptiveTriggerMode.Off,
+            },
+            StartPosition = c.StartPosition / 255f,
+            EndPosition = c.EndPosition / 255f,
+            Strength = c.Strength / 255f,
+        };
     }
 
     private static ushort ToRumbleMagnitude(double value) =>

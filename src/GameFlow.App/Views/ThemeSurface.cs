@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Media.Immutable;
 using Avalonia.Platform;
 using Avalonia.VisualTree;
 using Serilog;
@@ -1064,6 +1065,8 @@ public sealed class ThemeSurface : Control
                     DrawTrailPadMarker(ctx, trailPad, owner);
                     foreach (var child in trailPad.Children) { RenderNode(ctx, child, owner); }
                 }
+
+                DrawAdditionalContacts(ctx, trailPad, transform);
                 return;
             }
 
@@ -1127,6 +1130,91 @@ public sealed class ThemeSurface : Control
         var dx = image.Center ? -w / 2 : 0;
         var dy = image.Center ? -h / 2 : 0;
         ctx.DrawImage(bmp, new Rect(dx, dy, w, h));
+    }
+
+    /// <summary>
+    /// Per-finger colours. Distinct hues rather than shades, so which
+    /// finger is which is readable at a glance and does not depend on
+    /// judging brightness.
+    /// </summary>
+    private static readonly IBrush[] ContactBrushes =
+    [
+        new ImmutableSolidColorBrush(Color.FromRgb(0x4F, 0x9C, 0xFF)),  // 1st — blue
+        new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x35)),  // 2nd — orange
+        new ImmutableSolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)),  // 3rd — green
+        new ImmutableSolidColorBrush(Color.FromRgb(0xE8, 0x79, 0xF0)),  // 4th — magenta
+        new ImmutableSolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),  // 5th — amber
+    ];
+
+    /// <summary>
+    /// Draws every touch contact beyond the first, each in its own
+    /// colour.
+    ///
+    /// <para>
+    /// The position comes from re-evaluating the theme's OWN
+    /// <c>InputX</c>/<c>InputY</c> expressions with that finger
+    /// substituted as the primary contact. The alternative — deriving the
+    /// touchpad's rectangle in theme coordinates and mapping the
+    /// normalised contact onto it — would be guesswork per theme, and
+    /// would drift the moment a pack positioned its pad differently. This
+    /// way a theme that renders one finger correctly renders five
+    /// correctly, with no re-authoring.
+    /// </para>
+    ///
+    /// <para>
+    /// The first contact is skipped: the theme already drew it, with its
+    /// own artwork.
+    /// </para>
+    /// </summary>
+    private void DrawAdditionalContacts(DrawingContext ctx, TrailPadNode trailPad, Matrix transform)
+    {
+        var contacts = snapshot.TouchContacts;
+        if (contacts.Count <= 1)
+        {
+            return;
+        }
+
+        var restore = snapshot;
+
+        try
+        {
+            for (var i = 1; i < contacts.Count && i < ContactBrushes.Length; i++)
+            {
+                var contact = contacts[i];
+
+                // Substitute this finger as contact 0 so the theme's
+                // expressions — which reference finger 0 — resolve to it.
+                symbols.UpdateSnapshot(restore with
+                {
+                    TouchContacts = [contact],
+                    TouchX = contact.X,
+                    TouchY = contact.Y,
+                });
+
+                var position = Matrix.CreateTranslation(
+                    trailPad.InputX.Evaluate(symbols),
+                    trailPad.InputY.Evaluate(symbols)) * transform;
+
+                using (ctx.PushTransform(position))
+                {
+                    var brush = ContactBrushes[i % ContactBrushes.Length];
+
+                    // Pressure-sensitive radius, with a floor so a light
+                    // touch is still visible.
+                    var radius = 14 + (10 * Math.Clamp(contact.Pressure, 0f, 1f));
+
+                    ctx.DrawEllipse(null, new Pen(brush, 3), new Point(0, 0), radius, radius);
+                    ctx.DrawEllipse(brush, null, new Point(0, 0), 4, 4);
+                }
+            }
+        }
+        finally
+        {
+            // Always restore: every later node in this frame reads these
+            // symbols, and leaving a substituted finger in place would
+            // move buttons and sticks too.
+            symbols.UpdateSnapshot(restore);
+        }
     }
 
     private static void DrawTrailPadMarker(DrawingContext ctx, TrailPadNode trailPad, InstalledTheme owner)

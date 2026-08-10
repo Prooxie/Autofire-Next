@@ -168,6 +168,16 @@ internal static partial class SdlInterop
     internal static partial bool SetGamepadLED(IntPtr gamepad, byte red, byte green, byte blue);
 
     /// <summary>
+    /// Device-specific effect report. This is the only route to adaptive
+    /// triggers — SDL has no portable API for them — and SDL's PS5 driver
+    /// owns the framing, so the payload here is the effect state alone
+    /// without report id or the CRC that Bluetooth requires.
+    /// </summary>
+    [LibraryImport("SDL3", EntryPoint = "SDL_SendGamepadEffect")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool SendGamepadEffect(IntPtr gamepad, ReadOnlySpan<byte> data, int size);
+
+    /// <summary>
     /// SDL_SensorType — values verified against upstream
     /// include/SDL3/SDL_sensor.h, not written from memory.
     /// </summary>
