@@ -394,9 +394,57 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     /// <summary>Configured virtual-controller slots (sidebar rows).</summary>
     public ObservableCollection<MenuColumnItemViewModel> VirtualMenuItems { get; } = [];
 
+    /// <summary>
+    /// Replaces <paramref name="target"/>'s contents with
+    /// <paramref name="fresh"/>, touching only the rows that actually
+    /// differ.
+    ///
+    /// <para>
+    /// This is the fix for the navigation column blinking under the
+    /// cursor. The menu is rebuilt whenever the device catalog or a slot
+    /// changes — battery readings and slot status alone are enough to
+    /// trigger it repeatedly — and the old code cleared the collection and
+    /// re-added everything. <c>Clear()</c> tears down every container in
+    /// the ItemsControl, so the row under the pointer was destroyed and
+    /// recreated: it vanished for a frame and came back without its hover
+    /// state, which is exactly the reported flicker.
+    /// </para>
+    ///
+    /// <para>
+    /// Comparing <see cref="MenuColumnItemViewModel.Signature"/> means a
+    /// rebuild triggered by an unrelated row — or by nothing visible at
+    /// all — leaves every other container alive and untouched.
+    /// </para>
+    /// </summary>
+    private static void ReconcileMenu(
+        ObservableCollection<MenuColumnItemViewModel> target,
+        List<MenuColumnItemViewModel> fresh)
+    {
+        // Overwrite in place where the row genuinely changed.
+        for (var i = 0; i < fresh.Count && i < target.Count; i++)
+        {
+            if (!string.Equals(target[i].Signature, fresh[i].Signature, StringComparison.Ordinal))
+            {
+                target[i] = fresh[i];
+            }
+        }
+
+        // Trim surplus from the end, so removing one row does not
+        // reshuffle the ones above it.
+        while (target.Count > fresh.Count)
+        {
+            target.RemoveAt(target.Count - 1);
+        }
+
+        for (var i = target.Count; i < fresh.Count; i++)
+        {
+            target.Add(fresh[i]);
+        }
+    }
+
     private void RebuildMenuColumn()
     {
-        PhysicalMenuItems.Clear();
+        var physical = new List<MenuColumnItemViewModel>();
         foreach (var device in inputDeviceCatalog.Devices)
         {
             var icon = device.Category switch
@@ -416,7 +464,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
                 DeviceCategory.Mouse => "Mouse",
                 _ => "Input device",
             };
-            PhysicalMenuItems.Add(new MenuColumnItemViewModel(
+            physical.Add(new MenuColumnItemViewModel(
                 device.Id, device.DisplayName, icon, isConnected: true,
                 onSelect: () => SelectPhysicalMenuItem(capturedId),
                 isPinned: physicalPanelPins.IsPinned(capturedId),
@@ -426,19 +474,23 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
                 batteryState: device.BatteryState));
         }
 
-        VirtualMenuItems.Clear();
+        ReconcileMenu(PhysicalMenuItems, physical);
+
+        var virtualItems = new List<MenuColumnItemViewModel>();
         foreach (var slot in slotRegistry.GetSlots())
         {
             var name = string.IsNullOrWhiteSpace(slot.Name) ? "(unnamed)" : slot.Name;
             var capturedId = slot.Id;
             var row = SlotsPanel.Slots.FirstOrDefault(item => item.Id == slot.Id);
-            VirtualMenuItems.Add(new MenuColumnItemViewModel(
+            virtualItems.Add(new MenuColumnItemViewModel(
                 slot.Id, name, "▣", isConnected: slot.Enabled,
                 onSelect: () => SelectVirtualMenuItem(capturedId),
                 secondaryText: row is null
                     ? SlotsViewModel.KindLabelFor(slot.OutputTemplate)
                     : $"{row.KindLabel} · {row.StatusLabel}"));
         }
+
+        ReconcileMenu(VirtualMenuItems, virtualItems);
     }
 
     private void SelectPhysicalMenuItem(string deviceId)

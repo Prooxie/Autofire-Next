@@ -43,6 +43,21 @@ public sealed class MenuColumnItemViewModel
         _ => BatteryText,
     };
 
+    /// <summary>
+    /// Every field this row actually displays, flattened into one value.
+    ///
+    /// <para>
+    /// Used to tell "the menu was rebuilt" from "this row changed". These
+    /// instances are immutable, so refreshing the menu means replacing
+    /// them — and replacing an item in an <c>ObservableCollection</c>
+    /// destroys and recreates its container, which drops the hover state
+    /// and blinks the row out for a frame under the cursor. Comparing
+    /// signatures lets an unchanged row keep its container, and its hover.
+    /// </para>
+    /// </summary>
+    public string Signature =>
+        $"{Id}|{Name}|{IconText}|{IsConnected}|{SecondaryText}|{BatteryPercentage}|{BatteryState}|{CanPin}|{PinIcon}";
+
     /// <summary>True when this row offers a dashboard pin toggle (physical devices only).</summary>
     public bool CanPin { get; }
 
