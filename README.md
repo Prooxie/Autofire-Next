@@ -187,7 +187,7 @@ A slot's own virtual output is hidden from every input picker — you can't feed
 
 |Key|Default|Description|
 |-|-|-|
-|`DashboardRefreshHz`|`165`|UI refresh rate for the live dashboard|
+|`DashboardRefreshHz`|`60`|UI refresh rate for the live dashboard (30–1000). This drives a full redraw of every controller surface on screen, so it is the dominant UI cost — lower it on a weak machine. Independent of the mapping tick, which polls at its own rate and is unaffected|
 |`StartRuntimeOnLaunch`|`true`|Whether the input/output runtime starts automatically|
 |`DefaultCulture`|`en`|Fallback UI language|
 |`Updates:RepoOwner` / `RepoName`|`Prooxie` / `GameFlow`|GitHub-releases update checker|

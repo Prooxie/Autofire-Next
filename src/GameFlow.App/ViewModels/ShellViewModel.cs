@@ -69,6 +69,16 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     private readonly ILogger<ShellViewModel> logger;
     private readonly IServiceProvider serviceProvider;
     private readonly AppRuntimeOptions runtimeOptions;
+    private readonly GameFlow.Infrastructure.Configuration.IUserSettingsService userSettings;
+
+    /// <summary>
+    /// Dashboard UI tick rate, in Hz. The per-user setting supersedes the
+    /// appsettings.json value, matching the contract documented on
+    /// <see cref="GameFlow.Infrastructure.Profiles.AppSettings.DashboardRefreshHz"/>.
+    /// </summary>
+    public int DashboardRefreshHz =>
+        userSettings.Current.DashboardRefreshHz
+        ?? (runtimeOptions.DashboardRefreshHz > 0 ? runtimeOptions.DashboardRefreshHz : 30);
     private readonly SemaphoreSlim rulesSaveGate = new(1, 1);
     private readonly SemaphoreSlim panelBackgroundSaveGate = new(1, 1);
     private int panelBackgroundPersistVersion;
@@ -135,10 +145,12 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         IProfileFileDialogService profileFileDialogService,
         MotionServerPanelViewModel motionServerPanel,
         IOptions<AppRuntimeOptions> runtimeOptions,
+        GameFlow.Infrastructure.Configuration.IUserSettingsService userSettings,
         ILoggerFactory loggerFactory,
         ILogger<ShellViewModel> logger,
         IServiceProvider serviceProvider)
     {
+        this.userSettings = userSettings;
         MotionServerPanel = motionServerPanel;
         this.profileSession = profileSession;
         this.runtimeSnapshotStore = runtimeSnapshotStore;

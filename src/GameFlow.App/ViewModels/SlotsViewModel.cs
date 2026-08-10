@@ -599,11 +599,17 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
                 AssignedDevices.Add(new AssignableDeviceRow(id, info?.DisplayName ?? id));
             }
 
-            // Available = gamepads/joysticks not already assigned to this slot.
+            // Available = assignable devices not already on this slot.
+            //
+            // IsAssignableAsInput excludes GameFlow's own virtual pads.
+            // They enumerate through SDL looking exactly like physical
+            // hardware — impersonating it is what makes games accept the
+            // output — so without that check a slot could be fed from
+            // another slot's output, and the chain could be extended
+            // until the runtime was mapping itself in a circle.
             foreach (var d in devices)
             {
-                bool assignable = d.Category is DeviceCategory.Gamepad or DeviceCategory.Joystick or DeviceCategory.Keyboard or DeviceCategory.Mouse;
-                if (assignable && !slot.InputDeviceIds.Contains(d.Id))
+                if (d.IsAssignableAsInput && !slot.InputDeviceIds.Contains(d.Id))
                 {
                     AvailableDevices.Add(new AssignableDeviceRow(d.Id, d.DisplayName));
                 }

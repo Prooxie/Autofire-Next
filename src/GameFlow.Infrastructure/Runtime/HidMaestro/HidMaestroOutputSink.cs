@@ -196,6 +196,15 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
             controller.OutputReceived += OnOutputReceived;   // game rumble/haptics/FFB → physical pad
             connected = true;
             activatedAtUtc = DateTimeOffset.UtcNow;
+
+            // Tell device enumeration this pad is ours. It is about to
+            // reappear through SDL indistinguishable from real hardware —
+            // its VID/PID deliberately impersonate the controller it
+            // emulates — and without this claim it would show up in the
+            // input picker as a physical pad that could be fed back into
+            // another slot.
+            VirtualDeviceIdentity.ClaimSerial(profile.Id);
+
             logger.LogInformation("HIDMaestro controller created for profile {ProfileId}.", profile.Id);
         }
         catch (Exception exception)

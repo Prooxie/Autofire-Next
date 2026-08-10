@@ -1129,6 +1129,10 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 liveMap[gamepadId] = instanceId;
                 var power = GetCachedPower(gamepadId);
 
+                // A virtual pad impersonates real hardware down to VID/PID,
+                // so the OS path is the only thing that gives it away.
+                var gamepadPath = SdlInterop.ReadString(SdlInterop.GetGamepadPathForIdPointer(instanceId));
+
                 devices.Add(new InputDeviceInfo(
                     gamepadId,
                     StableName(gamepadId, name),
@@ -1139,7 +1143,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                     true,
                     DeviceCategory.Gamepad,
                     power.Percentage,
-                    power.State));
+                    power.State,
+                    VirtualDeviceIdentity.IsVirtual(gamepadPath, serial: null)));
             }
         }
         finally
@@ -1173,6 +1178,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 liveMap[joystickId] = instanceId;
                 var power = GetCachedPower(joystickId);
 
+                var joystickPath = SdlInterop.ReadString(SdlInterop.GetJoystickPathForIdPointer(instanceId));
+
                 devices.Add(new InputDeviceInfo(
                     joystickId,
                     StableName(joystickId, name),
@@ -1183,7 +1190,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                     false,
                     DeviceCategory.Joystick,
                     power.Percentage,
-                    power.State));
+                    power.State,
+                    VirtualDeviceIdentity.IsVirtual(joystickPath, serial: null)));
             }
         }
         finally

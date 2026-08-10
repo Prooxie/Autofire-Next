@@ -120,6 +120,17 @@ internal static partial class SdlInterop
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadNameForID")]
     internal static partial IntPtr GetGamepadNameForIdPointer(uint instanceId);
 
+    // The OS device path. On Windows this carries the enumerator and
+    // hardware id, which is how a HIDMaestro-created pad is told apart
+    // from a real one: the virtual device is root-enumerated as
+    // ROOT\HIDMAESTRO, while VID/PID deliberately impersonate real
+    // hardware and so cannot be used to distinguish them.
+    [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadPathForID")]
+    internal static partial IntPtr GetGamepadPathForIdPointer(uint instanceId);
+
+    [LibraryImport("SDL3", EntryPoint = "SDL_GetJoystickPathForID")]
+    internal static partial IntPtr GetJoystickPathForIdPointer(uint instanceId);
+
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadVendor")]
     internal static partial ushort GetGamepadVendor(IntPtr gamepad);
 

@@ -30,8 +30,33 @@ public sealed record InputDeviceInfo(
     bool IsGamepad = false,
     DeviceCategory Category = DeviceCategory.Unknown,
     int? BatteryPercentage = null,
-    DeviceBatteryState BatteryState = DeviceBatteryState.Unknown)
+    DeviceBatteryState BatteryState = DeviceBatteryState.Unknown,
+    bool IsVirtual = false)
 {
+    /// <summary>
+    /// True when this is one of GameFlow's own virtual pads rather than
+    /// real hardware.
+    ///
+    /// <para>
+    /// A virtual controller impersonates real hardware down to its
+    /// VID/PID — that is what makes games accept it — so it re-enters
+    /// through SDL's enumeration looking physical. Without this flag a
+    /// slot can take another slot's output as its input, and that chain
+    /// can be repeated until the runtime is mapping itself in a circle.
+    /// See <see cref="VirtualDeviceIdentity"/> for how it is decided.
+    /// </para>
+    /// </summary>
+    public bool IsVirtual { get; init; } = IsVirtual;
+
+    /// <summary>
+    /// Whether this device may be assigned to a slot as an input source.
+    /// Virtual pads are excluded — feeding one back in is the recursion
+    /// above, not a use case.
+    /// </summary>
+    public bool IsAssignableAsInput => !IsVirtual
+        && Category is DeviceCategory.Gamepad or DeviceCategory.Joystick
+                    or DeviceCategory.Keyboard or DeviceCategory.Mouse;
+
     public string HardwareId => VendorId == 0 && ProductId == 0
         ? string.Empty
         : $"VID {VendorId:X4} · PID {ProductId:X4}";

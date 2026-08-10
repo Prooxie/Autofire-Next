@@ -43,6 +43,15 @@ public sealed class ThemeSurface : Control
     /// </summary>
     private static readonly ConcurrentDictionary<string, Bitmap?> BitmapCache = new();
 
+    /// <summary>
+    /// Image references that could not be resolved, keyed
+    /// <c>{themeId}|{imagePath}</c>. Separate from
+    /// <see cref="BitmapCache"/> because that one is keyed on the RESOLVED
+    /// absolute path, which by definition does not exist for a miss — so a
+    /// failure had no cache entry and was retried on every single frame.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, byte> ResolveFailureCache = new();
+
     private readonly ControllerStateSymbols symbols = new();
 
     private InstalledTheme? activeTheme;
@@ -362,13 +371,27 @@ public sealed class ThemeSurface : Control
             }
         }
 
-        // Throttled feedback diagnostic: once per second per surface,
-        // log snapshot state + showhide eval results so the user can
-        // confirm input → symbols → expression chain. Cheap (handful
-        // of expression evals) and gated by a wall-clock check, so it
-        // never costs anything on the render hot path.
+        // Throttled feedback diagnostic: once per second per surface, log
+        // snapshot state + showhide eval results so the input → symbols →
+        // expression chain can be confirmed.
+        //
+        // Debug level, and gated on Debug being ENABLED before any of the
+        // work is done. Both matter. At Information this ran for every
+        // surface on screen — two per slot, up to sixteen slots — and each
+        // pass walks the node tree, evaluates an expression per ShowHide
+        // node, and builds a string. That produced 60+ MB of log per day
+        // and, worse, buried real warnings: diagnosing the theme artwork
+        // regression meant grepping past hundreds of thousands of these
+        // lines. A diagnostic that drowns the log it writes to has
+        // negative value.
+        //
+        // The IsEnabled check is not redundant with the level: Serilog
+        // evaluates arguments eagerly, so without it the tree walk and
+        // string building would still happen on every tick and simply be
+        // discarded.
         var now = DateTime.UtcNow;
-        if ((now - lastFeedbackDiagnostic).TotalSeconds >= 1.0)
+        if ((now - lastFeedbackDiagnostic).TotalSeconds >= 1.0 &&
+            Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
         {
             lastFeedbackDiagnostic = now;
             var pressed = snapshot.Buttons.Count(kv => kv.Value);
@@ -384,7 +407,7 @@ public sealed class ThemeSurface : Control
                     samples.Append(varName).Append('=').Append(val);
                 }
             }
-            Log.Information(
+            Log.Debug(
                 "ThemeSurface[{Mode}] tick: device={Device} pressed={Pressed}/{Total} L=({LX:F2},{LY:F2}) R=({RX:F2},{RY:F2}) LT={LT:F2} RT={RT:F2} showhide=[{Samples}]",
                 isPhysicalView ? "physical" : "virtual",
                 snapshot.DeviceName,
@@ -1024,6 +1047,16 @@ public sealed class ThemeSurface : Control
     /// </summary>
     private void LogSliderDiagnosticsOnce(SliderNode slider, GameFlow.Infrastructure.Theming.Flee.IFleeSymbols symbols, Matrix accumulated)
     {
+        // Checked before the HashSet probe, not after: until a slider has
+        // moved this returns early WITHOUT recording itself, so the probe
+        // and the two expression evaluations below repeat for every slider
+        // on every frame for as long as the stick sits still — which is
+        // most of the time.
+        if (!Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+        {
+            return;
+        }
+
         if (sliderDiagnosticsLogged.Contains(slider))
         {
             return;
@@ -1049,7 +1082,7 @@ public sealed class ThemeSurface : Control
         var restingPoint = accumulated.Transform(new Point(slider.X, slider.Y));
         var deflectedPoint = accumulated.Transform(new Point(slider.X + ix, slider.Y + iy));
 
-        Log.Information(
+        Log.Debug(
             "Theme slider diagnostic: node=({X},{Y}) deflection=({Ix:F1},{Iy:F1})px " +
             "resolvedResting=({RX:F1},{RY:F1}) resolvedDeflected=({DX:F1},{DY:F1}) " +
             "children={Count} firstChild={Kind} {Detail}",
@@ -1070,6 +1103,18 @@ public sealed class ThemeSurface : Control
             return TryLoadAvares(imagePath);
         }
 
+        // A FAILED lookup is cached too, keyed on the unresolved reference.
+        // This is load-bearing, not tidiness: the three packs that ship
+        // manifests referencing art they do not contain would otherwise
+        // re-run the resolver, re-probe the embedded assets (which costs a
+        // thrown exception per miss) and re-log a warning on EVERY frame.
+        // Measured at ~900 KB of log per 40 seconds before this cache.
+        var missKey = $"{owner.Id}|{imagePath}";
+        if (ResolveFailureCache.ContainsKey(missKey))
+        {
+            return null;
+        }
+
         // Resolution lives in ThemeAssetResolver (Infrastructure) so it can
         // be tested against real folder layouts. Its fallbacks exist
         // because shipped packs disagree with their own manifests about
@@ -1086,9 +1131,16 @@ public sealed class ThemeSurface : Control
             var embedded = TryLoadAvares(imagePath);
             if (embedded is null)
             {
-                Log.Warning(
-                    "Theme image not found on disk or anywhere in its pack: {Image} (theme {Theme}).",
-                    imagePath, owner.Id);
+                // Warn ONCE per missing image. The condition is permanent —
+                // the file is not there — so repeating it every frame adds
+                // nothing and buries everything else.
+                if (ResolveFailureCache.TryAdd(missKey, 0))
+                {
+                    Log.Warning(
+                        "Theme image not found on disk or anywhere in its pack: {Image} (theme {Theme}). "
+                        + "This image will render as missing; the pack is incomplete.",
+                        imagePath, owner.Id);
+                }
             }
 
             return embedded;

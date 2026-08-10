@@ -36,6 +36,40 @@ public partial class ShellWindow : Window
     }
 
     /// <summary>
+    /// Applies the user's dashboard refresh rate to the UI tick.
+    ///
+    /// <para>
+    /// The setting was previously inert: it is persisted, exposed in the
+    /// settings dialog, documented in the README and bound from
+    /// appsettings.json, but the timer was constructed with a hard-coded
+    /// 33 ms and nothing ever wrote to it. Turning the rate down on a
+    /// weak machine therefore did nothing at all.
+    /// </para>
+    ///
+    /// <para>
+    /// This tick drives the whole dashboard redraw — every controller
+    /// surface, physical and virtual, for every slot — so it is the
+    /// dominant UI cost, and the one dial worth having.
+    /// </para>
+    /// </summary>
+    private void ApplyConfiguredRefreshRate()
+    {
+        var hz = shellViewModel?.DashboardRefreshHz ?? 30;
+
+        // Clamped to the same range the settings dialog validates, so a
+        // hand-edited settings.json cannot stall the UI with 1 Hz or spin
+        // it at 10 000.
+        hz = Math.Clamp(hz, 30, 1000);
+
+        var interval = TimeSpan.FromMilliseconds(1000d / hz);
+        if (refreshTimer.Interval != interval)
+        {
+            refreshTimer.Interval = interval;
+            Log.Information("Dashboard UI tick set to {Hz} Hz ({Interval:F1} ms).", hz, interval.TotalMilliseconds);
+        }
+    }
+
+    /// <summary>
     /// Keeps the first frame inside the primary monitor's usable area,
     /// including DPI scaling and the taskbar. This runs before
     /// <see cref="Window.Show()"/> so an oversized window never flashes.
@@ -151,6 +185,7 @@ public partial class ShellWindow : Window
     {
         if (!isClosing)
         {
+            ApplyConfiguredRefreshRate();
             refreshTimer.Start();
         }
         // Attach the Raw Input reader to this window's HWND so the keyboard
