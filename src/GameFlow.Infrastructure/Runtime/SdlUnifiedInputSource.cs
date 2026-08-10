@@ -116,12 +116,41 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         _ = SdlInterop.SetHint(SdlInterop.HintJoystickDirectInput, "1");
         _ = SdlInterop.SetHint(SdlInterop.HintXInputEnabled, "1");
         _ = SdlInterop.SetHint(SdlInterop.HintAutoUpdateJoysticks, "0");
-        // Never let SDL send output packets (effects / enhanced-mode switch)
-        // to DS4/DS5 pads: on some Bluetooth stacks that write wedges inside
-        // the HID driver and SDL_OpenGamepad never returns — exactly the
-        // observed "freeze the moment a DualSense joins a slot". We don't
-        // consume gyro/touch-sensor data, so simple reports are sufficient.
-        _ = SdlInterop.SetHint("SDL_JOYSTICK_ENHANCED_REPORTS", "0");
+        // Enhanced reports on DS4/DS5 pads.
+        //
+        // This was pinned OFF to stop a real bug: sending the enhanced-mode
+        // switch wedges inside the HID driver on some Bluetooth stacks and
+        // SDL_OpenGamepad never returns — "freeze the moment a DualSense
+        // joins a slot". That hazard is unchanged and is why this is not
+        // simply switched on.
+        //
+        // But the justification attached to it — "we don't consume
+        // gyro/touch-sensor data, so simple reports are sufficient" — has
+        // been overtaken. Simple reports carry no battery state, no motion
+        // and no touchpad, so that one line silently disables the battery
+        // readout, DualSense gyro (and therefore the DSU motion server that
+        // feeds Cemu/Dolphin/Yuzu/Ryujinx) and touchpad input. All three
+        // are advertised features. Leaving it off is not neutral; it just
+        // moves the breakage somewhere less obvious than a freeze.
+        //
+        // So it is a choice now, defaulting to ON because the features it
+        // gates are ones the app claims to have. GAMEFLOW_ENHANCED_REPORTS=0
+        // restores the old behaviour without a rebuild — deliberately an
+        // environment variable, because if this DOES wedge the pad the
+        // window may be unresponsive and the in-app settings unreachable.
+        var enhanced = !string.Equals(
+            Environment.GetEnvironmentVariable("GAMEFLOW_ENHANCED_REPORTS"),
+            "0",
+            StringComparison.Ordinal);
+
+        _ = SdlInterop.SetHint("SDL_JOYSTICK_ENHANCED_REPORTS", enhanced ? "1" : "0");
+
+        logger.LogInformation(
+            enhanced
+                ? "SDL enhanced reports ENABLED — battery, gyro and touchpad available on DualSense/DS4. "
+                  + "If a DualSense freezes the app when it joins a slot, set GAMEFLOW_ENHANCED_REPORTS=0."
+                : "SDL enhanced reports disabled by GAMEFLOW_ENHANCED_REPORTS — battery, gyro and touchpad "
+                  + "will be unavailable on DualSense/DS4.");
 
         if (!SdlInterop.Init(SdlInterop.InitGamepad | SdlInterop.InitJoystick))
         {
