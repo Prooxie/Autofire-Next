@@ -89,6 +89,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// Cleared when the device reappears.
     /// </summary>
     private readonly HashSet<string> unknownDeviceWarned = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Devices whose adaptive-trigger effect SDL refused, so the warning is logged once.</summary>
+    private readonly HashSet<string> adaptiveRejected = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> loggedNonSdlSkips = new(StringComparer.OrdinalIgnoreCase);
 
     public SdlUnifiedInputSource(ILogger<SdlUnifiedInputSource> logger, InputDeviceCatalog inputDeviceCatalog, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.Web.WebControllerHub webControllerHub, GameFlow.Infrastructure.Runtime.Effects.ControllerEffectMailbox? effectMailbox = null)
@@ -1464,30 +1467,49 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             {
                 var state = write.State;
 
-                // Adaptive triggers force the device-specific path. That
-                // report carries rumble and the LED too, and its enable
-                // bits are per-report — so sending it alongside the
-                // portable calls would let one clear what the other set.
-                // It is all-or-nothing per device, per write.
+                // Adaptive triggers need the device-specific report; rumble
+                // does NOT go in it.
+                //
+                // I previously routed rumble through this report and
+                // skipped SDL's own call, on the reasoning that the enable
+                // bits are per-report so a second report would clear the
+                // first. That reasoning was wrong. An enable bit means
+                // "this report carries valid data for that section" —
+                // sections whose bit is clear are LEFT ALONE, not reset.
+                // So a trigger-only report cannot disturb rumble, and
+                // routing rumble through it only bypassed SDL's tested
+                // path for no benefit. The observed symptom was exactly
+                // that: rumble stopped working as soon as an adaptive
+                // trigger mode was enabled.
                 if (state.LeftTrigger is not null || state.RightTrigger is not null)
                 {
                     if (GameFlow.Core.Pipeline.DualSenseEffectEncoder.TryWrite(
                             effect,
                             ToTriggerSettings(state.LeftTrigger),
                             ToTriggerSettings(state.RightTrigger),
-                            state.LedColor is { } c
-                                ? new GameFlow.Core.Pipeline.LightColor(c.R, c.G, c.B)
-                                : null,
-                            state.LowFrequencyRumble,
-                            state.HighFrequencyRumble)
-                        && SdlInterop.SendGamepadEffect(device.Handle, effect, effect.Length))
+                            led: null,
+                            lowFrequencyRumble: 0,
+                            highFrequencyRumble: 0))
                     {
-                        continue;
+                        if (!SdlInterop.SendGamepadEffect(device.Handle, effect, effect.Length))
+                        {
+                            // Logged once per device: a silent reject is
+                            // indistinguishable from "the mode does
+                            // nothing", which is how this looked from the
+                            // outside.
+                            if (adaptiveRejected.Add(write.DeviceId))
+                            {
+                                logger.LogWarning(
+                                    "Adaptive trigger effect rejected by SDL for {DeviceId} ({Error}). "
+                                    + "Rumble and lighting are unaffected.",
+                                    write.DeviceId, SdlInterop.GetError());
+                            }
+                        }
+                        else
+                        {
+                            _ = adaptiveRejected.Remove(write.DeviceId);
+                        }
                     }
-
-                    // Fell through: not a DualSense, or SDL rejected it.
-                    // Rumble and LED still work through the portable calls,
-                    // so degrade to those rather than dropping everything.
                 }
 
                 // Duration 0 means "until told otherwise" in SDL. That is

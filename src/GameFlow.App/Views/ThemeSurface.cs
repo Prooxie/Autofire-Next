@@ -650,6 +650,20 @@ public sealed class ThemeSurface : Control
             {
                 DrawHoverOutline(context, hoveredHit);
             }
+
+            // Touch contacts, drawn last so nothing occludes them.
+            //
+            // This used to happen only inside a TrailPad node and only for
+            // the SECOND finger onward, which meant it drew nothing at all
+            // on a theme without that node and nothing for a single touch —
+            // the reported "no dots". Falling back to the touchpad's own
+            // hit region makes it independent of how a pack is authored.
+            if (!sawTrailPadThisFrame)
+            {
+                DrawContactsOverTouchRegion(context);
+            }
+
+            sawTrailPadThisFrame = false;
         }
         }
         finally
@@ -1067,6 +1081,7 @@ public sealed class ThemeSurface : Control
                 }
 
                 DrawAdditionalContacts(ctx, trailPad, transform);
+                sawTrailPadThisFrame = true;
                 return;
             }
 
@@ -1166,6 +1181,86 @@ public sealed class ThemeSurface : Control
     /// own artwork.
     /// </para>
     /// </summary>
+    /// <summary>Set while a frame rendered a TrailPad, so the fallback overlay does not double-draw.</summary>
+    private bool sawTrailPadThisFrame;
+
+    /// <summary>
+    /// Draws every touch contact inside the touchpad's own hit region.
+    ///
+    /// <para>
+    /// The fallback for themes with no TrailPad node — which is most of
+    /// them. The region is found by probing the hit tester at the centre
+    /// of the document for the touchpad element, so the rectangle comes
+    /// from the theme's own geometry rather than being guessed.
+    /// </para>
+    /// </summary>
+    private void DrawContactsOverTouchRegion(DrawingContext ctx)
+    {
+        var contacts = snapshot.TouchContacts;
+        if (contacts.Count == 0 || activeTheme is null)
+        {
+            return;
+        }
+
+        var region = ResolveTouchRegion(activeTheme);
+        if (region is not { } bounds || bounds.Width <= 1 || bounds.Height <= 1)
+        {
+            return;
+        }
+
+        for (var i = 0; i < contacts.Count && i < ContactBrushes.Length; i++)
+        {
+            var contact = contacts[i];
+            var point = new Point(
+                bounds.X + (bounds.Width * Math.Clamp(contact.X, 0f, 1f)),
+                bounds.Y + (bounds.Height * Math.Clamp(contact.Y, 0f, 1f)));
+
+            var brush = ContactBrushes[i % ContactBrushes.Length];
+            var radius = 12 + (8 * Math.Clamp(contact.Pressure, 0f, 1f));
+
+            ctx.DrawEllipse(null, new Pen(brush, 3), point, radius, radius);
+            ctx.DrawEllipse(brush, null, point, 4, 4);
+        }
+    }
+
+    /// <summary>
+    /// The touchpad element's rectangle in theme coordinates, cached per
+    /// theme. Probing walks a coarse grid because the hit tester answers
+    /// point queries only — there is no enumeration of regions — and the
+    /// pad's position varies per pack.
+    /// </summary>
+    private Rect? ResolveTouchRegion(InstalledTheme theme)
+    {
+        if (touchRegionTheme == theme.Id)
+        {
+            return touchRegionBounds;
+        }
+
+        touchRegionTheme = theme.Id;
+        touchRegionBounds = null;
+
+        var doc = theme.Document;
+        for (var yStep = 1; yStep < 20 && touchRegionBounds is null; yStep++)
+        {
+            for (var xStep = 1; xStep < 20; xStep++)
+            {
+                var hit = GameFlow.App.ViewModels.ThemeHitTester.TryHit(
+                    doc, doc.Width * xStep / 20d, doc.Height * yStep / 20d);
+
+                if (hit is not null && hit.ElementId.StartsWith("touch_center", StringComparison.Ordinal))
+                {
+                    touchRegionBounds = hit.Bounds;
+                    break;
+                }
+            }
+        }
+
+        return touchRegionBounds;
+    }
+
+    private string? touchRegionTheme;
+    private Rect? touchRegionBounds;
+
     private void DrawAdditionalContacts(DrawingContext ctx, TrailPadNode trailPad, Matrix transform)
     {
         var contacts = snapshot.TouchContacts;
