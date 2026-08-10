@@ -98,11 +98,43 @@ public sealed record RumbleSettings
 /// <summary>How a DualSense-class lightbar behaves when no game is driving it.</summary>
 public enum LightbarMode
 {
+    /// <summary>Light off entirely.</summary>
     Off,
+
+    /// <summary>One fixed colour, from <see cref="LightingSettings.Color"/>.</summary>
     Solid,
+
+    /// <summary>The console-style per-player colour, keyed on slot index.</summary>
     PlayerNumber,
+
+    /// <summary>Smooth fade in and out around the configured colour.</summary>
     Breathing,
-    BatteryLevel
+
+    /// <summary>Green through amber to red as the pad discharges.</summary>
+    BatteryLevel,
+
+    // ── Added with the effects backend ───────────────────────────────
+    // Existing values keep their ordinal positions: the enum is
+    // serialised into profiles by NAME, but reordering would still
+    // invalidate any integer that leaked into an older file.
+
+    /// <summary>Hard on/off blink. Deliberately harsh — meant to be noticed.</summary>
+    Strobe,
+
+    /// <summary>Continuous hue sweep through the spectrum.</summary>
+    Rainbow,
+
+    /// <summary>
+    /// Brightness follows rumble, so the light reacts to what the game is
+    /// doing rather than to a timer.
+    /// </summary>
+    RumbleReactive,
+
+    /// <summary>
+    /// Red while a trigger is held, configured colour otherwise — a
+    /// firing indicator.
+    /// </summary>
+    TriggerReactive
 }
 
 public sealed record LightingSettings

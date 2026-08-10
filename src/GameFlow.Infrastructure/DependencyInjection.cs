@@ -113,8 +113,14 @@ public static class DependencyInjection
         // against real Bluetooth hardware, because holding SDL's device
         // lock across a blocking HID transfer is what froze the runtime
         // when effects were previously wired up.
+        // The mailbox is the hand-off: the effects thread decides what and
+        // when, the SDL worker performs the write on the thread that owns
+        // the device handles. Writing from the effects thread directly
+        // would contend with SDL's device lock across a blocking Bluetooth
+        // transfer — the freeze that got effects deleted the first time.
+        _ = services.AddSingleton<Runtime.Effects.ControllerEffectMailbox>();
         _ = services.AddSingleton<Runtime.Effects.IControllerEffectWriter,
-                                  Runtime.Effects.NullControllerEffectWriter>();
+                                  Runtime.Effects.MailboxControllerEffectWriter>();
         _ = services.AddSingleton<Runtime.Effects.ControllerEffectsService>();
         _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Effects.ControllerEffectsService>());
 

@@ -153,6 +153,20 @@ internal static partial class SdlInterop
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadPowerInfo")]
     internal static partial PowerState GetGamepadPowerInfo(IntPtr gamepad, out int percent);
 
+    // Effect output. These were removed once because they were being
+    // called from the runtime tick, where the blocking Bluetooth HID
+    // write froze everything. They are back because the write now happens
+    // on the SDL worker thread, which already owns device I/O and is the
+    // only thread allowed to block on it.
+    [LibraryImport("SDL3", EntryPoint = "SDL_RumbleGamepad")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool RumbleGamepad(
+        IntPtr gamepad, ushort lowFrequencyRumble, ushort highFrequencyRumble, uint durationMs);
+
+    [LibraryImport("SDL3", EntryPoint = "SDL_SetGamepadLED")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool SetGamepadLED(IntPtr gamepad, byte red, byte green, byte blue);
+
     /// <summary>
     /// SDL_SensorType — values verified against upstream
     /// include/SDL3/SDL_sensor.h, not written from memory.

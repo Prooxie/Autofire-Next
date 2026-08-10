@@ -64,15 +64,17 @@ public sealed class ControllerEffectsService : BackgroundService
     /// <summary>Writes that failed and were re-queued. Diagnostics.</summary>
     public long WritesFailed { get; private set; }
 
+    /// <summary>Last observed backend availability, so the transition logs once each way.</summary>
+    private bool backendAvailable = true;
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!writer.IsSupported)
-        {
-            logger.LogInformation(
-                "Controller effects: no effect backend on this platform; rumble, lighting and " +
-                "adaptive triggers will save but not reach hardware.");
-            return Task.CompletedTask;
-        }
+        // Support is NOT decided here. The backend is the SDL input
+        // source, which the runtime creates lazily when it activates a
+        // provider — after this hosted service starts. Checking once at
+        // startup therefore always saw "unsupported" and parked the thread
+        // permanently, so effects never reached hardware however well the
+        // rest of the chain worked. The loop checks per pass instead.
 
         // Run the loop on its own thread rather than returning an async
         // state machine to the host: this body blocks, and it must not
@@ -129,6 +131,26 @@ public sealed class ControllerEffectsService : BackgroundService
 
     private void DrainOnce()
     {
+        if (!writer.IsSupported)
+        {
+            // No backend yet. Log the transition once each way so the
+            // state is visible without spamming a line per poll.
+            if (backendAvailable)
+            {
+                backendAvailable = false;
+                logger.LogInformation(
+                    "Controller effects: no backend attached; rumble and lighting will save but not reach hardware.");
+            }
+
+            return;
+        }
+
+        if (!backendAvailable)
+        {
+            backendAvailable = true;
+            logger.LogInformation("Controller effects: backend attached, effects are now reaching hardware.");
+        }
+
         var due = Queue.TakeDueWrites(DateTimeOffset.UtcNow);
         if (due.Count == 0)
         {

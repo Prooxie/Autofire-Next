@@ -42,6 +42,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// <see cref="RefreshPowerStateCache"/>.
     /// </summary>
     private readonly Dictionary<string, OpenedDevice> telemetryHandles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Where the effects thread posts. Null when effects are not wired up.</summary>
+    private readonly GameFlow.Infrastructure.Runtime.Effects.ControllerEffectMailbox? effectMailbox;
     private IntPtr rawInspectionHandle = IntPtr.Zero;
     private string? rawInspectionHandleId;
 
@@ -88,7 +91,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     private readonly HashSet<string> unknownDeviceWarned = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> loggedNonSdlSkips = new(StringComparer.OrdinalIgnoreCase);
 
-    public SdlUnifiedInputSource(ILogger<SdlUnifiedInputSource> logger, InputDeviceCatalog inputDeviceCatalog, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.Web.WebControllerHub webControllerHub)
+    public SdlUnifiedInputSource(ILogger<SdlUnifiedInputSource> logger, InputDeviceCatalog inputDeviceCatalog, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.Web.WebControllerHub webControllerHub, GameFlow.Infrastructure.Runtime.Effects.ControllerEffectMailbox? effectMailbox = null)
     {
         this.logger = logger;
         this.inputDeviceCatalog = inputDeviceCatalog;
@@ -96,6 +99,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         this.keyboardStateSource = keyboardStateSource;
         this.mouseStateSource = mouseStateSource;
         this.webControllerHub = webControllerHub;
+        this.effectMailbox = effectMailbox;
+        if (effectMailbox is not null) { effectMailbox.HasCollector = true; }
 
         SdlInterop.SetMainReady();
         // SDL_JOYSTICK_THREAD = 0 (was 1). With the background joystick thread
@@ -233,6 +238,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                     }
 
                     RefreshPowerStateCache(utcNow);
+                    ApplyPendingEffects();
 
                     currentOperation = "idle";
                 }
@@ -1408,6 +1414,80 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// safe worker-owned handle, which covers the devices users are actively
     /// working with without adding a new freeze path.
     /// </summary>
+    /// <summary>
+    /// Applies rumble and LED state posted by the effects thread.
+    ///
+    /// <para>
+    /// This runs on the SDL worker thread ON PURPOSE. SDL takes its device
+    /// lock for the duration of a write, and over Bluetooth that write is
+    /// a blocking HID transfer of a millisecond or more. Performed from
+    /// any other thread it contends with this loop's own reads, which is
+    /// how effects froze the runtime when they were last wired up and why
+    /// the calls were deleted. Here the cost lands on the thread that was
+    /// going to be busy with that device anyway.
+    /// </para>
+    ///
+    /// <para>
+    /// The effects thread has already coalesced and rate-limited, so what
+    /// arrives here is at most one write per device per pass.
+    /// </para>
+    /// </summary>
+    private void ApplyPendingEffects()
+    {
+        if (effectMailbox is null || !effectMailbox.TryCollect(out var writes))
+        {
+            return;
+        }
+
+        foreach (var write in writes)
+        {
+            if (!slotHandles.TryGetValue(write.DeviceId, out var device) &&
+                !telemetryHandles.TryGetValue(write.DeviceId, out device))
+            {
+                continue;
+            }
+
+            // Gamepad-only: the LED and rumble entry points are the gamepad
+            // API, and a raw joystick has neither.
+            if (device.Kind != DeviceKind.Gamepad)
+            {
+                continue;
+            }
+
+            currentOperation = "effects " + write.DeviceId;
+
+            try
+            {
+                var state = write.State;
+
+                // Duration 0 means "until told otherwise" in SDL. That is
+                // what we want: the effects thread owns when this stops,
+                // and a timeout here would cut a sustained rumble short.
+                _ = SdlInterop.RumbleGamepad(
+                    device.Handle,
+                    ToRumbleMagnitude(state.LowFrequencyRumble),
+                    ToRumbleMagnitude(state.HighFrequencyRumble),
+                    0);
+
+                if (state.LedColor is { } led)
+                {
+                    _ = SdlInterop.SetGamepadLED(device.Handle, led.R, led.G, led.B);
+                }
+            }
+            catch (Exception exception)
+            {
+                // A pad unplugged mid-write is ordinary. One bad device
+                // must not stop the others, and must not kill the loop.
+                logger.LogDebug(exception, "Effect write to {DeviceId} failed.", write.DeviceId);
+            }
+        }
+
+        currentOperation = "idle";
+    }
+
+    private static ushort ToRumbleMagnitude(double value) =>
+        (ushort)Math.Clamp(Math.Round(value * ushort.MaxValue), 0, ushort.MaxValue);
+
     private void RefreshPowerStateCache(DateTime utcNow)
     {
         if (utcNow < nextPowerRefreshUtc)
