@@ -78,9 +78,9 @@ public sealed class ThemeSurface : Control
     /// size is dropped on the next request. The old bitmap is NOT disposed
     /// — the compositor may still hold it for a frame already submitted,
     /// and a disposed bitmap there is a crash, whereas an unreferenced one
-    /// is a collection. Sizes are rounded up to
-    /// <see cref="ScaleQuantum"/> so dragging a window edge re-scales in
-    /// steps instead of once per pixel of drag.
+    /// is a collection. Sizes snap up by <see cref="ScaleStepFraction"/> so
+    /// dragging a window edge re-scales in steps instead of once per pixel
+    /// of drag.
     /// </para>
     /// </summary>
     private static readonly ConcurrentDictionary<string, ScaledBitmap> ScaledCache = new();
@@ -92,13 +92,24 @@ public sealed class ThemeSurface : Control
     private readonly record struct ScaledBitmap(Bitmap Bitmap, PixelSize Size);
 
     /// <summary>
-    /// Target sizes are rounded up to a multiple of this. A window being
-    /// dragged produces a new width every frame, and without the step each
-    /// one would queue a fresh scale of every image in the theme. Small
-    /// enough that the residual downscale from a cached copy to its
-    /// destination stays under the point where a cheap filter shows.
+    /// Target sizes snap up to a step this fraction of themselves. A window
+    /// being dragged produces a new width every frame, and without a step
+    /// each one would queue a fresh scale of every image in the theme.
+    ///
+    /// <para>
+    /// The step is RELATIVE, not a fixed pixel count, because it bounds
+    /// something that matters: whatever the step is, a cached copy can
+    /// overshoot its destination by that much, and the frame draws it with
+    /// the cheap filter. An absolute quantum bounds that overshoot at a
+    /// ratio for large images and at 2x for small ones — a 33 px draw
+    /// snapping to 64 — which is precisely the downscale the cheap filter
+    /// cannot take. A relative one holds it near 1.125x at every size.
+    /// </para>
     /// </summary>
-    private const int ScaleQuantum = 32;
+    private const double ScaleStepFraction = 0.125;
+
+    /// <summary>Floor for the relative step, so tiny images do not re-scale on every pixel.</summary>
+    private const int MinimumScaleStep = 4;
 
     /// <summary>
     /// Only pre-scale when the source is at least this many times larger
@@ -1343,7 +1354,11 @@ public sealed class ThemeSurface : Control
         return source;
     }
 
-    /// <summary>Rounds a device-pixel extent up to <see cref="ScaleQuantum"/>.</summary>
+    /// <summary>
+    /// Rounds a device-pixel extent up to the next
+    /// <see cref="ScaleStepFraction"/> step of itself, so a cached copy
+    /// overshoots its destination by at most that fraction.
+    /// </summary>
     private static int Quantize(double devicePixels)
     {
         if (!double.IsFinite(devicePixels) || devicePixels <= 0)
@@ -1351,8 +1366,9 @@ public sealed class ThemeSurface : Control
             return 0;
         }
 
-        var steps = (int)Math.Ceiling(devicePixels / ScaleQuantum);
-        return steps * ScaleQuantum;
+        var step = Math.Max(MinimumScaleStep, (int)Math.Round(devicePixels * ScaleStepFraction));
+        var steps = (int)Math.Ceiling(devicePixels / step);
+        return steps * step;
     }
 
     /// <summary>
