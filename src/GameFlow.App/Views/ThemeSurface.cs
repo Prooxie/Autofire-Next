@@ -480,12 +480,17 @@ public sealed class ThemeSurface : Control
     /// </summary>
     private static readonly SolidColorBrush HighlightBrush =
         new(Color.FromArgb(0xE6, 0xFF, 0xC3, 0x00));
+
+    /// <summary>
+    /// Same amber, lighter. Hover and press draw the identical silhouette,
+    /// so alpha is the only thing left to tell "you could click this" from
+    /// "you are pressing this".
+    /// </summary>
+    private static readonly SolidColorBrush HoverHighlightBrush =
+        new(Color.FromArgb(0x8C, 0xFF, 0xC3, 0x00));
+
     private static readonly Pen HighlightOutlinePen = new(HighlightBrush, 2);
-    private static readonly Vector[] HighlightOutlineOffsets =
-    [
-        new(-2.25, 0), new(2.25, 0), new(0, -2.25), new(0, 2.25),
-        new(-1.6, -1.6), new(1.6, -1.6), new(-1.6, 1.6), new(1.6, 1.6),
-    ];
+    private static readonly Pen HoverOutlinePen = new(HoverHighlightBrush, 2);
 
     /// <summary>
     /// Per-path opacity-mask brushes for the silhouette highlight. Tiny
@@ -703,22 +708,17 @@ public sealed class ThemeSurface : Control
             }
 
             // Click-to-map highlights painted on top so they're never
-            // occluded by overlay images. Selected first (so the
-            // outline appears on top of its own fill), hover on top of
-            // selected so the user always sees the cursor-anchored
-            // outline. If the cursor is currently over the selected
-            // element we paint only the selected highlight (avoids
-            // doubled outlines).
-            // While the pointer is held down on an element, only the
-            // stronger pressed tint paints; otherwise the hover tint.
+            // occluded by overlay images. While the pointer is held down
+            // on an element only the stronger pressed tint paints,
+            // otherwise the lighter hover tint — one shape, two alphas.
             // Nothing persists once the pointer releases or leaves.
             if (pressedHit is not null)
             {
-                DrawPressedHighlight(context, pressedHit);
+                DrawElementHighlight(context, pressedHit, pressed: true);
             }
             else if (hoveredHit is not null)
             {
-                DrawHoverOutline(context, hoveredHit);
+                DrawElementHighlight(context, hoveredHit, pressed: false);
             }
 
             // Touch contacts, drawn last so nothing occludes them.
@@ -905,90 +905,73 @@ public sealed class ThemeSurface : Control
     }
 
     /// <summary>
-    /// Paints a hover ring derived from the hit element's own alpha mask.
-    /// Irregular controls therefore follow their artwork instead of an
-    /// approximate bounding ellipse/rectangle. Falls back to an inset
-    /// geometric outline when a node has no bitmap mask.
+    /// Tints one hit element through its own artwork, so the highlight
+    /// takes the SHAPE of the control — an irregular bumper, a D-pad arm,
+    /// a trigger — instead of a rectangle that fits none of them.
+    ///
+    /// <para>
+    /// Hover and press share this one path, differing only in alpha. Hover
+    /// used to be drawn a completely different way: eight copies of the
+    /// mask, shifted by a fixed 1.6–2.25, formed a ring, and the entire
+    /// document was then repainted through the unshifted mask to carve the
+    /// interior back out. Both halves were broken.
+    /// </para>
+    ///
+    /// <para>
+    /// The offsets were in THEME units, and the surface scales the whole
+    /// document to fit the panel. At a dashboard's usual scale of about
+    /// 0.29 that ring came out well under one device pixel — a smear
+    /// rather than an outline — and it thickened as the window grew, which
+    /// is exactly the "hover looks wrong unless the window is maximised"
+    /// report. Nothing about the ring was expressed in the units it was
+    /// eventually drawn in.
+    /// </para>
+    ///
+    /// <para>
+    /// The interior-restoring repaint was worse: it walked and drew every
+    /// node in the document, clipped to the hovered element's mask
+    /// RECTANGLE, so any neighbouring artwork overlapping that rectangle
+    /// painted over the element too — the "sometimes it is not done right"
+    /// half. It also put a second full render of the theme inside every
+    /// frame the pointer was over a control.
+    /// </para>
     /// </summary>
-    private void DrawHoverOutline(DrawingContext ctx, ThemeHitResult hit)
+    private void DrawElementHighlight(DrawingContext ctx, ThemeHitResult hit, bool pressed)
     {
         var theme = activeTheme;
         var mask = theme is null ? null : GetHighlightMask(theme, hit.ShapeImagePath);
-        if (theme is not null && mask is not null)
-        {
-            // Build a true silhouette outline from the control's own alpha
-            // mask. Eight small translated copies form the outside ring;
-            // repainting the normal theme through the unshifted mask restores
-            // the interior, leaving only the artwork-accurate edge visible.
-            // This avoids the old ellipse/rectangle exceeding irregular
-            // bumpers, D-pads, and trigger artwork.
-            foreach (var offset in HighlightOutlineOffsets)
-            {
-                var shifted = new Rect(
-                    hit.Bounds.X + offset.X,
-                    hit.Bounds.Y + offset.Y,
-                    hit.Bounds.Width,
-                    hit.Bounds.Height);
-                using (ctx.PushOpacityMask(mask, shifted))
-                {
-                    ctx.FillRectangle(HighlightBrush, shifted);
-                }
-            }
+        var brush = pressed ? HighlightBrush : HoverHighlightBrush;
 
+        if (mask is not null)
+        {
             using (ctx.PushOpacityMask(mask, hit.Bounds))
             {
-                foreach (var node in theme.Document.Children)
-                {
-                    RenderNode(ctx, node, theme);
-                }
+                ctx.FillRectangle(brush, hit.Bounds);
             }
+
             return;
         }
 
-        const double inset = 2;
-        var bounds = hit.Bounds.Width > inset * 2 && hit.Bounds.Height > inset * 2
-            ? new Rect(
-                hit.Bounds.X + inset,
-                hit.Bounds.Y + inset,
-                hit.Bounds.Width - inset * 2,
-                hit.Bounds.Height - inset * 2)
-            : hit.Bounds;
+        // No art to silhouette — a colour-only pbar, or a pack missing the
+        // overlay. Fill and outline together so it still reads as a soft
+        // button shape rather than a hard box.
+        var pen = pressed ? HighlightOutlinePen : HoverOutlinePen;
 
         if (IsRoundControl(hit.ElementId))
         {
-            ctx.DrawEllipse(null, HighlightOutlinePen, bounds);
+            ctx.DrawEllipse(brush, pen, hit.Bounds.Center,
+                hit.Bounds.Width / 2, hit.Bounds.Height / 2);
             return;
         }
 
-        var radius = Math.Min(10, Math.Min(bounds.Width, bounds.Height) / 3);
-        ctx.DrawRectangle(null, HighlightOutlinePen, bounds, radius, radius);
+        var radius = Math.Min(8, Math.Min(hit.Bounds.Width, hit.Bounds.Height) / 3);
+        ctx.DrawRectangle(brush, pen, hit.Bounds, radius, radius);
     }
 
     private static bool IsRoundControl(string elementId) => elementId is
         "South" or "East" or "West" or "North" or "Guide" or
         "LeftStick" or "RightStick" or
         "LeftStick.Button" or "RightStick.Button";
-
-    private void DrawPressedHighlight(DrawingContext ctx, ThemeHitResult hit)
-    {
-        var theme = activeTheme;
-        var mask = theme is null ? null : GetHighlightMask(theme, hit.ShapeImagePath);
-
-        if (mask is not null)
-        {
-            using (ctx.PushOpacityMask(mask, hit.Bounds))
-            {
-                ctx.FillRectangle(HighlightBrush, hit.Bounds);
-            }
-        }
-        else
-        {
-            // No art to silhouette — rounded rect with both fill and
-            // outline so it still reads as a soft button shape rather
-            // than a hard box.
-            ctx.DrawRectangle(HighlightBrush, HighlightOutlinePen, hit.Bounds, 8, 8);
-        }
-    }
 
     private ImageBrush? GetHighlightMask(InstalledTheme theme, string? imagePath)
     {
