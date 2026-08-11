@@ -377,7 +377,7 @@ public sealed class ThemeSurface : Control
         // attached. Only repaint when something the art can actually show has
         // changed; otherwise keep the latest snapshot but skip the paint.
         if (lastRenderedSnapshot is not null
-            && VisuallyEquivalent(lastRenderedSnapshot, newSnapshot))
+            && SnapshotVisuals.AreEquivalent(lastRenderedSnapshot, newSnapshot))
         {
             return;
         }
@@ -399,41 +399,6 @@ public sealed class ThemeSurface : Control
         lightColor = normalized;
         lightbarBrush = IsTransparentColor(normalized) ? null : HexBrush(normalized);
         InvalidateVisual();
-    }
-
-    /// <summary>
-    /// True when two snapshots would draw identical controller art: same
-    /// pressed-button set, and sticks/triggers/touch equal within a
-    /// sub-pixel threshold. Timestamp and device identity are ignored —
-    /// they change every tick but never change a pixel.
-    /// </summary>
-    private static bool VisuallyEquivalent(ControllerSnapshot a, ControllerSnapshot b)
-    {
-        const float Epsilon = 1f / 256f;   // finer than any visible deflection
-        if (a.TouchContactCount != b.TouchContactCount) { return false; }
-        if (MathF.Abs(a.LeftTrigger  - b.LeftTrigger)  > Epsilon) { return false; }
-        if (MathF.Abs(a.RightTrigger - b.RightTrigger) > Epsilon) { return false; }
-        if (MathF.Abs(a.LeftStick.X  - b.LeftStick.X)  > Epsilon) { return false; }
-        if (MathF.Abs(a.LeftStick.Y  - b.LeftStick.Y)  > Epsilon) { return false; }
-        if (MathF.Abs(a.RightStick.X - b.RightStick.X) > Epsilon) { return false; }
-        if (MathF.Abs(a.RightStick.Y - b.RightStick.Y) > Epsilon) { return false; }
-        return PressedButtonsEqual(a.Buttons, b.Buttons);
-    }
-
-    private static bool PressedButtonsEqual(
-        IReadOnlyDictionary<ButtonId, bool> a,
-        IReadOnlyDictionary<ButtonId, bool> b)
-    {
-        if (ReferenceEquals(a, b)) { return true; }
-        foreach (var kv in a)
-        {
-            if (kv.Value && !(b.TryGetValue(kv.Key, out var bv) && bv)) { return false; }
-        }
-        foreach (var kv in b)
-        {
-            if (kv.Value && !(a.TryGetValue(kv.Key, out var av) && av)) { return false; }
-        }
-        return true;
     }
 
     /// <summary>
