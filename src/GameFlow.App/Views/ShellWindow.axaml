@@ -1107,13 +1107,23 @@
 
                 <Border Grid.Row="1" BorderThickness="1" CornerRadius="6" Padding="12"
                         BorderBrush="{DynamicResource AppBorder}">
-                  <!-- IsVisible resolves against this control's OWN DataContext,
-                       which the line below has just set to the editor — so the
-                       path is HasDevice, not DeviceSettingsEditor.HasDevice.
-                       The longer path silently bound to nothing; compiled
-                       bindings turned that into a build error. -->
-                  <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
-                                                  IsVisible="{Binding HasDevice}" />
+                  <Panel>
+                    <!-- IsVisible resolves against this control's OWN DataContext,
+                         which the line below has just set to the editor — so the
+                         path is HasDevice, not DeviceSettingsEditor.HasDevice.
+                         The longer path silently bound to nothing; compiled
+                         bindings turned that into a build error. -->
+                    <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
+                                                    IsVisible="{Binding HasDevice}" />
+                    <!-- The tab only appears once a slot exists, so this is
+                         the narrower case: a slot is picked and no tuning
+                         target resolved. Saying nothing at all leaves a
+                         blank panel that reads as a broken tab. -->
+                    <TextBlock Text="Pick a slot to tune."
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Opacity="0.55"
+                               IsVisible="{Binding !DeviceSettingsEditor.HasDevice}" />
+                  </Panel>
                 </Border>
 
               </Grid>

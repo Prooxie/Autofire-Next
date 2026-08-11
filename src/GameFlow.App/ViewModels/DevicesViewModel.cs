@@ -357,6 +357,13 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
             ?? TuningSlotOptions.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedTuningSlot));
         OnPropertyChanged(nameof(HasTuningSlots));
+
+        // Assigning the FIELD above skips the property setter, and the
+        // setter is what loads the editor. Without this the tab sat empty
+        // after a controller was created — the picker showed the slot, and
+        // nothing had told the editor to open it. It only ever populated
+        // if the user re-picked the entry that was already selected.
+        LoadTuningForSelection();
     }
 
     private bool TuningSlotsMatch(IReadOnlyList<GameFlow.Infrastructure.Runtime.Slots.ControllerSlot> slots)
@@ -611,6 +618,20 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(OnlineCount));
             OnPropertyChanged(nameof(TotalCount));
             OnPropertyChanged(nameof(IsEmpty));
+
+            // Separates "the catalog is empty" from "the catalog has
+            // devices and the page is not showing them". Those two look
+            // identical on screen and lead to completely different
+            // investigations; without this the first thing anyone does is
+            // guess. Debug level and gated, so it costs nothing normally.
+            if (Serilog.Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+            {
+                Serilog.Log.Debug(
+                    "Devices page rebuilt: catalog has {CatalogCount} device(s), page shows {RowCount} row(s) [{Ids}].",
+                    catalog.Devices.Count,
+                    Devices.Count,
+                    string.Join(", ", catalog.Devices.Select(d => $"{d.Id}({d.Category},virtual={d.IsVirtual},connected={d.IsConnected})")));
+            }
         }
         finally
         {

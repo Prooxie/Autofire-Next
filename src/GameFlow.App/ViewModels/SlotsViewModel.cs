@@ -651,6 +651,16 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
             }
         }
 
+        if (Serilog.Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+        {
+            Serilog.Log.Debug(
+                "Slots rebuilt: {Count} slot(s) [{Slots}], selected={Selected}, catalog=[{Catalog}].",
+                Slots.Count,
+                string.Join(" | ", Slots.Select(s => $"{s.Name}:{s.StatusLabel}:{s.DeviceSummary}")),
+                SelectedSlot?.Name ?? "<none>",
+                string.Join(", ", catalog.Devices.Select(d => $"{d.Id}(connected={d.IsConnected})")));
+        }
+
         // Honor a pending selection from CreateSlot.
         if (pendingSelectId is not null)
         {
@@ -661,7 +671,24 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
                 SelectedSlot = match;
             }
         }
-        else if (SelectedSlot is not null)
+        else if (SelectedSlot is null || !Slots.Contains(SelectedSlot))
+        {
+            // Select something as soon as there is something to select.
+            //
+            // Nothing used to depend on this: a master list down the left
+            // rendered every slot whether or not one was selected, so an
+            // unselected page still showed the user their controller and
+            // its status. Replacing that list with a picker made selection
+            // load-bearing — with none, the identity card, every tab and
+            // both device lists are hidden behind HasSelectedSlot, and the
+            // page reads as though the controller and its devices are
+            // gone. They were never gone; nothing had been picked.
+            //
+            // Also covers the selected slot being deleted, which would
+            // otherwise leave the page blank with slots still present.
+            SelectedSlot = Slots.FirstOrDefault();
+        }
+        else
         {
             // Selected slot may have changed (device assignment etc.) — refresh detail.
             LoadDetail();
@@ -741,6 +768,22 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
                     .ToList(),
                 row => row.Id,
                 (a, b) => string.Equals(a.Name, b.Name, StringComparison.Ordinal));
+
+            // Separates "the catalog does not have it" from "the slot
+            // references an id the catalog does not know" from "it is
+            // there and the page is not showing it". A slot reading
+            // Offline while its pad plainly works is one of those three,
+            // and they look identical on screen.
+            if (Serilog.Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
+            {
+                Serilog.Log.Debug(
+                    "Slot {Slot}: assigned=[{Assigned}] catalog=[{Catalog}] rows assigned={AssignedRows} available={AvailableRows}.",
+                    slot.Name,
+                    string.Join(", ", slot.InputDeviceIds),
+                    string.Join(", ", devices.Select(d => $"{d.Id}(connected={d.IsConnected},assignable={d.IsAssignableAsInput})")),
+                    AssignedDevices.Count,
+                    AvailableDevices.Count);
+            }
 
             // The Touchpad tab follows the hardware: it shows as soon as
             // any assigned device reports a touch surface. Settings are
