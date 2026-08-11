@@ -376,6 +376,17 @@ public sealed class ThemeSurface : Control
         // which is what made the whole UI sluggish whenever a controller was
         // attached. Only repaint when something the art can actually show has
         // changed; otherwise keep the latest snapshot but skip the paint.
+        // A cooling trail is an animation with no input behind it: the
+        // snapshot stops changing the moment the finger stops or lifts,
+        // and without this the trail would freeze half-faded and sit there
+        // until something else happened to force a paint.
+        if (touchTrail.HasPoints)
+        {
+            lastRenderedSnapshot = newSnapshot;
+            InvalidateVisual();
+            return;
+        }
+
         if (lastRenderedSnapshot is not null
             && SnapshotVisuals.AreEquivalent(lastRenderedSnapshot, newSnapshot))
         {
@@ -1363,14 +1374,41 @@ public sealed class ThemeSurface : Control
     /// finger is which is readable at a glance and does not depend on
     /// judging brightness.
     /// </summary>
-    private static readonly IBrush[] ContactBrushes =
+    private static readonly Color[] ContactColors =
     [
-        new ImmutableSolidColorBrush(Color.FromRgb(0x4F, 0x9C, 0xFF)),  // 1st — blue
-        new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x35)),  // 2nd — orange
-        new ImmutableSolidColorBrush(Color.FromRgb(0x4A, 0xDE, 0x80)),  // 3rd — green
-        new ImmutableSolidColorBrush(Color.FromRgb(0xE8, 0x79, 0xF0)),  // 4th — magenta
-        new ImmutableSolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)),  // 5th — amber
+        Color.FromRgb(0x4F, 0x9C, 0xFF),  // blue
+        Color.FromRgb(0xFF, 0x6B, 0x35),  // orange
+        Color.FromRgb(0x4A, 0xDE, 0x80),  // green
+        Color.FromRgb(0xE8, 0x79, 0xF0),  // magenta
+        Color.FromRgb(0xFB, 0xBF, 0x24),  // amber
     ];
+
+    private static readonly IBrush[] ContactBrushes =
+        [.. ContactColors.Select(c => (IBrush)new ImmutableSolidColorBrush(c))];
+
+    /// <summary>
+    /// The colour a trail point has just been laid down at — near-white,
+    /// so a moving finger has a hot head. Every point cools from here
+    /// through its finger's own colour and out.
+    /// </summary>
+    private static readonly Color TrailCoreColor = Color.FromRgb(0xFF, 0xF4, 0xD6);
+
+    /// <summary>
+    /// What a point cools TO before it disappears. A deep oxidised red,
+    /// which is what makes the trail read as an ember rather than as a
+    /// smear of the finger's colour at decreasing opacity.
+    /// </summary>
+    private static readonly Color TrailEmberColor = Color.FromRgb(0x8C, 0x1F, 0x04);
+
+    /// <summary>Recent positions per finger, for the ember trail.</summary>
+    private readonly TouchTrail touchTrail = new();
+
+    /// <summary>
+    /// Monotonic clock for trail ageing. A Stopwatch rather than
+    /// DateTime.UtcNow so a clock adjustment mid-gesture cannot make every
+    /// point look expired — or make one look like it is from the future.
+    /// </summary>
+    private readonly System.Diagnostics.Stopwatch trailClock = System.Diagnostics.Stopwatch.StartNew();
 
     /// <summary>
     /// Draws every touch contact beyond the first, each in its own
@@ -1407,8 +1445,20 @@ public sealed class ThemeSurface : Control
     /// </summary>
     private void DrawContactsOverTouchRegion(DrawingContext ctx)
     {
+        if (activeTheme is null)
+        {
+            return;
+        }
+
         var contacts = snapshot.TouchContacts;
-        if (contacts.Count == 0 || activeTheme is null)
+        var now = trailClock.Elapsed.TotalSeconds;
+
+        // Record before the early-out on an empty contact list: a lifted
+        // finger's trail still has to finish cooling, and nothing else
+        // would be ageing it.
+        touchTrail.Record(contacts, now);
+
+        if (contacts.Count == 0 && !touchTrail.HasPoints)
         {
             return;
         }
@@ -1419,19 +1469,99 @@ public sealed class ThemeSurface : Control
             return;
         }
 
-        for (var i = 0; i < contacts.Count && i < ContactBrushes.Length; i++)
+        Point ToSurface(double x, double y) => new(
+            bounds.X + (bounds.Width * Math.Clamp(x, 0d, 1d)),
+            bounds.Y + (bounds.Height * Math.Clamp(y, 0d, 1d)));
+
+        // Trails under the live contacts, so a dot is never buried by its
+        // own history. Every finger's whole trail is drawn before any
+        // live marker, rather than trail-then-marker per finger, so two
+        // crossing fingers do not have one marker hidden by the other's
+        // tail.
+        foreach (var contact in AllTrailedFingers(contacts))
+        {
+            var color = ContactColors[FingerColorIndex(contact)];
+            var samples = touchTrail.Samples(contact);
+
+            for (var i = 0; i < samples.Count; i++)
+            {
+                var sample = samples[i];
+                var age = TouchTrail.NormalizedAge(sample, now);
+
+                // Cools white -> the finger's colour -> oxidised red, and
+                // spreads as it goes, the way an ember's glow does. The
+                // finger's own colour sits in the MIDDLE of that ramp
+                // rather than at the head, so which finger drew a trail is
+                // still readable while the head stays hot.
+                var tint = age < 0.35
+                    ? Blend(TrailCoreColor, color, age / 0.35)
+                    : Blend(color, TrailEmberColor, (age - 0.35) / 0.65);
+
+                var opacity = Math.Pow(1 - age, 1.6) * (0.35 + (0.65 * Math.Clamp(sample.Pressure, 0d, 1d)));
+                if (opacity <= 0.01)
+                {
+                    continue;
+                }
+
+                var radius = 3.5 + (7.5 * age);
+                var brush = new ImmutableSolidColorBrush(tint, opacity);
+                ctx.DrawEllipse(brush, null, ToSurface(sample.X, sample.Y), radius, radius);
+            }
+        }
+
+        for (var i = 0; i < contacts.Count && i < ContactColors.Length; i++)
         {
             var contact = contacts[i];
-            var point = new Point(
-                bounds.X + (bounds.Width * Math.Clamp(contact.X, 0f, 1f)),
-                bounds.Y + (bounds.Height * Math.Clamp(contact.Y, 0f, 1f)));
-
-            var brush = ContactBrushes[i % ContactBrushes.Length];
+            var point = ToSurface(contact.X, contact.Y);
+            var brush = ContactBrushes[FingerColorIndex(contact.FingerIndex)];
             var radius = 12 + (8 * Math.Clamp(contact.Pressure, 0f, 1f));
 
             ctx.DrawEllipse(null, new Pen(brush, 3), point, radius, radius);
-            ctx.DrawEllipse(brush, null, point, 4, 4);
+            ctx.DrawEllipse(new ImmutableSolidColorBrush(TrailCoreColor), null, point, 5, 5);
         }
+    }
+
+    /// <summary>
+    /// Finger slots that need a trail drawn: the ones down now, plus any
+    /// still cooling after being lifted.
+    /// </summary>
+    private IEnumerable<int> AllTrailedFingers(IReadOnlyList<TouchContact> contacts)
+    {
+        foreach (var contact in contacts)
+        {
+            yield return contact.FingerIndex;
+        }
+
+        // A lifted finger's slot is no longer in the snapshot, so its
+        // remaining points would never be drawn and the trail would vanish
+        // the instant contact ended instead of fading out.
+        for (var slot = 0; slot < ContactColors.Length; slot++)
+        {
+            if (touchTrail.Samples(slot).Count > 0
+                && !contacts.Any(c => c.FingerIndex == slot))
+            {
+                yield return slot;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Colour follows the hardware finger SLOT, not the position in the
+    /// contact list. Lifting an earlier finger shifts the list, which
+    /// would otherwise recolour every remaining finger mid-gesture — and
+    /// recolour its trail out from under it.
+    /// </summary>
+    private static int FingerColorIndex(int fingerIndex) =>
+        ((fingerIndex % ContactColors.Length) + ContactColors.Length) % ContactColors.Length;
+
+    /// <summary>Linear blend between two colours.</summary>
+    private static Color Blend(Color from, Color to, double amount)
+    {
+        var t = Math.Clamp(amount, 0d, 1d);
+        return Color.FromRgb(
+            (byte)Math.Round(from.R + ((to.R - from.R) * t)),
+            (byte)Math.Round(from.G + ((to.G - from.G) * t)),
+            (byte)Math.Round(from.B + ((to.B - from.B) * t)));
     }
 
     /// <summary>
