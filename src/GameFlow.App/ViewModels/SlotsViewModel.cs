@@ -129,6 +129,8 @@ public sealed class AssignableDeviceRow(string id, string displayName)
 /// </summary>
 public static class RowSync
 {
+    /// <param name="rows">The bound collection, mutated in place.</param>
+    /// <param name="target">The rows that should be present, in order.</param>
     /// <param name="key">
     /// Row identity. Matched case-insensitively, because catalog ids come
     /// from several backends that do not agree on case.
