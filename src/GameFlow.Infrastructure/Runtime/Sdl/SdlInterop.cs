@@ -58,6 +58,24 @@ internal static partial class SdlInterop
         Touchpad = 20
     }
 
+    /// <summary>SDL_GamepadType from SDL3/SDL_gamepad.h.</summary>
+    internal enum GamepadType
+    {
+        Unknown = 0,
+        Standard = 1,
+        Xbox360 = 2,
+        XboxOne = 3,
+        PlayStation3 = 4,
+        PlayStation4 = 5,
+        PlayStation5 = 6,
+        NintendoSwitchPro = 7,
+        NintendoSwitchJoyConLeft = 8,
+        NintendoSwitchJoyConRight = 9,
+        NintendoSwitchJoyConPair = 10,
+        GameCube = 11,
+        Steam = 12,
+    }
+
     /// <summary>SDL_PowerState from SDL3/SDL_power.h.</summary>
     internal enum PowerState
     {
@@ -120,6 +138,9 @@ internal static partial class SdlInterop
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadNameForID")]
     internal static partial IntPtr GetGamepadNameForIdPointer(uint instanceId);
 
+    [LibraryImport("SDL3", EntryPoint = "SDL_GetRealGamepadType")]
+    internal static partial GamepadType GetRealGamepadType(IntPtr gamepad);
+
     // The OS device path. On Windows this carries the enumerator and
     // hardware id, which is how a HIDMaestro-created pad is told apart
     // from a real one: the virtual device is root-enumerated as
@@ -139,6 +160,9 @@ internal static partial class SdlInterop
 
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadProduct")]
     internal static partial ushort GetGamepadProduct(IntPtr gamepad);
+
+    [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadFirmwareVersion")]
+    internal static partial ushort GetGamepadFirmwareVersion(IntPtr gamepad);
 
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadProductForID")]
     internal static partial ushort GetGamepadProductForId(uint instanceId);
@@ -233,12 +257,10 @@ internal static partial class SdlInterop
     [LibraryImport("SDL3", EntryPoint = "SDL_UpdateGamepads")]
     internal static partial void UpdateGamepads();
 
-    // NOTE: the SDL LED/rumble effect imports (SDL_SetGamepadLED,
-    // SDL_RumbleGamepad, SDL_SetJoystickLED, SDL_RumbleJoystick) were
-    // removed on purpose: those calls hold SDL's joystick lock through a
-    // blocking Bluetooth HID write on DualSense pads, which froze the
-    // runtime. Rumble passthrough will return on a dedicated effects
-    // thread (see IRumbleFeedbackSource).
+    // Device ownership matters for effect calls: SDL rumble/LED writes
+    // remain on SdlUnifiedInputSource's worker rather than running inside
+    // the mapping tick or effects producer, because Bluetooth HID writes
+    // may hold SDL's joystick lock while they block.
     [LibraryImport("SDL3", EntryPoint = "SDL_GetGamepadJoystick")]
     internal static partial IntPtr GetGamepadJoystick(IntPtr gamepad);
 

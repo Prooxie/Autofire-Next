@@ -3,15 +3,21 @@ using GameFlow.Core.Models;
 namespace GameFlow.Core.Pipeline;
 
 /// <summary>
-/// Builds the DualSense effect report that SDL's PS5 driver accepts
+/// Builds a complete DualSense effect report that SDL's PS5 driver accepts
 /// through <c>SDL_SendGamepadEffect</c>.
 ///
 /// <para>
 /// Adaptive triggers have no portable API — SDL exposes rumble and the
-/// LED, but resistance curves are a device-specific output report. This
-/// encoder produces that report's payload; SDL owns the framing (report
-/// id, and the CRC that Bluetooth requires but USB does not), which is
-/// why this goes through SDL rather than a raw HID write.
+/// LED, but resistance curves are a device-specific output report.
+/// SDL's portable rumble and LED APIs are still called first so SDL's
+/// internal state remains synchronized. This encoder then produces the
+/// final, atomic device state containing those portable channels together
+/// with the trigger commands. DualSense output reports are stateful: a
+/// trigger-only report can restore audio haptics and stop steady rumble,
+/// while a later portable report can clear the trigger effect. The combined
+/// final write avoids both order-dependent failures. SDL owns the framing
+/// (report id, and the CRC that Bluetooth requires but USB does not), which
+/// is why this goes through SDL rather than a raw HID write.
 /// </para>
 ///
 /// <para>
@@ -35,16 +41,26 @@ public static class DualSenseEffectEncoder
     private const int OffsetRumbleLeft = 3;
     private const int OffsetRightTriggerEffect = 10;
     private const int OffsetLeftTriggerEffect = 21;
+    private const int OffsetEnableBits3 = 38;
     private const int OffsetLedRed = 44;
     private const int OffsetLedGreen = 45;
     private const int OffsetLedBlue = 46;
 
     // Enable bits. Without the matching bit the firmware ignores that
     // section entirely, whatever it contains.
-    private const byte Enable1Rumble = 0x01;
+    private const byte Enable1LegacyRumble = 0x01;
+    private const byte Enable1DisableAudioHaptics = 0x02;
     private const byte Enable1RightTrigger = 0x04;
     private const byte Enable1LeftTrigger = 0x08;
     private const byte Enable2Lightbar = 0x04;
+    private const byte Enable3EnhancedRumble = 0x04;
+
+    // SDL 3.4.2 uses the enhanced rumble lane for Sony pads on firmware
+    // 0x0224+, for unknown Sony firmware (the Bluetooth fallback), and for
+    // every DualSense Edge. All other PS5-driver devices use legacy emulation.
+    public const ushort SonyVendorId = 0x054C;
+    public const ushort DualSenseEdgeProductId = 0x0DF2;
+    public const ushort EnhancedRumbleFirmwareMinimum = 0x0224;
 
     /// <summary>Trigger effect kinds as the DualSense firmware numbers them.</summary>
     private const byte TriggerOff = 0x05;
@@ -62,8 +78,9 @@ public static class DualSenseEffectEncoder
         AdaptiveTriggerSettings? leftTrigger,
         AdaptiveTriggerSettings? rightTrigger,
         LightColor? led,
-        double lowFrequencyRumble,
-        double highFrequencyRumble)
+        ushort lowFrequencyRumble,
+        ushort highFrequencyRumble,
+        DualSenseRumbleMode rumbleMode)
     {
         if (destination.Length < EffectStateLength)
         {
@@ -76,14 +93,27 @@ public static class DualSenseEffectEncoder
         byte enable1 = 0;
         byte enable2 = 0;
 
-        // Rumble is included so a single report carries everything. Sending
-        // triggers and rumble as separate reports lets the second clear
-        // what the first set, because the enable bits are per-report.
-        if (lowFrequencyRumble > 0 || highFrequencyRumble > 0)
+        // Match HIDAPI_DriverPS5_UpdateEffects in bundled SDL 3.4.2.
+        // SDL first reduces its public 16-bit magnitudes to the high byte.
+        // Legacy firmware then halves that byte to match Xbox controller
+        // strength; enhanced firmware uses the full byte and enable-bits-3.
+        var left = (byte)(lowFrequencyRumble >> 8);
+        var right = (byte)(highFrequencyRumble >> 8);
+        if (left != 0 || right != 0)
         {
-            enable1 |= Enable1Rumble;
-            report[OffsetRumbleLeft] = ToByte(lowFrequencyRumble);
-            report[OffsetRumbleRight] = ToByte(highFrequencyRumble);
+            enable1 |= Enable1DisableAudioHaptics;
+            if (rumbleMode == DualSenseRumbleMode.Enhanced)
+            {
+                report[OffsetEnableBits3] |= Enable3EnhancedRumble;
+                report[OffsetRumbleLeft] = left;
+                report[OffsetRumbleRight] = right;
+            }
+            else
+            {
+                enable1 |= Enable1LegacyRumble;
+                report[OffsetRumbleLeft] = (byte)(left >> 1);
+                report[OffsetRumbleRight] = (byte)(right >> 1);
+            }
         }
 
         if (rightTrigger is not null && WriteTrigger(report[OffsetRightTriggerEffect..], rightTrigger))
@@ -108,6 +138,22 @@ public static class DualSenseEffectEncoder
         report[OffsetEnableBits2] = enable2;
         return true;
     }
+
+    /// <summary>
+    /// Mirrors SDL 3.4.2's <c>ctx-&gt;enhanced_rumble</c> decision so the
+    /// final raw report uses the same lane and scaling as the portable call
+    /// that preceded it.
+    /// </summary>
+    public static DualSenseRumbleMode ResolveRumbleMode(
+        ushort vendorId,
+        ushort productId,
+        ushort firmwareVersion) =>
+        vendorId == SonyVendorId &&
+        (productId == DualSenseEdgeProductId ||
+         firmwareVersion == 0 ||
+         firmwareVersion >= EnhancedRumbleFirmwareMinimum)
+            ? DualSenseRumbleMode.Enhanced
+            : DualSenseRumbleMode.Legacy;
 
     /// <summary>
     /// Writes one 11-byte trigger block. Returns false when the mode
@@ -172,7 +218,11 @@ public static class DualSenseEffectEncoder
                 return false;
         }
     }
+}
 
-    private static byte ToByte(double unit) =>
-        (byte)Math.Clamp(Math.Round(unit * 255), 0, 255);
+/// <summary>The two rumble encodings selected by SDL's PS5 HIDAPI driver.</summary>
+public enum DualSenseRumbleMode
+{
+    Legacy,
+    Enhanced,
 }

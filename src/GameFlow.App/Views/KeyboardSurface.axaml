@@ -1,24 +1,18 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:conv="using:GameFlow.App.Converters"
              xmlns:vm="using:GameFlow.App.ViewModels"
              x:Class="GameFlow.App.Views.KeyboardSurface"
              x:DataType="vm:DevicesViewModel"
              x:CompileBindings="True">
-
-  <UserControl.Resources>
-    <conv:VkPressedToBrushConverter x:Key="VkBrush" />
-  </UserControl.Resources>
 
   <UserControl.Styles>
     <Style Selector="Border.keycap">
       <Setter Property="BorderBrush" Value="{DynamicResource AppBorder0}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Height" Value="30" />
       <Setter Property="Padding" Value="2,0" />
       <Setter Property="HorizontalAlignment" Value="Left" />
-      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
     <Style Selector="Border.keycap > StackPanel">
       <Setter Property="HorizontalAlignment" Value="Center" />
@@ -26,6 +20,7 @@
     </Style>
     <Style Selector="Border.keycap TextBlock.keylabel">
       <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="FontSize" Value="10.5" />
       <Setter Property="FontFamily" Value="Consolas, monospace" />
@@ -33,393 +28,22 @@
     <Style Selector="Border.keycap TextBlock.keyhint">
       <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="FontSize" Value="7.5" />
-      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="LineHeight" Value="8" />
+      <Setter Property="Opacity" Value="0.62" />
     </Style>
   </UserControl.Styles>
 
   <Border Background="{DynamicResource AppSurface0}"
-          BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1"
-          CornerRadius="10" Padding="14,12">
-    <Grid ColumnDefinitions="Auto,12,Auto">
-      <!-- Main key block -->
-      <StackPanel Grid.Column="0" Spacing="4">
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=1B}">
-            <TextBlock Classes="keylabel" Text="Esc" />
-          </Border>
-          <Border Width="15" />
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=70}">
-            <TextBlock Classes="keylabel" Text="F1" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=71}">
-            <TextBlock Classes="keylabel" Text="F2" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=72}">
-            <TextBlock Classes="keylabel" Text="F3" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=73}">
-            <TextBlock Classes="keylabel" Text="F4" />
-          </Border>
-          <Border Width="15" />
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=74}">
-            <TextBlock Classes="keylabel" Text="F5" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=75}">
-            <TextBlock Classes="keylabel" Text="F6" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=76}">
-            <TextBlock Classes="keylabel" Text="F7" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=77}">
-            <TextBlock Classes="keylabel" Text="F8" />
-          </Border>
-          <Border Width="15" />
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=78}">
-            <TextBlock Classes="keylabel" Text="F9" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=79}">
-            <TextBlock Classes="keylabel" Text="F10" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=7A}">
-            <TextBlock Classes="keylabel" Text="F11" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=7B}">
-            <TextBlock Classes="keylabel" Text="F12" />
-          </Border>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=C0}">
-            <TextBlock Classes="keylabel" Text="`" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=31}">
-            <TextBlock Classes="keylabel" Text="1" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=32}">
-            <TextBlock Classes="keylabel" Text="2" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=33}">
-            <TextBlock Classes="keylabel" Text="3" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=34}">
-            <TextBlock Classes="keylabel" Text="4" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=35}">
-            <TextBlock Classes="keylabel" Text="5" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=36}">
-            <TextBlock Classes="keylabel" Text="6" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=37}">
-            <TextBlock Classes="keylabel" Text="7" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=38}">
-            <TextBlock Classes="keylabel" Text="8" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=39}">
-            <TextBlock Classes="keylabel" Text="9" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=30}">
-            <TextBlock Classes="keylabel" Text="0" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=BD}">
-            <TextBlock Classes="keylabel" Text="-" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=BB}">
-            <TextBlock Classes="keylabel" Text="=" />
-          </Border>
-          <Border Classes="keycap" Width="64"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=08}">
-            <TextBlock Classes="keylabel" Text="Backspace" />
-          </Border>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="47"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=09}">
-            <TextBlock Classes="keylabel" Text="Tab" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=51}">
-            <TextBlock Classes="keylabel" Text="Q" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=57}">
-            <TextBlock Classes="keylabel" Text="W" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=45}">
-            <TextBlock Classes="keylabel" Text="E" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=52}">
-            <TextBlock Classes="keylabel" Text="R" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=54}">
-            <TextBlock Classes="keylabel" Text="T" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=59}">
-            <TextBlock Classes="keylabel" Text="Y" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=55}">
-            <TextBlock Classes="keylabel" Text="U" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=49}">
-            <TextBlock Classes="keylabel" Text="I" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=4F}">
-            <TextBlock Classes="keylabel" Text="O" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=50}">
-            <TextBlock Classes="keylabel" Text="P" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=DB}">
-            <TextBlock Classes="keylabel" Text="[" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=DD}">
-            <TextBlock Classes="keylabel" Text="]" />
-          </Border>
-          <Border Classes="keycap" Width="47"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=DC}">
-            <TextBlock Classes="keylabel" Text="\" />
-          </Border>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="56"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=14}">
-            <TextBlock Classes="keylabel" Text="Caps" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=41}">
-            <TextBlock Classes="keylabel" Text="A" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=53}">
-            <TextBlock Classes="keylabel" Text="S" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=44}">
-            <TextBlock Classes="keylabel" Text="D" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=46}">
-            <TextBlock Classes="keylabel" Text="F" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=47}">
-            <TextBlock Classes="keylabel" Text="G" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=48}">
-            <TextBlock Classes="keylabel" Text="H" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=4A}">
-            <TextBlock Classes="keylabel" Text="J" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=4B}">
-            <TextBlock Classes="keylabel" Text="K" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=4C}">
-            <TextBlock Classes="keylabel" Text="L" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=BA}">
-            <TextBlock Classes="keylabel" Text=";" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=DE}">
-            <TextBlock Classes="keylabel" Text="'" />
-          </Border>
-          <Border Classes="keycap" Width="72"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=0D}">
-            <TextBlock Classes="keylabel" Text="Enter" />
-          </Border>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="72"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=A0}">
-            <TextBlock Classes="keylabel" Text="Shift" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=5A}">
-            <TextBlock Classes="keylabel" Text="Z" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=58}">
-            <TextBlock Classes="keylabel" Text="X" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=43}">
-            <TextBlock Classes="keylabel" Text="C" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=56}">
-            <TextBlock Classes="keylabel" Text="V" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=42}">
-            <TextBlock Classes="keylabel" Text="B" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=4E}">
-            <TextBlock Classes="keylabel" Text="N" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=4D}">
-            <TextBlock Classes="keylabel" Text="M" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=BC}">
-            <TextBlock Classes="keylabel" Text="," />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=BE}">
-            <TextBlock Classes="keylabel" Text="." />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=BF}">
-            <TextBlock Classes="keylabel" Text="/" />
-          </Border>
-          <Border Classes="keycap" Width="90"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=A1}">
-            <TextBlock Classes="keylabel" Text="Shift" />
-          </Border>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=A2}">
-            <TextBlock Classes="keylabel" Text="Ctrl" />
-          </Border>
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=5B}">
-            <TextBlock Classes="keylabel" Text="Win" />
-          </Border>
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=A4}">
-            <TextBlock Classes="keylabel" Text="Alt" />
-          </Border>
-          <Border Classes="keycap" Width="208"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=20}">
-            <TextBlock Classes="keylabel" Text="Space" />
-          </Border>
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=A5}">
-            <TextBlock Classes="keylabel" Text="Alt" />
-          </Border>
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=5C}">
-            <TextBlock Classes="keylabel" Text="Win" />
-          </Border>
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=5D}">
-            <TextBlock Classes="keylabel" Text="Menu" />
-          </Border>
-          <Border Classes="keycap" Width="38"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=A3}">
-            <TextBlock Classes="keylabel" Text="Ctrl" />
-          </Border>
-        </StackPanel>
-      </StackPanel>
-
-      <!-- Nav cluster + arrows -->
-      <StackPanel Grid.Column="2" Spacing="4" VerticalAlignment="Top">
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=2C}">
-            <TextBlock Classes="keylabel" Text="PrtScn" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=2D}">
-            <TextBlock Classes="keylabel" Text="Ins" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=2E}">
-            <TextBlock Classes="keylabel" Text="Del" />
-          </Border>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=24}">
-            <TextBlock Classes="keylabel" Text="Home" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=23}">
-            <TextBlock Classes="keylabel" Text="End" />
-          </Border>
-          <Border Width="15" />
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=21}">
-            <TextBlock Classes="keylabel" Text="PgUp" />
-          </Border>
-          <Border Classes="keycap" Width="30"
-                  Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=22}">
-            <TextBlock Classes="keylabel" Text="PgDn" />
-          </Border>
-          <Border Width="15" />
-        </StackPanel>
-        <Border Height="18" />
-        <StackPanel Spacing="4">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <Border Width="15" />
-            <Border Classes="keycap" Width="30"
-                    Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=26}">
-              <TextBlock Classes="keylabel" Text="↑" />
-            </Border>
-            <Border Width="15" />
-          </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <Border Classes="keycap" Width="30"
-                    Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=25}">
-              <TextBlock Classes="keylabel" Text="←" />
-            </Border>
-            <Border Classes="keycap" Width="30"
-                    Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=28}">
-              <TextBlock Classes="keylabel" Text="↓" />
-            </Border>
-            <Border Classes="keycap" Width="30"
-                    Background="{Binding PressedKeysSet, Converter={StaticResource VkBrush}, ConverterParameter=27}">
-              <TextBlock Classes="keylabel" Text="→" />
-            </Border>
-          </StackPanel>
-        </StackPanel>
-      </StackPanel>
-    </Grid>
+          BorderBrush="{DynamicResource AppBorder0}"
+          BorderThickness="1"
+          CornerRadius="10"
+          Padding="14,12">
+    <!--
+      Children are generated from KeyboardPhysicalLayout.Ansi104 in the
+      code-behind. Keeping the 104 identifiers and rectangles in one typed,
+      testable table prevents the displayed geometry from drifting away from
+      the raw-input mapping as individual keys are added or corrected.
+    -->
+    <Canvas x:Name="KeyCanvas" Width="770" Height="208" />
   </Border>
 </UserControl>

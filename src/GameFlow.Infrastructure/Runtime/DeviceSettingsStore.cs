@@ -24,8 +24,17 @@ namespace GameFlow.Infrastructure.Runtime;
 /// </summary>
 public sealed class DeviceSettingsStore
 {
+    /// <summary>
+    /// Reserved persistence id for settings owned by the slot rather than
+    /// one physical input. These settings keep a virtual controller tunable
+    /// before hardware is assigned and are inherited by devices that do not
+    /// have an explicit per-device entry.
+    /// </summary>
+    public const string SlotDefaultsDeviceId = "$slot-defaults";
+
     private readonly Lock gate = new();
     private readonly Dictionary<string, DeviceSettings> settings = new(StringComparer.Ordinal);
+    private readonly Dictionary<EffectiveSettingsKey, DeviceSettings> effectiveSettingsCache = [];
     private readonly string filePath;
     private readonly ILogger<DeviceSettingsStore> logger;
 
@@ -64,6 +73,52 @@ public sealed class DeviceSettingsStore
         }
     }
 
+    /// <summary>
+    /// Returns a device's explicit settings when present, otherwise the
+    /// slot-wide defaults. This preserves per-device overrides while making
+    /// tuning configured without connected hardware effective once an input
+    /// is assigned later.
+    /// </summary>
+    public DeviceSettings GetEffective(string slotId, string deviceId)
+    {
+        if (string.IsNullOrEmpty(slotId) || string.IsNullOrEmpty(deviceId))
+        {
+            return DeviceSettings.Default;
+        }
+
+        lock (gate)
+        {
+            var cacheKey = new EffectiveSettingsKey(slotId, deviceId);
+            if (effectiveSettingsCache.TryGetValue(cacheKey, out var cached))
+            {
+                return cached;
+            }
+
+            DeviceSettings effective;
+            if (settings.TryGetValue(BuildKey(slotId, deviceId), out var deviceSettings))
+            {
+                effective = deviceSettings;
+            }
+            else if (settings.TryGetValue(BuildKey(slotId, SlotDefaultsDeviceId), out var slotDefaults))
+            {
+                effective = slotDefaults;
+            }
+            else
+            {
+                effective = DeviceSettings.Default;
+            }
+
+            // Runtime reads this at up to 1000 Hz. Caching by the pair avoids
+            // rebuilding one or two composite strings every frame; settings
+            // writes are rare and invalidate the tiny cache wholesale.
+            effectiveSettingsCache[cacheKey] = effective;
+            return effective;
+        }
+    }
+
+    public static bool IsSlotDefaultsDevice(string? deviceId) =>
+        string.Equals(deviceId, SlotDefaultsDeviceId, StringComparison.Ordinal);
+
     public void Set(string slotId, string deviceId, DeviceSettings value)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -75,6 +130,7 @@ public sealed class DeviceSettingsStore
         lock (gate)
         {
             settings[BuildKey(slotId, deviceId)] = value;
+            effectiveSettingsCache.Clear();
         }
 
         Persist();
@@ -93,6 +149,10 @@ public sealed class DeviceSettingsStore
         lock (gate)
         {
             removed = settings.Remove(BuildKey(slotId, deviceId));
+            if (removed)
+            {
+                effectiveSettingsCache.Clear();
+            }
         }
 
         if (removed)
@@ -124,6 +184,10 @@ public sealed class DeviceSettingsStore
                 _ = settings.Remove(key);
             }
             changed = doomed.Count > 0;
+            if (changed)
+            {
+                effectiveSettingsCache.Clear();
+            }
         }
 
         if (changed)
@@ -147,6 +211,8 @@ public sealed class DeviceSettingsStore
     }
 
     private static string BuildKey(string slotId, string deviceId) => $"{slotId}::{deviceId}";
+
+    private readonly record struct EffectiveSettingsKey(string SlotId, string DeviceId);
 
     private void Load()
     {

@@ -19,10 +19,9 @@ namespace GameFlow.Infrastructure.Runtime.Effects;
 ///
 /// <para>
 /// Runs on a timer rather than inside the mapping tick. The mapping tick
-/// is a 250 Hz real-time loop and lighting does not need re-deciding at
-/// that rate; 30 Hz is smooth for a breathing curve and leaves the tick
-/// alone. Downstream the effects queue rate-limits per device anyway, so
-/// producing faster than the hardware accepts would only be discarded.
+/// can be 1000 Hz and must not perform blocking output work. A 16 ms pass
+/// matches the effect queue's per-device write interval, keeps returned
+/// game rumble responsive, and remains smooth for lighting animations.
 /// </para>
 /// </summary>
 public sealed class ControllerEffectProducer(
@@ -30,10 +29,11 @@ public sealed class ControllerEffectProducer(
     SlotSnapshotStore snapshots,
     DeviceSettingsStore deviceSettings,
     InputDeviceCatalog deviceCatalog,
+    RumbleFeedbackStore rumbleFeedback,
     ControllerEffectsService effects,
     ILogger<ControllerEffectProducer> logger) : BackgroundService
 {
-    private static readonly TimeSpan ProduceInterval = TimeSpan.FromMilliseconds(33);
+    private static readonly TimeSpan ProduceInterval = TimeSpan.FromMilliseconds(16);
 
     /// <summary>
     /// Charge at or below which the pad is treated as low. 20% is roughly
@@ -112,14 +112,19 @@ public sealed class ControllerEffectProducer(
                     continue;
                 }
 
-                var settings = deviceSettings.Get(slot.Id, deviceId);
+                // A pad-specific entry wins; otherwise effects inherit the
+                // slot defaults that can be edited before the pad is online.
+                var settings = deviceSettings.GetEffective(slot.Id, deviceId);
                 _ = deviceCatalog.TryGetById(deviceId, out var info);
 
                 UpdateLowBatteryState(deviceId, info);
 
                 var physical = pair.Physical;
+                var requestedRumble = rumbleFeedback.Get(slot.Id);
                 var (low, high) = EffectSceneResolver.ResolveRumble(
-                    settings.Rumble, physical.LeftTrigger, physical.RightTrigger);
+                    settings.Rumble,
+                    requestedRumble.LowFrequency,
+                    requestedRumble.HighFrequency);
 
                 var context = new EffectSceneContext(
                     ElapsedSeconds: elapsed,
@@ -228,21 +233,16 @@ public sealed class ControllerEffectProducer(
     /// command the queue carries.
     ///
     /// <para>
-    /// <see cref="AdaptiveTriggerMode.Off"/> returns null so the queue
-    /// treats the pad as silent on that channel; the backend still sends
-    /// an explicit release when the state changes, because the firmware
-    /// holds the last effect until told otherwise.
+    /// <see cref="AdaptiveTriggerMode.Off"/> is an explicit command, not
+    /// a null/absent section: the firmware retains its previous effect
+    /// until a release report reaches it.
     /// </para>
     /// </summary>
-    private static AdaptiveTriggerCommand? ToCommand(AdaptiveTriggerSettings settings)
+    internal static AdaptiveTriggerCommand ToCommand(AdaptiveTriggerSettings settings)
     {
-        if (settings.Mode == AdaptiveTriggerMode.Off)
-        {
-            return null;
-        }
-
         var effect = settings.Mode switch
         {
+            AdaptiveTriggerMode.Off => AdaptiveTriggerEffect.Off,
             AdaptiveTriggerMode.Weapon => AdaptiveTriggerEffect.Section,
             AdaptiveTriggerMode.Vibration or AdaptiveTriggerMode.MultiplePositionVibration
                 => AdaptiveTriggerEffect.Vibration,
@@ -255,7 +255,8 @@ public sealed class ControllerEffectProducer(
             effect,
             Scale(settings.StartPosition),
             Scale(settings.EndPosition),
-            Scale(settings.Strength));
+            Scale(settings.Strength),
+            (byte)Math.Clamp(settings.FrequencyHz, 1, 255));
     }
 
     private bool IsLow(string deviceId)

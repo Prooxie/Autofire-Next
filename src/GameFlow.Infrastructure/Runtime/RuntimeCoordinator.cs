@@ -52,6 +52,7 @@ public sealed class RuntimeCoordinator(
     Slots.PhysicalPanelPinService physicalPanelPins,
     Input.IMouseOutputWriter mouseOutputWriter,
     DeviceSettingsStore deviceSettingsStore,
+    Effects.RumbleFeedbackStore rumbleFeedbackStore,
     ILogger<RuntimeCoordinator> logger) : BackgroundService
 {
     private readonly IInputSourceFactory inputSourceFactory = inputSourceFactory;
@@ -65,6 +66,7 @@ public sealed class RuntimeCoordinator(
     private readonly Slots.PhysicalPanelPinService physicalPanelPins = physicalPanelPins;
     private readonly Input.IMouseOutputWriter mouseOutputWriter = mouseOutputWriter;
     private readonly DeviceSettingsStore deviceSettingsStore = deviceSettingsStore;
+    private readonly Effects.RumbleFeedbackStore rumbleFeedbackStore = rumbleFeedbackStore;
     private readonly ILogger<RuntimeCoordinator> logger = logger;
     private readonly SemaphoreSlim providerGate = new(1, 1);
 
@@ -486,17 +488,21 @@ public sealed class RuntimeCoordinator(
         var multiInput = currentInputSource as Slots.IMultiDeviceInputSource
             ?? Slots.EmptyMultiDeviceInputSource.Instance;
 
-        slotRuntime ??= new Slots.SlotRuntime(slotRegistry, outputSinkFactory, slotSnapshotStore, profileRepository, mouseOutputWriter, deviceSettingsStore, logger);
+        slotRuntime ??= new Slots.SlotRuntime(
+            slotRegistry,
+            outputSinkFactory,
+            slotSnapshotStore,
+            profileRepository,
+            mouseOutputWriter,
+            deviceSettingsStore,
+            rumbleFeedbackStore,
+            logger);
 
-        if (!slotRuntime.HasEnabledSlots)
-        {
-            return false;
-        }
-
+        var hasEnabledSlots = slotRuntime.HasEnabledSlots;
         var profileSwitched = !ReferenceEquals(slotRuntimeProfile, activeProfile);
         var debounceElapsed = now - lastSlotRebuildAt >= SlotRebuildDebounce;
 
-        if (profileSwitched || (slotsDirty && debounceElapsed))
+        if (ShouldRebuildSlots(hasEnabledSlots, profileSwitched, slotsDirty, debounceElapsed))
         {
             await slotRuntime.RebuildAsync(activeProfile, activeProfile.OutputProvider);
             slotRuntimeProfile = activeProfile;
@@ -515,6 +521,16 @@ public sealed class RuntimeCoordinator(
                 (now - lastSlotRebuildAt).TotalMilliseconds, SlotRebuildDebounce.TotalMilliseconds);
         }
 
+        // Rebuilding an empty registry is still essential: it tears down
+        // the pipelines and prunes cached virtual sinks, subscriptions,
+        // and retained rumble belonging to the slot that was just
+        // disabled. Only fall back to the single-profile pipeline after
+        // that teardown has completed.
+        if (!hasEnabledSlots)
+        {
+            return false;
+        }
+
         var representative = await slotRuntime.TickAsync(multiInput, now, cancellationToken);
         if (representative is { } r)
         {
@@ -524,6 +540,13 @@ public sealed class RuntimeCoordinator(
         PublishPinnedPhysicalSnapshots(multiInput, now);
         return true;
     }
+
+    internal static bool ShouldRebuildSlots(
+        bool hasEnabledSlots,
+        bool profileSwitched,
+        bool slotsDirty,
+        bool debounceElapsed) =>
+        profileSwitched || (slotsDirty && (!hasEnabledSlots || debounceElapsed));
 
     /// <summary>
     /// Feeds the dashboard's physical-only layout panels: reads each

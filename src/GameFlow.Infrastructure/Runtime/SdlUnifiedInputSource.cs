@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GameFlow.Core.Enums;
 using GameFlow.Core.Models;
+using GameFlow.Infrastructure.Runtime.Input;
 using GameFlow.Infrastructure.Runtime.Sdl;
 using Microsoft.Extensions.Logging;
 
@@ -43,7 +44,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// </summary>
     private readonly Dictionary<string, OpenedDevice> telemetryHandles = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Where the effects thread posts. Null when effects are not wired up.</summary>
+    /// <summary>Where the effects thread posts; null only in isolated/test construction.</summary>
     private readonly GameFlow.Infrastructure.Runtime.Effects.ControllerEffectMailbox? effectMailbox;
     private IntPtr rawInspectionHandle = IntPtr.Zero;
     private string? rawInspectionHandleId;
@@ -92,6 +93,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
     /// <summary>Devices whose adaptive-trigger effect SDL refused, so the warning is logged once.</summary>
     private readonly HashSet<string> adaptiveRejected = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> adaptiveTriggerActive = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> loggedNonSdlSkips = new(StringComparer.OrdinalIgnoreCase);
 
     public SdlUnifiedInputSource(ILogger<SdlUnifiedInputSource> logger, InputDeviceCatalog inputDeviceCatalog, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.Web.WebControllerHub webControllerHub, GameFlow.Infrastructure.Runtime.Effects.ControllerEffectMailbox? effectMailbox = null)
@@ -386,11 +388,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 // frequently splits one physical keyboard into several
                 // Raw Input handles, and the assigned id isn't always
                 // the one keystrokes arrive under.
-                var pressed = keyboardStateSource.GetPressedKeys(deviceId);
-                if (pressed.Count == 0)
-                {
-                    pressed = keyboardStateSource.GetPressedKeysAggregate();
-                }
+                var pressed = keyboardStateSource.GetPressedKeysWithAggregateFallback(deviceId);
                 return GameFlow.Infrastructure.Runtime.Input.KeyboardGamepadSynthesizer
                     .Synthesize(info.DisplayName ?? deviceId, pressed)
                     with
@@ -527,7 +525,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         var displayName = inputDeviceCatalog.TryGetById(deviceId, out var catalogInfo)
             ? catalogInfo!.DisplayName
             : deviceId;
-        var opened = new OpenedDevice(deviceId, displayName, instanceId, kind, handle);
+        var opened = CreateOpenedDevice(deviceId, displayName, instanceId, kind, handle);
         slotHandles[deviceId] = opened;
         return opened;
     }
@@ -687,6 +685,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         {
             _ = slotHandles.Remove(deviceId);
             _ = tracedDeviceIds.Remove(deviceId);
+            _ = adaptiveTriggerActive.Remove(deviceId);
+            _ = adaptiveRejected.Remove(deviceId);
         }
     }
 
@@ -983,7 +983,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
             return false;
         }
 
-        openedDevice = new OpenedDevice(device.Id, device.DisplayName, instanceId, kind, handle);
+        openedDevice = CreateOpenedDevice(device.Id, device.DisplayName, instanceId, kind, handle);
         return true;
     }
 
@@ -1465,31 +1465,34 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
             try
             {
-                var state = write.State;
+                var plan = Effects.SdlGamepadEffectPlan.Create(write.State);
+                var triggerWasActive = adaptiveTriggerActive.Contains(write.DeviceId);
 
-                // Adaptive triggers need the device-specific report; rumble
-                // does NOT go in it.
-                //
-                // I previously routed rumble through this report and
-                // skipped SDL's own call, on the reasoning that the enable
-                // bits are per-report so a second report would clear the
-                // first. That reasoning was wrong. An enable bit means
-                // "this report carries valid data for that section" —
-                // sections whose bit is clear are LEFT ALONE, not reset.
-                // So a trigger-only report cannot disturb rumble, and
-                // routing rumble through it only bypassed SDL's tested
-                // path for no benefit. The observed symptom was exactly
-                // that: rumble stopped working as soon as an adaptive
-                // trigger mode was enabled.
-                if (state.LeftTrigger is not null || state.RightTrigger is not null)
+                // Keep SDL's public state synchronized first. This updates
+                // the PS5 driver's cached motor/LED values and preserves the
+                // portable path for every other gamepad type. Duration 0
+                // means "until told otherwise"; the effects producer owns
+                // the explicit stop.
+                _ = SdlInterop.RumbleGamepad(
+                    device.Handle,
+                    plan.LowFrequencyRumble,
+                    plan.HighFrequencyRumble,
+                    0);
+
+                if (plan.LedColor is { } led)
                 {
-                    if (GameFlow.Core.Pipeline.DualSenseEffectEncoder.TryWrite(
-                            effect,
-                            ToTriggerSettings(state.LeftTrigger),
-                            ToTriggerSettings(state.RightTrigger),
-                            led: null,
-                            lowFrequencyRumble: 0,
-                            highFrequencyRumble: 0))
+                    _ = SdlInterop.SetGamepadLED(device.Handle, led.R, led.G, led.B);
+                }
+
+                // A DualSense effect report is a whole device state, not a
+                // safe trigger delta. The FINAL write therefore repeats the
+                // current rumble (using SDL 3.4.2's firmware-specific mode)
+                // and requested LED alongside adaptive triggers. A later
+                // portable report would clear triggers; a trigger-only final
+                // report can restore audio haptics and stop steady rumble.
+                if (plan.ShouldSendTriggerReport(device.SupportsAdaptiveTriggers, triggerWasActive))
+                {
+                    if (plan.TryWriteDualSenseReport(effect, device.DualSenseRumbleMode))
                     {
                         if (!SdlInterop.SendGamepadEffect(device.Handle, effect, effect.Length))
                         {
@@ -1508,22 +1511,16 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                         else
                         {
                             _ = adaptiveRejected.Remove(write.DeviceId);
+                            if (plan.HasActiveTriggerEffect)
+                            {
+                                _ = adaptiveTriggerActive.Add(write.DeviceId);
+                            }
+                            else
+                            {
+                                _ = adaptiveTriggerActive.Remove(write.DeviceId);
+                            }
                         }
                     }
-                }
-
-                // Duration 0 means "until told otherwise" in SDL. That is
-                // what we want: the effects thread owns when this stops,
-                // and a timeout here would cut a sustained rumble short.
-                _ = SdlInterop.RumbleGamepad(
-                    device.Handle,
-                    ToRumbleMagnitude(state.LowFrequencyRumble),
-                    ToRumbleMagnitude(state.HighFrequencyRumble),
-                    0);
-
-                if (state.LedColor is { } led)
-                {
-                    _ = SdlInterop.SetGamepadLED(device.Handle, led.R, led.G, led.B);
                 }
             }
             catch (Exception exception)
@@ -1536,37 +1533,6 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
         currentOperation = "idle";
     }
-
-    /// <summary>
-    /// Converts the transport-level command back into the settings shape
-    /// the encoder takes. The queue carries a device-neutral command so
-    /// the effects thread need not know what a DualSense is.
-    /// </summary>
-    private static GameFlow.Core.Models.AdaptiveTriggerSettings? ToTriggerSettings(
-        Effects.AdaptiveTriggerCommand? command)
-    {
-        if (command is not { } c)
-        {
-            return null;
-        }
-
-        return new GameFlow.Core.Models.AdaptiveTriggerSettings
-        {
-            Mode = c.Effect switch
-            {
-                Effects.AdaptiveTriggerEffect.Constant => GameFlow.Core.Models.AdaptiveTriggerMode.Feedback,
-                Effects.AdaptiveTriggerEffect.Section => GameFlow.Core.Models.AdaptiveTriggerMode.Weapon,
-                Effects.AdaptiveTriggerEffect.Vibration => GameFlow.Core.Models.AdaptiveTriggerMode.Vibration,
-                _ => GameFlow.Core.Models.AdaptiveTriggerMode.Off,
-            },
-            StartPosition = c.StartPosition / 255f,
-            EndPosition = c.EndPosition / 255f,
-            Strength = c.Strength / 255f,
-        };
-    }
-
-    private static ushort ToRumbleMagnitude(double value) =>
-        (ushort)Math.Clamp(Math.Round(value * ushort.MaxValue), 0, ushort.MaxValue);
 
     private void RefreshPowerStateCache(DateTime utcNow)
     {
@@ -1640,7 +1606,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
                 continue;
             }
 
-            var telemetry = new OpenedDevice(info.Id, info.DisplayName, telemetryInstance, telemetryKind, handle);
+            var telemetry = CreateOpenedDevice(info.Id, info.DisplayName, telemetryInstance, telemetryKind, handle);
             telemetryHandles[info.Id] = telemetry;
             opened[info.Id] = telemetry;
             logger.LogDebug("Opened {DeviceId} for battery telemetry (not assigned to a slot).", info.Id);
@@ -2038,7 +2004,41 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         Joystick
     }
 
-    private sealed record OpenedDevice(string DeviceId, string DisplayName, uint InstanceId, DeviceKind Kind, IntPtr Handle);
+    private static OpenedDevice CreateOpenedDevice(
+        string deviceId,
+        string displayName,
+        uint instanceId,
+        DeviceKind kind,
+        IntPtr handle)
+    {
+        var supportsAdaptiveTriggers =
+            kind == DeviceKind.Gamepad &&
+            SdlInterop.GetRealGamepadType(handle) == SdlInterop.GamepadType.PlayStation5;
+        var rumbleMode = supportsAdaptiveTriggers
+            ? GameFlow.Core.Pipeline.DualSenseEffectEncoder.ResolveRumbleMode(
+                SdlInterop.GetGamepadVendor(handle),
+                SdlInterop.GetGamepadProduct(handle),
+                SdlInterop.GetGamepadFirmwareVersion(handle))
+            : GameFlow.Core.Pipeline.DualSenseRumbleMode.Legacy;
+
+        return new OpenedDevice(
+            deviceId,
+            displayName,
+            instanceId,
+            kind,
+            handle,
+            supportsAdaptiveTriggers,
+            rumbleMode);
+    }
+
+    private sealed record OpenedDevice(
+        string DeviceId,
+        string DisplayName,
+        uint InstanceId,
+        DeviceKind Kind,
+        IntPtr Handle,
+        bool SupportsAdaptiveTriggers,
+        GameFlow.Core.Pipeline.DualSenseRumbleMode DualSenseRumbleMode);
 
     private readonly record struct DevicePowerInfo(int? Percentage, DeviceBatteryState State)
     {

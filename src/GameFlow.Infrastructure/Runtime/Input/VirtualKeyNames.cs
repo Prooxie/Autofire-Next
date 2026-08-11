@@ -12,6 +12,7 @@ public static class VirtualKeyNames
 {
     public static string GetName(int vk) => vk switch
     {
+        KeyboardVirtualKeys.NumpadEnter => "Num Enter",
         >= 0x30 and <= 0x39 => ((char)vk).ToString(),          // 0-9
         >= 0x41 and <= 0x5A => ((char)vk).ToString(),          // A-Z
         >= 0x60 and <= 0x69 => $"Num {vk - 0x60}",             // Numpad 0-9

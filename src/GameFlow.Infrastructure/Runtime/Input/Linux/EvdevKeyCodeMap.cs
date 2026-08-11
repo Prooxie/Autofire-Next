@@ -111,6 +111,7 @@ internal static class EvdevKeyCodeMap
         Add(map, 100, 0xA5); // KEY_RIGHTALT -> VK_RMENU
         Add(map, 125, 0x5B); // KEY_LEFTMETA -> VK_LWIN
         Add(map, 126, 0x5C); // KEY_RIGHTMETA -> VK_RWIN
+        Add(map, 127, 0x5D); // KEY_COMPOSE -> VK_APPS (menu key position on PC boards)
 
         // Standard US-layout punctuation (physical-position codes on both sides).
         Add(map, 12, 0xBD);  // KEY_MINUS -> VK_OEM_MINUS
@@ -134,7 +135,7 @@ internal static class EvdevKeyCodeMap
         Add(map, 74, 0x6D); // KEY_KPMINUS -> VK_SUBTRACT
         Add(map, 83, 0x6E); // KEY_KPDOT -> VK_DECIMAL
         Add(map, 98, 0x6F); // KEY_KPSLASH -> VK_DIVIDE
-        Add(map, 96, 0x0D); // KEY_KPENTER -> VK_RETURN (same as main Enter, matching Windows' own behavior)
+        Add(map, 96, KeyboardVirtualKeys.NumpadEnter); // KEY_KPENTER -> extended keypad Enter identifier
 
         return map;
     }

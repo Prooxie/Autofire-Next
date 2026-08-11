@@ -32,15 +32,15 @@
     <StackPanel Grid.Row="0" Margin="0,0,0,6" Spacing="2">
       <TextBlock Text="{Binding DeviceName}" FontWeight="Bold" FontSize="15"
                  Foreground="{DynamicResource AppForeground}" />
-      <TextBlock Text="Tuning applies to this device on this slot only."
+      <TextBlock Text="{Binding TuningScopeDescription}"
                  FontSize="11" Opacity="0.7"
                  Foreground="{DynamicResource AppForeground}" />
     </StackPanel>
 
-    <!-- Honest status about what reaches hardware today -->
+    <!-- Status about what reaches hardware today -->
     <Border Grid.Row="1" Padding="8,6" CornerRadius="4" Margin="0,0,0,8"
             Background="#22FFAA33" BorderBrush="#55FFAA33" BorderThickness="1">
-      <TextBlock Text="{Binding EffectsPendingNote}" TextWrapping="Wrap"
+      <TextBlock Text="{Binding EffectsStatusNote}" TextWrapping="Wrap"
                  FontSize="11" Foreground="{DynamicResource AppForeground}" />
     </Border>
 

@@ -1086,9 +1086,9 @@
               <Grid Margin="20,16" DataContext="{Binding DevicesPanel}" RowDefinitions="Auto,*" RowSpacing="12">
 
                 <StackPanel Grid.Row="0" Spacing="6">
-                  <TextBlock Text="Device tuning" FontSize="18" FontWeight="SemiBold" />
+                  <TextBlock Text="Controller tuning" FontSize="18" FontWeight="SemiBold" />
                   <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
-                             Text="Select a physical device on the Physical tab, then choose which slot's tuning to edit. The same pad can be tuned differently per slot." />
+                             Text="Choose a virtual-controller slot. A selected physical device edits its override; without one, tuning stays available for an assigned offline device or the slot defaults." />
                   <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Text="Slot" VerticalAlignment="Center" />
                     <ComboBox ItemsSource="{Binding TuningSlotOptions}"
@@ -1110,7 +1110,7 @@
                          bindings turned that into a build error. -->
                     <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
                                                     IsVisible="{Binding HasDevice}" />
-                    <TextBlock Text="Select a physical device and a slot to begin tuning."
+                    <TextBlock Text="Create a virtual controller to begin tuning."
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                Opacity="0.55"
                                IsVisible="{Binding !DeviceSettingsEditor.HasDevice}" />

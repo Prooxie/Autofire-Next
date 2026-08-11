@@ -187,7 +187,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         MappingEditor          = new MappingEditorViewModel(loggerFactory.CreateLogger<MappingEditorViewModel>(), localizationService);
         MappingEditor.RulesChanged += OnMappingRulesChanged;
         DevicesPanel           = new DevicesViewModel(inputDeviceCatalog, localizationService, deviceTemplateStore, buttonMapStore, keyboardStateSource, mouseStateSource, hidMaestroCatalog, deviceCategoryOverrides, deviceSettingsStore, slotRegistry, slotSnapshotStore);
-        SlotsPanel             = new SlotsViewModel(slotRegistry, inputDeviceCatalog, deviceTemplateStore, profileSession, localizationService, hidMaestroCatalog);
+        SlotsPanel             = new SlotsViewModel(slotRegistry, inputDeviceCatalog, deviceTemplateStore, profileSession, localizationService, hidMaestroCatalog, deviceSettingsStore);
 
         this.slotRegistry = slotRegistry;
         this.slotSnapshotStore = slotSnapshotStore;
@@ -2001,9 +2001,10 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Opens the per-device tuning editor for a slot's assigned device.
-    /// A slot with no device assigned has nothing to tune, so this is a
-    /// no-op rather than opening an empty editor.
+    /// Opens the tuning editor for a slot. An assigned device remains the
+    /// target even while offline; a slot without one edits its inheritable
+    /// defaults, so a virtual panel never becomes a dead button merely
+    /// because physical hardware is absent.
     /// </summary>
     private void OpenDeviceSettings(string? slotId)
     {
@@ -2018,24 +2019,9 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        // A slot with no device assigned has nothing to tune. Say so
-        // rather than swallowing the click: a panel that highlights on
-        // hover and then does nothing when clicked reads as broken, and
-        // "no device assigned" is the single most common reason a slot
-        // isn't behaving as expected.
-        if (slot.InputDeviceIds.Count == 0)
-        {
-            StatusText = "Assign a device to this slot before tuning it (Devices tab).";
-            return;
-        }
-
-        // Tuning is per slot AND per device; a multi-device slot tunes its
-        // first assigned device here. Per-device selection inside the
-        // editor is the natural follow-up once more than one is common.
-        var deviceId = slot.InputDeviceIds[0];
-        var displayName = inputDeviceCatalog.TryGetById(deviceId, out var info) && info is not null
-            ? info.DisplayName
-            : deviceId;
+        var target = GameFlow.Infrastructure.Runtime.Slots.DeviceSettingsTargetResolver.Resolve(
+            slot,
+            inputDeviceCatalog.Devices);
 
         var editor = serviceProvider.GetService(typeof(DeviceSettingsEditorViewModel)) as DeviceSettingsEditorViewModel;
         if (editor is null)
@@ -2043,7 +2029,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        editor.Load(slot.Id, deviceId, displayName);
+        editor.Load(slot.Id, target.DeviceId, target.DisplayName);
         DeviceSettingsRequested?.Invoke(this, new DeviceSettingsRequestedEventArgs(editor));
     }
 

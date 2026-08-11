@@ -41,6 +41,8 @@ public sealed class ControllerEffectsService : BackgroundService
 
     private readonly IControllerEffectWriter writer;
     private readonly ILogger<ControllerEffectsService> logger;
+    private readonly Dictionary<string, ControllerEffectState> deliveredStates =
+        new(StringComparer.Ordinal);
 
     public ControllerEffectsService(
         IControllerEffectWriter writer,
@@ -79,7 +81,20 @@ public sealed class ControllerEffectsService : BackgroundService
         // Run the loop on its own thread rather than returning an async
         // state machine to the host: this body blocks, and it must not
         // borrow a pool thread to do it.
-        var thread = new Thread(() => RunLoop(stoppingToken))
+        var completion = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                RunLoop(stoppingToken);
+                completion.TrySetResult();
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
+        })
         {
             IsBackground = true,
             Name = "GameFlow effects",
@@ -91,7 +106,10 @@ public sealed class ControllerEffectsService : BackgroundService
         };
 
         thread.Start();
-        return Task.CompletedTask;
+        // BackgroundService.StopAsync waits for this task. Returning a
+        // completed task here used to let host teardown race past the still-
+        // running effects thread and its final motor/trigger release.
+        return completion.Task;
     }
 
     private void RunLoop(CancellationToken stoppingToken)
@@ -175,6 +193,11 @@ public sealed class ControllerEffectsService : BackgroundService
             if (ok)
             {
                 WritesDelivered++;
+                // This is deliberately updated only after the writer accepts
+                // the state. It survives queue equality suppression, so the
+                // shutdown path still knows which steady devices need an
+                // explicit stop even when TakeDueWrites() has nothing due.
+                deliveredStates[write.DeviceId] = write.State;
             }
             else
             {
@@ -192,19 +215,29 @@ public sealed class ControllerEffectsService : BackgroundService
     /// </summary>
     private void SilenceEverything()
     {
-        try
+        foreach (var (deviceId, state) in deliveredStates.ToList())
         {
-            foreach (var write in Queue.TakeDueWrites(DateTimeOffset.UtcNow))
+            if (state.IsSilent)
             {
-                if (!write.State.IsSilent)
+                continue;
+            }
+
+            try
+            {
+                if (writer.TryWrite(deviceId, ControllerEffectState.Silent))
                 {
-                    _ = writer.TryWrite(write.DeviceId, ControllerEffectState.Silent);
+                    deliveredStates[deviceId] = ControllerEffectState.Silent;
                 }
             }
-        }
-        catch (Exception exception)
-        {
-            logger.LogDebug(exception, "Ignoring failure while silencing effects on shutdown.");
+            catch (Exception exception)
+            {
+                // Try every known device even when one unplugged during
+                // shutdown; one failure must not leave the remaining pads on.
+                logger.LogDebug(
+                    exception,
+                    "Ignoring failure while silencing effects for {Device} on shutdown.",
+                    deviceId);
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 using GameFlow.Infrastructure.Runtime;
+using GameFlow.Infrastructure.Runtime.Input;
 using GameFlow.Infrastructure.Runtime.Input.Mac;
 using Xunit;
 
@@ -17,6 +18,10 @@ public sealed class MacKeyCodeMapTests
     [InlineData(0x7E, 0x26)] // kVK_UpArrow -> VK_UP
     [InlineData(0x38, 0xA0)] // kVK_Shift -> VK_LSHIFT
     [InlineData(0x37, 0x5B)] // kVK_Command -> VK_LWIN
+    [InlineData(0x18, 0xBB)] // kVK_ANSI_Equal -> VK_OEM_PLUS
+    [InlineData(0x7A, 0x70)] // kVK_F1 -> VK_F1
+    [InlineData(0x52, 0x60)] // kVK_ANSI_Keypad0 -> VK_NUMPAD0
+    [InlineData(0x4C, KeyboardVirtualKeys.NumpadEnter)]
     public void MacToVirtualKey_MapsKnownCodesCorrectly(int macKeycode, int expectedVirtualKey)
     {
         Assert.True(MacKeyCodeMap.MacToVirtualKey.TryGetValue(macKeycode, out var vk));

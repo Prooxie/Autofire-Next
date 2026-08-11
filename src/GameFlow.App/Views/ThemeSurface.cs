@@ -1247,9 +1247,9 @@ public sealed class ThemeSurface : Control
                 var hit = GameFlow.App.ViewModels.ThemeHitTester.TryHit(
                     doc, doc.Width * xStep / 20d, doc.Height * yStep / 20d);
 
-                if (hit is not null && hit.ElementId.StartsWith("touch_center", StringComparison.Ordinal))
+                if (hit is { } touchpadHit && ThemeHitTester.IsTouchpadHit(touchpadHit))
                 {
-                    touchRegionBounds = hit.Bounds;
+                    touchRegionBounds = touchpadHit.Bounds;
                     break;
                 }
             }

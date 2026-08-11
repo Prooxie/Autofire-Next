@@ -17,14 +17,28 @@ public readonly record struct ControllerEffectState
     /// <summary>Lightbar / player LED colour. Null leaves the LED alone.</summary>
     public EffectColor? LedColor { get; init; }
 
-    /// <summary>Left adaptive-trigger effect. Null leaves the trigger alone.</summary>
+    /// <summary>
+    /// Left adaptive-trigger effect. Null leaves the trigger alone;
+    /// <see cref="AdaptiveTriggerEffect.Off"/> explicitly releases it.
+    /// </summary>
     public AdaptiveTriggerCommand? LeftTrigger { get; init; }
 
-    /// <summary>Right adaptive-trigger effect. Null leaves the trigger alone.</summary>
+    /// <summary>
+    /// Right adaptive-trigger effect. Null leaves the trigger alone;
+    /// <see cref="AdaptiveTriggerEffect.Off"/> explicitly releases it.
+    /// </summary>
     public AdaptiveTriggerCommand? RightTrigger { get; init; }
 
-    /// <summary>Everything off — what a slot is set to when it stops owning a pad.</summary>
-    public static ControllerEffectState Silent => new();
+    /// <summary>
+    /// Everything off — what a slot is set to when it stops owning a pad.
+    /// Trigger releases are explicit because DualSense firmware retains
+    /// the last adaptive effect when that report section is merely absent.
+    /// </summary>
+    public static ControllerEffectState Silent => new()
+    {
+        LeftTrigger = AdaptiveTriggerCommand.Release,
+        RightTrigger = AdaptiveTriggerCommand.Release,
+    };
 
     /// <summary>
     /// True when no motor is running and nothing else is being driven.
@@ -35,8 +49,11 @@ public readonly record struct ControllerEffectState
         LowFrequencyRumble <= 0d &&
         HighFrequencyRumble <= 0d &&
         LedColor is null &&
-        LeftTrigger is null &&
-        RightTrigger is null;
+        IsReleased(LeftTrigger) &&
+        IsReleased(RightTrigger);
+
+    private static bool IsReleased(AdaptiveTriggerCommand? command) =>
+        command is null || command.Value.Effect == AdaptiveTriggerEffect.Off;
 }
 
 /// <summary>8-bit RGB. Deliberately not <c>System.Drawing.Color</c> — Infrastructure has no drawing dependency.</summary>
@@ -91,7 +108,12 @@ public readonly record struct AdaptiveTriggerCommand(
     AdaptiveTriggerEffect Effect,
     byte StartPosition,
     byte EndPosition,
-    byte Strength);
+    byte Strength,
+    byte FrequencyHz = 10)
+{
+    /// <summary>An explicit free-travel instruction for retained firmware state.</summary>
+    public static AdaptiveTriggerCommand Release => new(AdaptiveTriggerEffect.Off, 0, 0, 0);
+}
 
 /// <summary>Adaptive-trigger effect kinds the DualSense firmware understands.</summary>
 public enum AdaptiveTriggerEffect : byte

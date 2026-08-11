@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 
@@ -1003,6 +1004,11 @@ internal sealed class DynamicHidMaestroController : IDisposable
     private readonly Type hatEnumType;
     private readonly Dictionary<string, ulong> buttonValues = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> missingButtons = new(StringComparer.OrdinalIgnoreCase);
+    private EventInfo? outputReceivedEvent;
+    private EventInfo? outputDecodedEvent;
+    private Delegate? outputReceivedHandler;
+    private Delegate? outputDecodedHandler;
+    private int outputWarningLogged;
     private bool disposed;
     private int consecutiveSubmitFailures;
     private const int FailureGiveUpThreshold = 300; // ~1-3s at typical tick rates
@@ -1015,6 +1021,9 @@ internal sealed class DynamicHidMaestroController : IDisposable
     /// HIDMaestro as unavailable for the rest of this configuration.
     /// </summary>
     public bool IsHealthy => consecutiveSubmitFailures < FailureGiveUpThreshold;
+
+    /// <summary>Game-requested motor state, including explicit zero stops.</summary>
+    public event Action<double, double>? RumbleReceived;
 
     /// <summary>A bound field/property setter that also knows the target's real numeric type, for safe reflection coercion.</summary>
     private readonly record struct Setter(MemberInfo Member, Type TargetType, Action<object, object?> Apply);
@@ -1175,6 +1184,193 @@ internal sealed class DynamicHidMaestroController : IDisposable
         axesInstance = (System.Collections.IDictionary)(Activator.CreateInstance(axesDictType)
             ?? throw new InvalidOperationException($"Could not instantiate {axesDictType.Name} for HMGamepadState.Axes."));
         setAxes.Apply(boxedState, axesInstance);
+
+        SubscribeOutputEvents();
+    }
+
+    /// <summary>
+    /// Binds HIDMaestro's output callbacks without a compile-time SDK
+    /// reference. OutputReceived covers XInput; OutputDecoded covers the
+    /// profile-authored Sony and Switch motor fields.
+    /// </summary>
+    private void SubscribeOutputEvents()
+    {
+        try
+        {
+            var type = controller.GetType();
+            outputReceivedEvent = type.GetEvent("OutputReceived", BindingFlags.Public | BindingFlags.Instance);
+            if (outputReceivedEvent?.EventHandlerType is { } rawHandlerType)
+            {
+                outputReceivedHandler = CreateEventBridge(rawHandlerType, OnOutputReceived);
+                outputReceivedEvent.AddEventHandler(controller, outputReceivedHandler);
+            }
+
+            outputDecodedEvent = type.GetEvent("OutputDecoded", BindingFlags.Public | BindingFlags.Instance);
+            if (outputDecodedEvent?.EventHandlerType is { } decodedHandlerType)
+            {
+                outputDecodedHandler = CreateEventBridge(decodedHandlerType, OnOutputDecoded);
+                outputDecodedEvent.AddEventHandler(controller, outputDecodedHandler);
+            }
+
+            if (outputReceivedHandler is null && outputDecodedHandler is null)
+            {
+                logger.LogWarning(
+                    "HIDMaestro dynamic: controller exposes neither OutputReceived nor OutputDecoded; game rumble cannot return to the physical pad.");
+            }
+        }
+        catch (Exception exception)
+        {
+            // Output feedback is optional; losing it must not destroy an
+            // otherwise healthy virtual input device.
+            logger.LogWarning(exception,
+                "HIDMaestro dynamic: could not bind output feedback; virtual input remains active but game rumble cannot return.");
+            UnsubscribeOutputEvents();
+        }
+    }
+
+    private static Delegate CreateEventBridge(
+        Type handlerType,
+        Action<object?, object?> callback)
+    {
+        var invoke = handlerType.GetMethod("Invoke")
+            ?? throw new InvalidOperationException($"Event delegate {handlerType.Name} has no Invoke method.");
+        var delegateParameters = invoke.GetParameters();
+        if (delegateParameters.Length == 0)
+        {
+            throw new InvalidOperationException($"Event delegate {handlerType.Name} carries no callback payload.");
+        }
+
+        var parameters = delegateParameters
+            .Select(parameter => Expression.Parameter(parameter.ParameterType, parameter.Name))
+            .ToArray();
+        Expression sender = parameters.Length > 1
+            ? Expression.Convert(parameters[0], typeof(object))
+            : Expression.Constant(null, typeof(object));
+        var payload = Expression.Convert(parameters[^1], typeof(object));
+        var body = Expression.Call(
+            Expression.Constant(callback),
+            typeof(Action<object, object>).GetMethod(nameof(Action<object, object>.Invoke))!,
+            sender,
+            payload);
+
+        return Expression.Lambda(handlerType, body, parameters).Compile();
+    }
+
+    private void OnOutputReceived(object? _, object? packet)
+    {
+        if (disposed || packet is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var source = ReadMember(packet, "Source");
+            if (source is null || Convert.ToInt32(source) != 2) // HMOutputSource.XInput
+            {
+                return;
+            }
+
+            if (TryReadBytes(ReadMember(packet, "Data"), out var bytes)
+                && HidMaestroRumbleDecoder.TryDecodeXInput(bytes.Span, out var low, out var high))
+            {
+                RumbleReceived?.Invoke(low, high);
+            }
+        }
+        catch (Exception exception)
+        {
+            LogOutputWarningOnce(exception);
+        }
+    }
+
+    private void OnOutputDecoded(object? _, object? eventArgs)
+    {
+        if (disposed || eventArgs is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Older HIDMaestro builds may not expose CrcValid; absence is
+            // treated as the historical behavior. When the member exists,
+            // never actuate a physical motor from a corrupt Bluetooth frame.
+            if (ReadMember(eventArgs, "CrcValid") is bool crcValid && !crcValid)
+            {
+                return;
+            }
+
+            if (ReadMember(eventArgs, "Fields") is IReadOnlyDictionary<string, object> fields
+                && HidMaestroRumbleDecoder.TryDecodeSemanticFields(fields, out var low, out var high))
+            {
+                RumbleReceived?.Invoke(low, high);
+            }
+        }
+        catch (Exception exception)
+        {
+            LogOutputWarningOnce(exception);
+        }
+    }
+
+    private static object? ReadMember(object instance, string name)
+    {
+        var type = instance.GetType();
+        return type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance)
+            ?? type.GetField(name, BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance);
+    }
+
+    private static bool TryReadBytes(object? value, out ReadOnlyMemory<byte> bytes)
+    {
+        switch (value)
+        {
+            case ReadOnlyMemory<byte> readOnlyMemory:
+                bytes = readOnlyMemory;
+                return true;
+            case Memory<byte> memory:
+                bytes = memory;
+                return true;
+            case byte[] array:
+                bytes = array;
+                return true;
+            default:
+                bytes = default;
+                return false;
+        }
+    }
+
+    private void LogOutputWarningOnce(Exception exception)
+    {
+        if (Interlocked.Exchange(ref outputWarningLogged, 1) == 0)
+        {
+            logger.LogWarning(exception,
+                "HIDMaestro dynamic: an output-feedback packet could not be decoded; later packets will still be attempted.");
+        }
+    }
+
+    private void UnsubscribeOutputEvents()
+    {
+        try
+        {
+            if (outputReceivedEvent is not null && outputReceivedHandler is not null)
+            {
+                outputReceivedEvent.RemoveEventHandler(controller, outputReceivedHandler);
+            }
+            if (outputDecodedEvent is not null && outputDecodedHandler is not null)
+            {
+                outputDecodedEvent.RemoveEventHandler(controller, outputDecodedHandler);
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "HIDMaestro dynamic: output callback detach failed during teardown.");
+        }
+        finally
+        {
+            outputReceivedHandler = null;
+            outputDecodedHandler = null;
+            outputReceivedEvent = null;
+            outputDecodedEvent = null;
+        }
     }
 
     /// <summary>
@@ -1270,6 +1466,7 @@ internal sealed class DynamicHidMaestroController : IDisposable
             return;
         }
         disposed = true;
+        UnsubscribeOutputEvents();
         TryRemoveController(controller, context, logger);
     }
 

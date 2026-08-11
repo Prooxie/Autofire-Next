@@ -3,6 +3,7 @@ using System.Windows.Input;
 using GameFlow.Core.Enums;
 using GameFlow.Infrastructure.Localization;
 using GameFlow.Infrastructure.Runtime;
+using GameFlow.Infrastructure.Runtime.Input;
 using Avalonia;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
@@ -44,6 +45,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     private bool isRebuilding;
     private bool rebuildQueued;
     private bool rawQueued;
+    private bool tuningSlotsRefreshQueued;
 
     // Calibration wizard state.
     private int calibrationIndex = -1;
@@ -84,6 +86,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
         this.catalog.Updated += OnCatalogUpdated;
         this.catalog.RawInspectionUpdated += OnRawInspectionUpdated;
+        this.slotRegistry.SlotsChanged += OnSlotsChanged;
         this.localization.CultureChanged += OnCultureChanged;
 
         Rebuild();
@@ -235,7 +238,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
         if (device.Category == DeviceCategory.Keyboard)
         {
-            var pressed = keyboardStateSource.GetPressedKeys(device.Id);
+            var pressed = keyboardStateSource.GetPressedKeysWithAggregateFallback(device.Id);
 
             // Change-gate: a keyboard at rest produces the same (usually
             // empty) set every tick — rebuilding the display string and
@@ -296,7 +299,11 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     /// <summary>Per-device tuning editor (sticks, triggers, rumble, lighting, adaptive triggers).</summary>
     public DeviceSettingsEditorViewModel DeviceSettingsEditor { get; }
 
-    /// <summary>Slots the selected device can be tuned for — tuning is per slot AND per device.</summary>
+    /// <summary>
+    /// Virtual-controller slots available for tuning. A selected physical
+    /// device edits its per-slot override; without one, an offline assigned
+    /// device or the slot's inheritable defaults remains editable.
+    /// </summary>
     public ObservableCollection<GameFlow.Infrastructure.Runtime.Slots.ControllerSlot> TuningSlotOptions { get; } = [];
 
     public IRelayCommand ResetTuningCommand { get; }
@@ -320,8 +327,15 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     private void RefreshTuningSlots()
     {
         var previousId = selectedTuningSlot?.Id;
+
+        var slots = slotRegistry.GetSlots();
+        if (TuningSlotsMatch(slots))
+        {
+            return;
+        }
+
         TuningSlotOptions.Clear();
-        foreach (var slot in slotRegistry.GetSlots())
+        foreach (var slot in slots)
         {
             TuningSlotOptions.Add(slot);
         }
@@ -330,17 +344,61 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SelectedTuningSlot));
     }
 
+    private bool TuningSlotsMatch(IReadOnlyList<GameFlow.Infrastructure.Runtime.Slots.ControllerSlot> slots)
+    {
+        if (slots.Count != TuningSlotOptions.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < slots.Count; index++)
+        {
+            var current = TuningSlotOptions[index];
+            var next = slots[index];
+            if (!string.Equals(current.Id, next.Id, StringComparison.Ordinal)
+                || !string.Equals(current.Name, next.Name, StringComparison.Ordinal)
+                || current.Index != next.Index
+                || !current.InputDeviceIds.SequenceEqual(next.InputDeviceIds, StringComparer.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Points the tuning editor at the current device + slot pair.</summary>
     private void LoadTuningForSelection()
     {
-        // Both halves are required: settings are keyed by slot AND
-        // device, so neither alone identifies an entry.
-        if (SelectedDevice is null || selectedTuningSlot is null)
+        if (selectedTuningSlot is null)
         {
             DeviceSettingsEditor.Load(string.Empty, string.Empty, string.Empty);
             return;
         }
-        DeviceSettingsEditor.Load(selectedTuningSlot.Id, SelectedDevice.Id, SelectedDevice.DisplayName);
+
+        var target = GameFlow.Infrastructure.Runtime.Slots.DeviceSettingsTargetResolver.Resolve(
+            selectedTuningSlot,
+            catalog.Devices,
+            SelectedDevice?.Id,
+            SelectedDevice?.DisplayName);
+
+        DeviceSettingsEditor.Load(selectedTuningSlot.Id, target.DeviceId, target.DisplayName);
+    }
+
+    private void OnSlotsChanged(object? sender, EventArgs e)
+    {
+        if (tuningSlotsRefreshQueued)
+        {
+            return;
+        }
+
+        tuningSlotsRefreshQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            tuningSlotsRefreshQueued = false;
+            RefreshTuningSlots();
+            LoadTuningForSelection();
+        });
     }
 
     /// <summary>Axes of the inspected device (raw, live).</summary>
@@ -801,6 +859,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         catalog.SetRawInspectionTarget(null);
         catalog.Updated -= OnCatalogUpdated;
         catalog.RawInspectionUpdated -= OnRawInspectionUpdated;
+        slotRegistry.SlotsChanged -= OnSlotsChanged;
         localization.CultureChanged -= OnCultureChanged;
     }
 }

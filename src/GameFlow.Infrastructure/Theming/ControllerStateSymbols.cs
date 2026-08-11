@@ -1,5 +1,6 @@
 using GameFlow.Core.Enums;
 using GameFlow.Core.Models;
+using GameFlow.Infrastructure.Runtime.Input;
 using GameFlow.Infrastructure.Theming.Flee;
 
 namespace GameFlow.Infrastructure.Theming;
@@ -282,7 +283,7 @@ public sealed class ControllerStateSymbols : IFleeSymbols
         }
         map["nummultiply"] = 0x6A; map["numadd"] = 0x6B;
         map["numsubtract"] = 0x6D; map["numdecimal"] = 0x6E;
-        map["numdivide"] = 0x6F; map["numenter"] = 0x0D;
+        map["numdivide"] = 0x6F; map["numenter"] = KeyboardVirtualKeys.NumpadEnter;
 
         return map;
     }

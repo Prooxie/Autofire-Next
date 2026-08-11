@@ -15,11 +15,19 @@ public sealed class DualSenseEffectEncoderTests
         AdaptiveTriggerSettings? left = null,
         AdaptiveTriggerSettings? right = null,
         LightColor? led = null,
-        double low = 0,
-        double high = 0)
+        ushort lowFrequencyRumble = 0,
+        ushort highFrequencyRumble = 0,
+        DualSenseRumbleMode rumbleMode = DualSenseRumbleMode.Enhanced)
     {
         var buffer = new byte[DualSenseEffectEncoder.EffectStateLength];
-        Assert.True(DualSenseEffectEncoder.TryWrite(buffer, left, right, led, low, high));
+        Assert.True(DualSenseEffectEncoder.TryWrite(
+            buffer,
+            left,
+            right,
+            led,
+            lowFrequencyRumble,
+            highFrequencyRumble,
+            rumbleMode));
         return buffer;
     }
 
@@ -31,7 +39,8 @@ public sealed class DualSenseEffectEncoderTests
     public void ATooSmallBufferIsRefusedRatherThanOverrunning()
     {
         var tiny = new byte[10];
-        Assert.False(DualSenseEffectEncoder.TryWrite(tiny, null, null, null, 0, 0));
+        Assert.False(DualSenseEffectEncoder.TryWrite(
+            tiny, null, null, null, 0, 0, DualSenseRumbleMode.Enhanced));
     }
 
     [Fact]
@@ -44,16 +53,7 @@ public sealed class DualSenseEffectEncoderTests
         // switch things off, which is a different instruction.
         Assert.Equal(0, report[0]);
         Assert.Equal(0, report[1]);
-    }
-
-    [Fact]
-    public void RumbleSetsItsEnableBitAndBothMotors()
-    {
-        var report = Encode(low: 1.0, high: 0.5);
-
-        Assert.Equal(0x01, report[0] & 0x01);
-        Assert.Equal(255, report[3]);              // left / heavy
-        Assert.InRange(report[2], 126, 130);       // right / light
+        Assert.Equal(0, report[38]);
     }
 
     [Fact]
@@ -134,10 +134,20 @@ public sealed class DualSenseEffectEncoderTests
     }
 
     [Fact]
-    public void TheLedSitsInTheLastThreeBytesWithItsOwnEnableBit()
+    public void FinalTriggerReportAtomicallyCarriesEnhancedRumbleAndLighting()
     {
-        var report = Encode(led: new LightColor(0x12, 0x34, 0x56));
+        var report = Encode(
+            left: Trigger(AdaptiveTriggerMode.Feedback),
+            right: Trigger(AdaptiveTriggerMode.Weapon),
+            led: new LightColor(0x12, 0x34, 0x56),
+            lowFrequencyRumble: 0xC000,
+            highFrequencyRumble: 0x4000,
+            rumbleMode: DualSenseRumbleMode.Enhanced);
 
+        Assert.Equal(0x0E, report[0] & 0x0F); // audio-haptics off + both triggers; no legacy lane
+        Assert.Equal(0x04, report[38] & 0x04); // enhanced-rumble lane
+        Assert.Equal(0xC0, report[3]); // low-frequency / left motor
+        Assert.Equal(0x40, report[2]); // high-frequency / right motor
         Assert.Equal(0x04, report[1] & 0x04);
         Assert.Equal(0x12, report[44]);
         Assert.Equal(0x34, report[45]);
@@ -145,19 +155,49 @@ public sealed class DualSenseEffectEncoderTests
     }
 
     [Fact]
-    public void OneReportCanCarryTriggersRumbleAndLedTogether()
+    public void LegacyRumbleUsesEnableBitsOneAndSdlStrengthScaling()
     {
-        // They must combine in a single report: the enable bits are
-        // per-report, so a second report would clear what the first set.
         var report = Encode(
-            left: Trigger(AdaptiveTriggerMode.Feedback),
-            right: Trigger(AdaptiveTriggerMode.Weapon),
-            led: new LightColor(1, 2, 3),
-            low: 0.5,
-            high: 0.5);
+            lowFrequencyRumble: ushort.MaxValue,
+            highFrequencyRumble: 0x8000,
+            rumbleMode: DualSenseRumbleMode.Legacy);
 
-        Assert.Equal(0x0D, report[0] & 0x0D);   // rumble + both triggers
-        Assert.Equal(0x04, report[1] & 0x04);   // lightbar
+        Assert.Equal(0x03, report[0] & 0x03); // legacy emulation + disable audio haptics
+        Assert.Equal(0, report[38] & 0x04);
+        Assert.Equal(0x7F, report[3]); // (0xFFFF >> 8) >> 1
+        Assert.Equal(0x40, report[2]); // (0x8000 >> 8) >> 1
+    }
+
+    [Fact]
+    public void SubBytePortableRumbleMatchesSdlAndDoesNotEnableAZeroMotor()
+    {
+        var report = Encode(
+            lowFrequencyRumble: 0x00FF,
+            rumbleMode: DualSenseRumbleMode.Legacy);
+
+        Assert.Equal(0, report[0] & 0x03);
+        Assert.Equal(0, report[2]);
+        Assert.Equal(0, report[3]);
+    }
+
+    [Theory]
+    [InlineData(0x054C, 0x0CE6, 0x0000, DualSenseRumbleMode.Enhanced)]
+    [InlineData(0x054C, 0x0CE6, 0x0223, DualSenseRumbleMode.Legacy)]
+    [InlineData(0x054C, 0x0CE6, 0x0224, DualSenseRumbleMode.Enhanced)]
+    [InlineData(0x054C, 0x0DF2, 0x0001, DualSenseRumbleMode.Enhanced)]
+    [InlineData(0x1532, 0x100B, 0x0000, DualSenseRumbleMode.Legacy)]
+    public void RumbleModeMatchesBundledSdlDecision(
+        int vendorId,
+        int productId,
+        int firmwareVersion,
+        DualSenseRumbleMode expected)
+    {
+        Assert.Equal(
+            expected,
+            DualSenseEffectEncoder.ResolveRumbleMode(
+                (ushort)vendorId,
+                (ushort)productId,
+                (ushort)firmwareVersion));
     }
 
     [Fact]

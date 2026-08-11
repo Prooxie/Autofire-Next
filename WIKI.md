@@ -166,7 +166,7 @@ All three modes can be enabled simultaneously on one rule.
 
 ## Per-Device Tuning
 
-Click any virtual controller panel on the Dashboard to open a slot's device editor. Settings are keyed by **slot AND device**, so the same physical pad can be tuned two different ways on two different slots without them fighting each other.
+Click any virtual controller panel on the Dashboard to open a slot's device editor. The editor does not require connected hardware: an offline assignment retains its **slot AND device** key, and a slot with no assignment exposes inheritable slot defaults. A device-specific entry overrides those defaults, so the same physical pad can still be tuned two different ways on two different slots without them fighting each other.
 
 **Sticks:** deadzone, anti-deadzone (lifts the floor past a game's own internal deadzone), full-at (lets a worn stick that no longer reaches its corners still hit 100%), sensitivity, response curve (Linear / Precision-squared / Aggressive-sqrt), per-axis invert.
 
@@ -174,7 +174,7 @@ Shaping is **radial**, not per-axis: deadzone and saturation apply to the stick'
 
 **Triggers:** deadzone, full-at, sensitivity, invert.
 
-**Rumble, Lighting, Adaptive Triggers:** the settings model, persistence, and UI are all real and tested. **They don't reach physical hardware yet** — see [Known Limitations](README.md#known-limitations) in the README.
+**Rumble, Lighting, Adaptive Triggers:** settings persist immediately and are delivered on the effects thread to an assigned, supported physical controller while it is connected.
 
 ---
 

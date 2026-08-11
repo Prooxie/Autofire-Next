@@ -8,15 +8,12 @@ namespace GameFlow.Infrastructure.Runtime.Input.Mac;
 /// translating at the source keeps everything downstream OS-agnostic.
 ///
 /// <para>
-/// <b>Deliberately smaller than the Linux table.</b> This is recalled
-/// from memory with no header or compiler available anywhere in this
-/// environment to check it against (unlike evdev's codes, which were
-/// cross-checked against real kernel headers). Rather than transcribe
-/// ~90 entries at roughly the same risk as the ~10 riskiest ones, this
-/// covers only letters, digits, arrows, core editing keys, and
-/// modifiers — the subset with the highest recall confidence — and
-/// stops there. Function keys, the numpad, and punctuation are left
-/// out rather than guessed.
+/// The source values are Apple's physical key-position constants from
+/// <c>HIToolbox/Events.h</c> (<c>kVK_ANSI_*</c> and <c>kVK_*</c>).
+/// That makes punctuation and keypad keys layout-independent here, just
+/// like evdev scan codes on Linux. External-PC-keyboard F13/F14/F15 are
+/// presented as Print Screen / Scroll Lock / Pause, the legends normally
+/// occupying those physical positions on an ANSI 104-key board.
 /// </para>
 /// </summary>
 internal static class MacKeyCodeMap
@@ -60,6 +57,19 @@ internal static class MacKeyCodeMap
         Add(map, 0x17, 0x35); Add(map, 0x16, 0x36); Add(map, 0x1A, 0x37); Add(map, 0x1C, 0x38);
         Add(map, 0x19, 0x39); Add(map, 0x1D, 0x30);
 
+        // ANSI punctuation (physical positions, not produced characters).
+        Add(map, 0x18, 0xBB); // Equal
+        Add(map, 0x1B, 0xBD); // Minus
+        Add(map, 0x1E, 0xDD); // Right bracket
+        Add(map, 0x21, 0xDB); // Left bracket
+        Add(map, 0x27, 0xDE); // Quote
+        Add(map, 0x29, 0xBA); // Semicolon
+        Add(map, 0x2A, 0xDC); // Backslash
+        Add(map, 0x2B, 0xBC); // Comma
+        Add(map, 0x2C, 0xBF); // Slash
+        Add(map, 0x2F, 0xBE); // Period
+        Add(map, 0x32, 0xC0); // Grave
+
         // Editing / whitespace.
         Add(map, 0x24, 0x0D); // Return -> VK_RETURN
         Add(map, 0x30, 0x09); // Tab -> VK_TAB
@@ -71,6 +81,24 @@ internal static class MacKeyCodeMap
         Add(map, 0x77, 0x23); // End -> VK_END
         Add(map, 0x74, 0x21); // Page Up -> VK_PRIOR
         Add(map, 0x79, 0x22); // Page Down -> VK_NEXT
+        Add(map, 0x72, 0x2D); // Help / Insert position -> VK_INSERT
+
+        // Function row.
+        Add(map, 0x7A, 0x70); // F1
+        Add(map, 0x78, 0x71); // F2
+        Add(map, 0x63, 0x72); // F3
+        Add(map, 0x76, 0x73); // F4
+        Add(map, 0x60, 0x74); // F5
+        Add(map, 0x61, 0x75); // F6
+        Add(map, 0x62, 0x76); // F7
+        Add(map, 0x64, 0x77); // F8
+        Add(map, 0x65, 0x78); // F9
+        Add(map, 0x6D, 0x79); // F10
+        Add(map, 0x67, 0x7A); // F11
+        Add(map, 0x6F, 0x7B); // F12
+        Add(map, 0x69, 0x2C); // F13 / Print Screen position
+        Add(map, 0x6B, 0x91); // F14 / Scroll Lock position
+        Add(map, 0x71, 0x13); // F15 / Pause position
 
         // Arrows.
         Add(map, 0x7B, 0x25); // Left
@@ -86,7 +114,26 @@ internal static class MacKeyCodeMap
         Add(map, 0x3A, 0xA4); // Option -> VK_LMENU
         Add(map, 0x3D, 0xA5); // Right Option -> VK_RMENU
         Add(map, 0x37, 0x5B); // Command -> VK_LWIN (closest semantic equivalent)
+        Add(map, 0x36, 0x5C); // Right Command -> VK_RWIN
         Add(map, 0x39, 0x14); // Caps Lock -> VK_CAPITAL
+
+        // Numeric keypad. Keypad Clear occupies Num Lock's position on an
+        // Apple extended keyboard, so it drives the same physical preview.
+        Add(map, 0x47, 0x90); // Keypad Clear -> VK_NUMLOCK
+        Add(map, 0x52, 0x60); Add(map, 0x53, 0x61); Add(map, 0x54, 0x62); Add(map, 0x55, 0x63);
+        Add(map, 0x56, 0x64); Add(map, 0x57, 0x65); Add(map, 0x58, 0x66);
+        Add(map, 0x59, 0x67); Add(map, 0x5B, 0x68); Add(map, 0x5C, 0x69);
+        Add(map, 0x43, 0x6A); // Keypad multiply
+        Add(map, 0x45, 0x6B); // Keypad plus
+        Add(map, 0x4E, 0x6D); // Keypad minus
+        Add(map, 0x41, 0x6E); // Keypad decimal
+        Add(map, 0x4B, 0x6F); // Keypad divide
+        Add(map, 0x4C, KeyboardVirtualKeys.NumpadEnter);
+
+        // Dedicated media keys exposed by CGEventTap.
+        Add(map, 0x4A, 0xAD); // Mute
+        Add(map, 0x49, 0xAE); // Volume down
+        Add(map, 0x48, 0xAF); // Volume up
 
         return map;
     }

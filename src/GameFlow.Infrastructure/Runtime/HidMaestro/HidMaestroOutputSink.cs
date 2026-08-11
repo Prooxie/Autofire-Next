@@ -67,7 +67,8 @@ namespace GameFlow.Infrastructure.Runtime.HidMaestro;
 // and Back/Start/LeftStick/RightStick are ALSO confirmed by name
 // (contra the previous comment's "inferred" flag — the enum spells them
 // exactly that way; see HMButton's XML doc for the Sony/Xbox aliasing).
-// STILL INFERRED: the rumble byte offsets in OnOutputReceived.
+// Rumble feedback is decoded from HIDMaestro's semantic motor fields, or
+// from the documented XInput output packet as a compatibility fallback.
 
 public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.Runtime.Slots.IConfigurableOutputSink, IRumbleFeedbackSource
 {
@@ -193,7 +194,8 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
 
             profile = ResolveProfile(context, template);
             controller = context.CreateController(profile);
-            controller.OutputReceived += OnOutputReceived;   // game rumble/haptics/FFB → physical pad
+            controller.OutputReceived += OnOutputReceived;
+            controller.OutputDecoded += OnOutputDecoded;
             connected = true;
             activatedAtUtc = DateTimeOffset.UtcNow;
 
@@ -362,34 +364,25 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
     }
 
     // ── Output (rumble / haptics / FFB) ──
-    // OutputReceived delivers the raw wire bytes the game sent to the
-    // virtual pad; the consumer decodes + forwards. This is a best-effort
-    // decode of the common rumble layout into normalized (low, high) →
-    // RumbleReceived, which the slot runtime forwards to the physical
-    // device. VERIFY these byte offsets against the output
-    // handler for the profiles you emit.
+    // OutputReceived carries XInput's raw wire packet. Sony/Switch HID
+    // reports go through OutputDecoded below, where HIDMaestro's profile
+    // owns their device-specific byte layout.
     private void OnOutputReceived(HMController sender, HMOutputPacket packet)
     {
-        var data = packet.Data;
-        if (data is null || data.Length == 0)
+        if (packet.Source != HMOutputSource.XInput
+            || !HidMaestroRumbleDecoder.TryDecodeXInput(packet.Data.Span, out var low, out var high))
         {
             return;
         }
 
-        double low = 0, high = 0;
-        if (data.Length >= 5)
-        {
-            // Common XUSB SET_STATE vibration: [type, size, 0, big, small, …]
-            low  = data[3] / 255.0;
-            high = data[4] / 255.0;
-        }
-        else if (data.Length >= 2)
-        {
-            low  = data[0] / 255.0;
-            high = data[1] / 255.0;
-        }
+        // Zero is a real stop command and must propagate too.
+        RumbleReceived?.Invoke(low, high);
+    }
 
-        if (low > 0 || high > 0)
+    private void OnOutputDecoded(object? sender, HMOutputDecodedEventArgs args)
+    {
+        if (args.CrcValid
+            && HidMaestroRumbleDecoder.TryDecodeSemanticFields(args.Fields, out var low, out var high))
         {
             RumbleReceived?.Invoke(low, high);
         }
@@ -401,9 +394,16 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
         {
             if (controller is not null)
             {
-                controller.OutputReceived -= OnOutputReceived;
+                var activeController = controller;
+                HidMaestroRumbleLifecycle.StopAndTeardown(
+                    RumbleReceived,
+                    () =>
+                    {
+                        activeController.OutputReceived -= OnOutputReceived;
+                        activeController.OutputDecoded -= OnOutputDecoded;
+                        activeController.Dispose();
+                    });
             }
-            controller?.Dispose();
         }
         catch (Exception exception) { logger.LogDebug(exception, "HIDMaestro controller dispose error."); }
         controller = null;
@@ -438,7 +438,9 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
 // (dynamic bridge found a working HIDMaestro.Core.dll) or it is not —
 // in which case DisplayName and the log say exactly why, and WriteAsync
 // is a documented no-op. There is no fallback provider to substitute.
-public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.Runtime.Slots.IConfigurableOutputSink
+public sealed class HidMaestroOutputSink : IOutputSink,
+    GameFlow.Infrastructure.Runtime.Slots.IConfigurableOutputSink,
+    IRumbleFeedbackSource
 {
     private readonly ILogger<HidMaestroOutputSink> logger;
     private readonly object gate = new();
@@ -456,6 +458,8 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
     {
         this.logger = logger;
     }
+
+    public event Action<double, double>? RumbleReceived;
 
     /// <summary>
     /// Reflects the real state so the slots list and dashboard show the
@@ -535,7 +539,10 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
             activeState = "unresolved";
             unavailableReason = null;
         }
-        old?.Controller.Dispose();
+        if (old is not null)
+        {
+            TeardownHandle(old);
+        }
     }
 
     /// <summary>
@@ -577,6 +584,7 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
             // reference to a proven-broken instance so the NEXT write
             // doesn't keep trying it — Configure() (a template change) or
             // a process restart are the paths back to "unresolved".
+            var detached = false;
             lock (gate)
             {
                 if (ReferenceEquals(activeHandle, handle))
@@ -587,9 +595,13 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
                     // Longer cooldown than a creation failure: a retry
                     // here creates a NEW device, so cycling must be rare.
                     dynamicRetryCreateAfterUtc = DateTimeOffset.UtcNow.AddMinutes(5);
+                    detached = true;
                 }
             }
-            handle.Controller.Dispose();
+            if (detached)
+            {
+                TeardownHandle(handle);
+            }
         }
 
         return ValueTask.CompletedTask;
@@ -678,6 +690,7 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
             return;
         }
 
+        handle.Controller.RumbleReceived += OnRumbleReceived;
         activeHandle = handle;
         activeState = "active";
         dynamicActivatedAtUtc = DateTimeOffset.UtcNow;
@@ -686,6 +699,18 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
             handle.ProfileId, handle.ProfileName,
             handle.HardwareSignature is { } sig ? $"{sig.Vid:X4}:{sig.Pid:X4}" : "unknown");
     }
+
+    private void OnRumbleReceived(double lowFrequency, double highFrequency) =>
+        RumbleReceived?.Invoke(lowFrequency, highFrequency);
+
+    private void TeardownHandle(DynamicControllerHandle handle) =>
+        HidMaestroRumbleLifecycle.StopAndTeardown(
+            RumbleReceived,
+            () =>
+            {
+                handle.Controller.RumbleReceived -= OnRumbleReceived;
+                handle.Controller.Dispose();
+            });
 
     /// <summary>
     /// The catalog id this template resolves to: the explicit pick when
@@ -790,7 +815,10 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
             activeHandle = null;
         }
 
-        handle?.Controller.Dispose();
+        if (handle is not null)
+        {
+            TeardownHandle(handle);
+        }
         return ValueTask.CompletedTask;
     }
 }

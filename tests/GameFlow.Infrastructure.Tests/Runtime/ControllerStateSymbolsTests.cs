@@ -1,4 +1,5 @@
 using GameFlow.Core.Models;
+using GameFlow.Infrastructure.Runtime.Input;
 using GameFlow.Infrastructure.Theming;
 using Xunit;
 
@@ -6,6 +7,19 @@ namespace GameFlow.Infrastructure.Tests.Runtime;
 
 public sealed class ControllerStateSymbolsTests
 {
+    [Fact]
+    public void Resolves_main_and_numpad_enter_as_distinct_physical_keys()
+    {
+        var snapshot = ControllerSnapshot.Empty() with
+        {
+            PressedKeys = new HashSet<int> { KeyboardVirtualKeys.NumpadEnter }
+        };
+        var symbols = new ControllerStateSymbols().UpdateSnapshot(snapshot);
+
+        Assert.Equal(0, symbols.Resolve("key:enter"));
+        Assert.Equal(1, symbols.Resolve("key:numenter"));
+    }
+
     [Fact]
     public void Resolves_touch_contacts_in_vscview_centered_coordinates()
     {

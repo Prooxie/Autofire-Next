@@ -43,6 +43,17 @@ public sealed record ThemeHitResult(string ElementId, Avalonia.Rect Bounds, stri
 public static class ThemeHitTester
 {
     /// <summary>
+    /// Logical element id returned for a theme's <c>touch_center:click</c>
+    /// region. Consumers should use <see cref="IsTouchpadHit"/> instead of
+    /// comparing against the source expression, because hit results carry
+    /// logical control ids rather than Flee variable names.
+    /// </summary>
+    public const string TouchpadElementId = "Touchpad";
+
+    public static bool IsTouchpadHit(ThemeHitResult? hit) =>
+        string.Equals(hit?.ElementId, TouchpadElementId, StringComparison.Ordinal);
+
+    /// <summary>
     /// Tests a theme-local (x, y) against the document's interactive
     /// elements. Returns the matched element + bounds, or
     /// <see langword="null"/> when the point doesn't fall on any
@@ -272,7 +283,7 @@ public static class ThemeHitTester
             "stick_right:click" => "RightStick.Button",
 
             // Touchpad
-            "touch_center:click" => "Touchpad",
+            "touch_center:click" => TouchpadElementId,
 
             _ => null,
         };

@@ -1,3 +1,4 @@
+using GameFlow.Infrastructure.Runtime.Input;
 using GameFlow.Infrastructure.Runtime.Input.Linux;
 using Xunit;
 
@@ -59,6 +60,8 @@ public sealed class EvdevKeyCodeMapTests
     [InlineData(105, 0x25)]  // KEY_LEFT -> VK_LEFT
     [InlineData(59, 0x70)]   // KEY_F1 -> VK_F1
     [InlineData(11, 0x30)]   // KEY_0 -> VK_0
+    [InlineData(127, 0x5D)]  // KEY_COMPOSE -> VK_APPS / Menu
+    [InlineData(96, KeyboardVirtualKeys.NumpadEnter)]
     public void EvdevToVirtualKey_MapsKnownCodesCorrectly(ushort evdevCode, int expectedVirtualKey)
     {
         Assert.True(EvdevKeyCodeMap.EvdevToVirtualKey.TryGetValue(evdevCode, out var vk));
@@ -79,34 +82,15 @@ public sealed class EvdevKeyCodeMapTests
     }
 
     [Fact]
-    public void EvdevToVirtualKey_HasNoUnintendedDuplicateVirtualKeyTargets()
+    public void EvdevToVirtualKey_HasNoDuplicateVirtualKeyTargets()
     {
-        // Two evdev codes mapping to the same VK makes them
-        // indistinguishable downstream — a real bug, with ONE deliberate
-        // exception: KEY_ENTER (28) and KEY_KPENTER (96) both map to
-        // VK_RETURN because Windows itself reports both Enter keys that
-        // way (they differ only by the extended-key flag, which this
-        // contract doesn't carry). That collision is intentional and
-        // documented in EvdevKeyCodeMap; anything else is not.
-        const int VkReturn = 0x0D;
-
         var offenders = EvdevKeyCodeMap.EvdevToVirtualKey
-            .Where(pair => pair.Value != VkReturn)
             .GroupBy(pair => pair.Value)
             .Where(group => group.Count() > 1)
             .Select(group => $"VK 0x{group.Key:X2} <- evdev {string.Join(", ", group.Select(p => p.Key))}")
             .ToList();
 
-        Assert.True(offenders.Count == 0, "unintended duplicate VK targets: " + string.Join("; ", offenders));
-
-        // And the intended pair is genuinely present, so this fails loudly
-        // if either Enter mapping is ever silently dropped.
-        var enterCodes = EvdevKeyCodeMap.EvdevToVirtualKey
-            .Where(pair => pair.Value == VkReturn)
-            .Select(pair => (int)pair.Key)
-            .OrderBy(code => code)
-            .ToList();
-        Assert.Equal(new List<int> { 28, 96 }, enterCodes);
+        Assert.True(offenders.Count == 0, "duplicate VK targets: " + string.Join("; ", offenders));
     }
 }
 

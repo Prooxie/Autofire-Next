@@ -196,10 +196,10 @@ public sealed class WindowsRawInputReader : IKeyboardStateSource, IMouseStateSou
             if (header.dwType == RIM_TYPEKEYBOARD)
             {
                 var kb = Marshal.PtrToStructure<RAWKEYBOARD>(buffer + (int)headerSize);
-                ushort vkey = kb.VKey;
-                if (vkey == 0 || vkey == 0xFF) return;
+                var virtualKey = WindowsRawKeyNormalizer.Normalize(kb.VKey, kb.MakeCode, kb.Flags);
+                if (virtualKey == 0 || virtualKey == 0xFF) return;
                 bool keyUp = (kb.Flags & RI_KEY_BREAK) != 0;
-                UpdateKey(header.hDevice, vkey, keyUp);
+                UpdateKey(header.hDevice, virtualKey, keyUp);
             }
             else if (header.dwType == RIM_TYPEMOUSE)
             {
@@ -209,14 +209,14 @@ public sealed class WindowsRawInputReader : IKeyboardStateSource, IMouseStateSou
         }
     }
 
-    private void UpdateKey(IntPtr hDevice, ushort vkey, bool keyUp)
+    private void UpdateKey(IntPtr hDevice, int virtualKey, bool keyUp)
     {
         var id = keyboardIdByHandle.GetOrAdd(hDevice, static h => ResolveCatalogId(h, "keyboard"));
         var state = keyboardStateById.GetOrAdd(id, static _ => new DeviceState());
         lock (state.Lock)
         {
-            if (keyUp) state.Pressed.Remove(vkey);
-            else       state.Pressed.Add(vkey);
+            if (keyUp) state.Pressed.Remove(virtualKey);
+            else       state.Pressed.Add(virtualKey);
         }
     }
 

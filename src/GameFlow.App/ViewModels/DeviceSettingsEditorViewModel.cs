@@ -18,11 +18,9 @@ namespace GameFlow.App.ViewModels;
 /// </para>
 ///
 /// <para>
-/// Stick/trigger conditioning is applied by the pipeline today. Rumble,
-/// lighting, and adaptive triggers persist and round-trip correctly, but
-/// reaching the hardware needs the dedicated effects thread that isn't
-/// built yet — <see cref="EffectsPendingNote"/> says so in the UI rather
-/// than letting those controls look live when they aren't.
+/// Stick/trigger conditioning is applied by the mapping pipeline. Rumble,
+/// lighting, and adaptive triggers flow through the dedicated effects
+/// thread to a connected, supported physical controller.
 /// </para>
 /// </summary>
 public sealed class DeviceSettingsEditorViewModel : ViewModelBase
@@ -168,10 +166,17 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
 
     public bool HasDevice => !string.IsNullOrEmpty(deviceId);
 
-    public string EffectsPendingNote =>
-        "Rumble, lighting and adaptive triggers are saved per slot. The effects thread that "
-        + "delivers them now exists, but its hardware backend is not connected yet, so they "
-        + "still do not reach the pad. Stick and trigger tuning is live now.";
+    /// <summary>True when this editor is changing the slot-wide fallback rather than one physical-device override.</summary>
+    public bool IsSlotDefaults => DeviceSettingsStore.IsSlotDefaultsDevice(deviceId);
+
+    public string TuningScopeDescription => IsSlotDefaults
+        ? "These defaults apply to this virtual controller when an input has no device-specific override."
+        : "Tuning applies to this device on this slot only.";
+
+    public string EffectsStatusNote =>
+        "Changes save immediately. Stick and trigger tuning shapes this slot's input; rumble, "
+        + "lighting and adaptive triggers are sent on the effects thread to an assigned, supported "
+        + "physical controller when it is connected.";
 
     /// <summary>Points the editor at one slot/device pair and loads its saved values.</summary>
     public void Load(string slotIdentifier, string deviceIdentifier, string displayName)
@@ -180,7 +185,7 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
         deviceId = deviceIdentifier;
         DeviceName = displayName;
 
-        var settings = store.Get(slotIdentifier, deviceIdentifier);
+        var settings = store.GetEffective(slotIdentifier, deviceIdentifier);
 
         suspendWrites = true;
         try
@@ -383,6 +388,7 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
         foreach (var name in new[]
         {
             nameof(HasDevice),
+            nameof(IsSlotDefaults), nameof(TuningScopeDescription),
             nameof(LeftDeadzone), nameof(LeftAntiDeadzone), nameof(LeftFullAt), nameof(LeftSensitivity),
             nameof(LeftCurve), nameof(LeftInvertX), nameof(LeftInvertY),
             nameof(RightDeadzone), nameof(RightAntiDeadzone), nameof(RightFullAt), nameof(RightSensitivity),

@@ -55,8 +55,11 @@ public sealed record ControllerSnapshot
     public bool HasGyro { get; init; }
 
     /// <summary>
-    /// Raw Windows virtual-key codes currently held, for sources that
-    /// are actual keyboards. Empty for gamepads.
+    /// Canonical keyboard key codes currently held. Standard keys use
+    /// Windows virtual-key values on every platform; input backends may use
+    /// values above the Win32 range to retain otherwise-lost physical
+    /// distinctions such as main Enter versus keypad Enter. Empty for
+    /// gamepads.
     ///
     /// <para>
     /// Kept ALONGSIDE <see cref="Buttons"/> rather than replacing it: the

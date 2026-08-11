@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\GameFlow.App\GameFlow.App.csproj" />
     <ProjectReference Include="..\..\src\GameFlow.Infrastructure\GameFlow.Infrastructure.csproj" />
   </ItemGroup>
 

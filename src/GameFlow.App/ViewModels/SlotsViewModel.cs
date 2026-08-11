@@ -112,16 +112,18 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
     private readonly SlotRegistry registry;
     private readonly InputDeviceCatalog catalog;
     private readonly ProfileSession profileSession;
+    private readonly DeviceSettingsStore deviceSettingsStore;
 
     private bool loadingDetail;
     private bool rebuildQueued;
     private bool disposed;
 
-    public SlotsViewModel(SlotRegistry registry, InputDeviceCatalog catalog, DeviceTemplateStore templateStore, ProfileSession profileSession, GameFlow.Infrastructure.Localization.ILocalizationService localization, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog)
+    public SlotsViewModel(SlotRegistry registry, InputDeviceCatalog catalog, DeviceTemplateStore templateStore, ProfileSession profileSession, GameFlow.Infrastructure.Localization.ILocalizationService localization, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog, DeviceSettingsStore deviceSettingsStore)
     {
         this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
         this.catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         this.profileSession = profileSession ?? throw new ArgumentNullException(nameof(profileSession));
+        this.deviceSettingsStore = deviceSettingsStore ?? throw new ArgumentNullException(nameof(deviceSettingsStore));
         TemplateEditor = new DeviceTemplateEditorViewModel(
             templateStore ?? throw new ArgumentNullException(nameof(templateStore)),
             localization,
@@ -397,7 +399,11 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
     {
         if (SelectedSlot is not null)
         {
-            registry.DeleteSlot(SelectedSlot.Id);
+            var slotId = SelectedSlot.Id;
+            if (registry.DeleteSlot(slotId))
+            {
+                deviceSettingsStore.RemoveSlot(slotId);
+            }
         }
     }
 

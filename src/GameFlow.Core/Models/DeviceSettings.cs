@@ -203,12 +203,11 @@ public sealed record AdaptiveTriggerSettings
 /// <para>
 /// Split by what actually consumes it. Sticks and triggers are INPUT
 /// conditioning — <see cref="Pipeline.DeviceSettingsProcessor"/> applies
-/// them to the physical snapshot before any mapping rule runs, so they
-/// work today on every platform. Rumble, lighting, and adaptive triggers
-/// are OUTPUT effects that have to be written back to the hardware; the
-/// settings persist and round-trip correctly, but the write path needs
-/// a dedicated effects thread (SDL writes block the runtime tick over
-/// Bluetooth), which isn't built yet.
+/// them to the physical snapshot before any mapping rule runs. Rumble,
+/// lighting, and adaptive triggers are OUTPUT effects delivered through
+/// the dedicated effects thread; SDL writes stay on the worker that owns
+/// the physical device handles so Bluetooth transfers never block the
+/// mapping tick.
 /// </para>
 /// </summary>
 public sealed record DeviceSettings

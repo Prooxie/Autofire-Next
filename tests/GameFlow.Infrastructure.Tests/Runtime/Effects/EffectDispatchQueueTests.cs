@@ -245,6 +245,8 @@ public sealed class ControllerEffectStateTests
     {
         Assert.True(ControllerEffectState.Silent.IsSilent);
         Assert.True(default(ControllerEffectState).IsSilent);
+        Assert.Equal(AdaptiveTriggerEffect.Off, ControllerEffectState.Silent.LeftTrigger?.Effect);
+        Assert.Equal(AdaptiveTriggerEffect.Off, ControllerEffectState.Silent.RightTrigger?.Effect);
     }
 
     [Fact]
@@ -256,6 +258,11 @@ public sealed class ControllerEffectStateTests
         Assert.False(new ControllerEffectState
         {
             LeftTrigger = new AdaptiveTriggerCommand(AdaptiveTriggerEffect.Constant, 0, 0, 200)
+        }.IsSilent);
+        Assert.True(new ControllerEffectState
+        {
+            LeftTrigger = AdaptiveTriggerCommand.Release,
+            RightTrigger = AdaptiveTriggerCommand.Release,
         }.IsSilent);
     }
 }

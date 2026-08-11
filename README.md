@@ -49,7 +49,7 @@ For the full feature reference, per-rule mechanics, and platform-by-platform ver
 |**Custom scripting**|Sandboxed Lua per control (MoonSharp), for logic the built-in rule types don't cover|
 |**Button combos**|One press → a timed sequence of virtual presses|
 |**Freeze macro**|Captures the stick vector on the rising edge of a button; optional pulse-while-frozen|
-|**Per-device tuning**|Deadzone, anti-deadzone, full-at, sensitivity, response curve, and invert — per stick, per trigger, **per slot AND per device**, so the same pad feels different on two different slots. Rumble/lighting/adaptive-trigger settings save and reload too (see [Known Limitations](#known-limitations) for what's live vs. saved-only)|
+|**Per-device tuning**|Deadzone, anti-deadzone, full-at, sensitivity, response curve, and invert — per stick, per trigger, **per slot AND per device**, so the same pad feels different on two different slots. Offline slots remain editable through inheritable defaults; rumble, lighting, and adaptive-trigger settings reach assigned supported hardware through the effects thread.|
 |**Keyboard \& mouse as gamepad**|Full keyboard state (not just a handful of buttons) synthesized into a gamepad snapshot — works on **Windows, Linux, and macOS**|
 |**Motion server**|DSU / Cemuhook over UDP (26760 by default) — Cemu, Dolphin, Yuzu and Ryujinx read gyro and accelerometer straight from any slot with a motion-capable pad. Off by default; enable it in the Dashboard's Motion Server section|
 |**Phone as controller**|No app install — open a URL in any phone browser on the LAN. Dual anchored sticks, 8-way D-pad, analog triggers, rumble via the Vibration API, and the phone's own **gyroscope/accelerometer** feed the same gyro pipeline a DualSense uses. Up to 16 phones at once|
@@ -145,7 +145,7 @@ A slot's own virtual output is hidden from every input picker — you can't feed
 
 ### Tune a device (deadzones, curves, rumble, lighting, adaptive triggers)
 
-**Click any virtual controller panel on the Dashboard.** The panel outlines on hover, and clicking opens that slot's tuning editor — five tabs: Sticks, Triggers, Rumble, Lighting, Adaptive. Stick and trigger changes are live immediately. Rumble/lighting/adaptive settings save per slot per device but don't reach physical hardware yet (the panel says so).
+**Click any virtual controller panel on the Dashboard.** The panel outlines on hover, and clicking opens that slot's tuning editor — five tabs: Sticks, Triggers, Rumble, Lighting, Adaptive. The editor remains available with no physical controller connected: an offline assigned device keeps its own settings, while a slot with no assignment edits defaults inherited by devices added later. Device-specific settings override those defaults. Changes are live and effects are delivered to an assigned supported controller whenever it is connected.
 
 ### Phone as a controller
 
@@ -263,7 +263,6 @@ Shift layers resolve first each tick, gating which rules are active. Every slot'
 
 Documented here rather than discovered by surprise:
 
-* **Rumble, RGB/lighting, and adaptive triggers save and reload correctly, but don't reach physical hardware yet.** The dedicated effects thread now exists (`ControllerEffectsService`) — a long-running thread with a latest-wins dispatch queue that coalesces redundant writes, rate-limits to ~60 Hz per device, and exempts "stop" from that limit so a motor never keeps running. What's left is the backend: `IControllerEffectWriter` is still the null implementation, because binding it to SDL's effect calls has to be validated against real Bluetooth hardware — SDL holds its device lock across the blocking HID transfer, and that is exactly what froze the runtime when effects were previously wired in.
 * **No virtual *gamepad* output on Linux or macOS.** Mouse output is real on both; a real virtual controller (via `uinput`'s gamepad mode, or DriverKit on macOS) is future work.
 * **Bundled controller theme placement is known-imperfect** on some skins — several were generated from asset-pack sprites without authoritative layout data. Fixing this properly needs template-matching each sprite against its base image; tracked, not yet done.
 * **CGEventTap (macOS) has no per-device keyboard/mouse distinction** — one aggregate stream for the whole system, not per-physical-device like Windows/Linux.

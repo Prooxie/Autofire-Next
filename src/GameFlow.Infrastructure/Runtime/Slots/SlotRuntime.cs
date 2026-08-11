@@ -25,6 +25,7 @@ public sealed class SlotRuntime : IAsyncDisposable
     private readonly IProfileRepository profileRepository;
     private readonly Input.IMouseOutputWriter mouseOutputWriter;
     private readonly DeviceSettingsStore deviceSettingsStore;
+    private readonly Effects.RumbleFeedbackStore rumbleFeedbackStore;
     private readonly ILogger logger;
 
     private readonly List<SlotPipeline> pipelines = [];
@@ -42,6 +43,8 @@ public sealed class SlotRuntime : IAsyncDisposable
     /// disappears, its provider changes, or the runtime shuts down.
     /// </summary>
     private readonly Dictionary<string, (string Provider, IOutputSink Sink)> sinkCache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (IRumbleFeedbackSource Source, Action<double, double> Handler)> rumbleSubscriptions =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Time base for per-slot demo previews — one continuous clock for
@@ -53,7 +56,9 @@ public sealed class SlotRuntime : IAsyncDisposable
     public SlotRuntime(SlotRegistry registry, IOutputSinkFactory outputSinkFactory,
         SlotSnapshotStore snapshotStore,
         IProfileRepository profileRepository, Input.IMouseOutputWriter mouseOutputWriter,
-        DeviceSettingsStore deviceSettingsStore, ILogger logger)
+        DeviceSettingsStore deviceSettingsStore,
+        Effects.RumbleFeedbackStore rumbleFeedbackStore,
+        ILogger logger)
     {
         this.registry = registry;
         this.outputSinkFactory = outputSinkFactory;
@@ -61,6 +66,7 @@ public sealed class SlotRuntime : IAsyncDisposable
         this.profileRepository = profileRepository;
         this.mouseOutputWriter = mouseOutputWriter;
         this.deviceSettingsStore = deviceSettingsStore;
+        this.rumbleFeedbackStore = rumbleFeedbackStore;
         this.logger = logger;
     }
 
@@ -176,12 +182,14 @@ public sealed class SlotRuntime : IAsyncDisposable
             logger.LogInformation(
                 "Slot runtime: slot {SlotId} provider changed {Old} → {New}; recreating sink.",
                 slotId, cached.Provider, provider);
+            DetachRumbleFeedback(slotId);
             await DisposeSinkQuietlyAsync(slotId, cached.Sink);
             sinkCache.Remove(slotId);
         }
 
         var sink = outputSinkFactory.Create(provider);
         sinkCache[slotId] = (provider, sink);
+        AttachRumbleFeedback(slotId, sink);
         return sink;
     }
 
@@ -197,8 +205,33 @@ public sealed class SlotRuntime : IAsyncDisposable
             }
             var (_, sink) = sinkCache[slotId];
             sinkCache.Remove(slotId);
+            DetachRumbleFeedback(slotId);
             await DisposeSinkQuietlyAsync(slotId, sink);
         }
+    }
+
+    private void AttachRumbleFeedback(string slotId, IOutputSink sink)
+    {
+        if (sink is not IRumbleFeedbackSource source)
+        {
+            return;
+        }
+
+        Action<double, double> handler = (low, high) => rumbleFeedbackStore.Set(slotId, low, high);
+        source.RumbleReceived += handler;
+        rumbleSubscriptions[slotId] = (source, handler);
+    }
+
+    private void DetachRumbleFeedback(string slotId)
+    {
+        if (rumbleSubscriptions.Remove(slotId, out var subscription))
+        {
+            subscription.Source.RumbleReceived -= subscription.Handler;
+        }
+
+        // A disposed or replaced virtual pad cannot send its final stop
+        // after teardown, so clear any retained motor state explicitly.
+        rumbleFeedbackStore.Clear(slotId);
     }
 
     private async ValueTask DisposeSinkQuietlyAsync(string slotId, IOutputSink sink)
@@ -240,13 +273,19 @@ public sealed class SlotRuntime : IAsyncDisposable
                     // with zero devices assigned too). Everything
                     // downstream is real — profiles map it, panels
                     // animate, the virtual controller emits it.
-                    snapshot = DemoInputSource.GenerateSnapshot(
-                        demoClock.Elapsed.TotalSeconds, "Demo preview") with
-                    { Timestamp = now };
+                    snapshot = ApplyDeviceSettings(
+                        pipeline.SlotId,
+                        DeviceSettingsStore.SlotDefaultsDeviceId,
+                        DemoInputSource.GenerateSnapshot(
+                            demoClock.Elapsed.TotalSeconds, "Demo preview") with
+                        { Timestamp = now });
                 }
                 else if (deviceIds.Count == 0)
                 {
-                    snapshot = ControllerSnapshot.Empty("No device assigned") with { Timestamp = now };
+                    snapshot = ApplyDeviceSettings(
+                        pipeline.SlotId,
+                        DeviceSettingsStore.SlotDefaultsDeviceId,
+                        ControllerSnapshot.Empty("No device assigned") with { Timestamp = now });
                 }
                 else if (deviceIds.Count == 1)
                 {
@@ -300,9 +339,10 @@ public sealed class SlotRuntime : IAsyncDisposable
     }
 
     /// <summary>
-    /// Applies this slot's tuning for one device. Short-circuits when the
-    /// device has no settings or they're all defaults — that's the common
-    /// case, and this runs per device per tick at up to 1000 Hz.
+    /// Applies this slot's tuning for one device (or the slot defaults when
+    /// that device has no override). Short-circuits when the effective
+    /// settings are all defaults — that's the common case, and this runs
+    /// per device per tick at up to 1000 Hz.
     ///
     /// <para>
     /// The check is by VALUE, not by reference. Settings restored from
@@ -315,7 +355,7 @@ public sealed class SlotRuntime : IAsyncDisposable
     /// </summary>
     private ControllerSnapshot ApplyDeviceSettings(string slotId, string deviceId, ControllerSnapshot snapshot)
     {
-        var settings = deviceSettingsStore.Get(slotId, deviceId);
+        var settings = deviceSettingsStore.GetEffective(slotId, deviceId);
         if (DeviceSettingsProcessor.IsIdentity(settings))
         {
             return snapshot;
@@ -422,6 +462,7 @@ public sealed class SlotRuntime : IAsyncDisposable
         await DisposePipelinesAsync();
         foreach (var (slotId, entry) in sinkCache.ToList())
         {
+            DetachRumbleFeedback(slotId);
             await DisposeSinkQuietlyAsync(slotId, entry.Sink);
         }
         sinkCache.Clear();

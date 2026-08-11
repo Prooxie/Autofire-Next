@@ -315,11 +315,11 @@
       "children": [
         {
           "type": "image",
-          "x": 410,
-          "y": 158,
+          "x": 492,
+          "y": 150,
           "image": "\\ds4\\Image Assets\\DS4-Touchpad-Cick.png",
-          "width": 645,
-          "height": 215
+          "width": 482,
+          "height": 289
         }
       ]
     }
