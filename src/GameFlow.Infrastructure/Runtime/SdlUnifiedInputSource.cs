@@ -57,6 +57,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     private bool disposed;
     private bool sdlInitialized;
 
+    /// <summary>Guards the elevated "no devices" advice so it is logged once per dry spell, not per 250 ms refresh.</summary>
+    private bool warnedElevatedNoDevices;
+
     // ── Dedicated SDL worker (owns every SDL call after the ctor) ──
     private Thread? worker;
     private volatile bool stopRequested;
@@ -126,6 +129,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         _ = SdlInterop.SetHint(SdlInterop.HintJoystickDirectInput, "1");
         _ = SdlInterop.SetHint(SdlInterop.HintXInputEnabled, "1");
         _ = SdlInterop.SetHint(SdlInterop.HintAutoUpdateJoysticks, "0");
+        ApplyElevationWorkarounds();
         // Enhanced reports on DS4/DS5 pads.
         //
         // This was pinned OFF to stop a real bug: sending the enhanced-mode
@@ -1281,6 +1285,66 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         return contacts;
     }
 
+    /// <summary>
+    /// Steers SDL away from the enumeration backends that go quiet in an
+    /// elevated process.
+    ///
+    /// <para>
+    /// GameFlow tells the user to run as Administrator — HIDMaestro needs
+    /// SeLoadDriverPrivilege to create virtual controllers — and doing
+    /// that made physical controllers disappear. Both of Windows'
+    /// modern enumeration paths are affected. Windows.Gaming.Input is a
+    /// WinRT API brokered through the interactive user's session, and an
+    /// elevated process is not in that session; SDL's Raw Input backend
+    /// then correlates its devices against WGI to recover names and
+    /// capabilities, so it inherits the same behaviour. The result is
+    /// enumeration returning nothing while the pad is plainly connected.
+    /// </para>
+    ///
+    /// <para>
+    /// Turning both off leaves HIDAPI, DirectInput and XInput, none of
+    /// which route through the session broker, and all of which are
+    /// already enabled above. That is a strictly smaller set of backends,
+    /// so this is deliberately scoped to the elevated case rather than
+    /// applied everywhere: unelevated, WGI is the better path and there is
+    /// nothing to work around.
+    /// </para>
+    ///
+    /// <para>
+    /// <c>GAMEFLOW_SDL_ELEVATION_WORKAROUND=0</c> disables this without a
+    /// rebuild, since it is a behaviour change on a code path that cannot
+    /// be exercised without elevating.
+    /// </para>
+    /// </summary>
+    private void ApplyElevationWorkarounds()
+    {
+        if (!OperatingSystem.IsWindows() || !Environment.IsPrivilegedProcess)
+        {
+            return;
+        }
+
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("GAMEFLOW_SDL_ELEVATION_WORKAROUND"),
+                "0",
+                StringComparison.Ordinal))
+        {
+            logger.LogInformation(
+                "Running elevated; the SDL elevation workaround is disabled by "
+                + "GAMEFLOW_SDL_ELEVATION_WORKAROUND=0. If no controllers are detected, unset it.");
+            return;
+        }
+
+        _ = SdlInterop.SetHint(SdlInterop.HintJoystickWgi, "0");
+        _ = SdlInterop.SetHint(SdlInterop.HintJoystickRawInput, "0");
+
+        logger.LogInformation(
+            "Running elevated: Windows.Gaming.Input and Raw Input enumeration disabled for SDL, "
+            + "falling back to HIDAPI/DirectInput/XInput. Those two backends are brokered through the "
+            + "interactive user's session and return no devices to an elevated process, which is why "
+            + "controllers vanished when GameFlow was started as Administrator. "
+            + "Set GAMEFLOW_SDL_ELEVATION_WORKAROUND=0 to disable this.");
+    }
+
     private void RefreshDeviceCatalog()
     {
         var devices = new List<InputDeviceInfo>();
@@ -1426,8 +1490,26 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         if (devices.Count == 0)
         {
             inputDeviceCatalog.SetProviderStatus("ProviderStatus_SdlNoGamepads");
+
+            // "No controllers" while elevated is a specific, known trap,
+            // and it looks exactly like "no controllers plugged in". Say
+            // which one it is, once, rather than leaving the user to guess
+            // — this is the state that had a connected DualSense reported
+            // as missing.
+            if (OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess && !warnedElevatedNoDevices)
+            {
+                warnedElevatedNoDevices = true;
+                logger.LogWarning(
+                    "No controllers enumerated, and GameFlow is running elevated. Elevation is the first "
+                    + "thing to rule out: run GameFlow WITHOUT Administrator and check whether the pad "
+                    + "appears. If it does, the remaining SDL backends are not seeing it either and the "
+                    + "log above will show which ones were enabled.");
+            }
+
             return;
         }
+
+        warnedElevatedNoDevices = false;
 
         // ProviderStatus_SdlActive's translation is "SDL3 unified input active — {0} gamepad(s) detected"
         inputDeviceCatalog.SetProviderStatus("ProviderStatus_SdlActive", devices.Count);

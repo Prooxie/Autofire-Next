@@ -21,6 +21,21 @@ internal static partial class SdlInterop
     internal const string HintXInputEnabled = "SDL_XINPUT_ENABLED";
     internal const string HintAutoUpdateJoysticks = "SDL_AUTO_UPDATE_JOYSTICKS";
 
+    /// <summary>
+    /// Windows.Gaming.Input backend. A WinRT API, and WinRT is brokered
+    /// through the interactive user's session — an elevated process is not
+    /// in that session, so enumeration through it can silently return
+    /// nothing.
+    /// </summary>
+    internal const string HintJoystickWgi = "SDL_JOYSTICK_WGI";
+
+    /// <summary>
+    /// Raw Input backend. SDL correlates its devices against WGI to
+    /// recover names and capabilities, so it inherits WGI's behaviour
+    /// under elevation.
+    /// </summary>
+    internal const string HintJoystickRawInput = "SDL_JOYSTICK_RAWINPUT";
+
     internal enum GamepadAxis
     {
         Invalid = -1,
