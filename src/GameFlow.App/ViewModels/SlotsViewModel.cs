@@ -107,6 +107,94 @@ public sealed class AssignableDeviceRow(string id, string displayName)
     public string DisplayName { get; } = displayName;
 }
 
+/// <summary>
+/// Reconciles an <see cref="ObservableCollection{T}"/> against a desired
+/// sequence instead of clearing and refilling it.
+///
+/// <para>
+/// Clear-then-refill is why the Add and Remove buttons blinked. These
+/// lists are rebuilt whenever the device catalog or the slot registry
+/// raises a change, which is often, and every rebuild replaced every row —
+/// so Avalonia tore down each row's controls and built new ones, and the
+/// buttons visibly flashed. The navigation column had the identical bug
+/// and the identical fix; this is that fix, generalised, so the next list
+/// does not have to rediscover it.
+/// </para>
+///
+/// <para>
+/// A row whose key AND content are unchanged is left alone entirely,
+/// which is what keeps its controls — and their hover and focus state —
+/// alive across a refresh.
+/// </para>
+/// </summary>
+public static class RowSync
+{
+    /// <param name="key">
+    /// Row identity. Matched case-insensitively, because catalog ids come
+    /// from several backends that do not agree on case.
+    /// </param>
+    /// <param name="sameContent">
+    /// Compares only what is DISPLAYED. It must not look at the key: two
+    /// rows only reach this check because their keys already matched, and
+    /// including the key means a device whose id differs only in case
+    /// compares unequal and gets replaced — throwing away the controls
+    /// this whole reconciler exists to keep. Record equality is therefore
+    /// the wrong thing to pass here.
+    /// </param>
+    public static void Apply<T>(
+        ObservableCollection<T> rows,
+        IReadOnlyList<T> target,
+        Func<T, string> key,
+        Func<T, T, bool> sameContent)
+    {
+        for (var i = rows.Count - 1; i >= 0; i--)
+        {
+            var existing = rows[i];
+            if (!target.Any(t => string.Equals(key(t), key(existing), StringComparison.OrdinalIgnoreCase)))
+            {
+                rows.RemoveAt(i);
+            }
+        }
+
+        for (var idx = 0; idx < target.Count; idx++)
+        {
+            var wanted = target[idx];
+            var at = IndexOfKey(rows, key, key(wanted));
+
+            if (at < 0)
+            {
+                rows.Insert(Math.Min(idx, rows.Count), wanted);
+                continue;
+            }
+
+            // Same identity, different content — replace in place rather
+            // than remove-then-insert, which would also drop the controls.
+            if (!sameContent(rows[at], wanted))
+            {
+                rows[at] = wanted;
+            }
+
+            if (at != idx && idx < rows.Count)
+            {
+                rows.Move(at, idx);
+            }
+        }
+    }
+
+    private static int IndexOfKey<T>(ObservableCollection<T> rows, Func<T, string> key, string wanted)
+    {
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (string.Equals(key(rows[i]), wanted, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+}
+
 public sealed class SlotsViewModel : ViewModelBase, IDisposable
 {
     private readonly SlotRegistry registry;
@@ -575,13 +663,12 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
         loadingDetail = true;
         try
         {
-            AssignedDevices.Clear();
-            AvailableDevices.Clear();
-            AssignedProfiles.Clear();
-
             var slot = SelectedSlot is null ? null : registry.GetSlot(SelectedSlot.Id);
             if (slot is null)
             {
+                AssignedDevices.Clear();
+                AvailableDevices.Clear();
+                AssignedProfiles.Clear();
                 SlotName = string.Empty;
                 SlotEnabled = false;
                 TemplateEditor.Clear();
@@ -597,13 +684,23 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
             var slotId = slot.Id;
             TemplateEditor.LoadTemplate(slot.OutputTemplate, t => registry.UpdateTemplate(slotId, t));
 
-            // Assigned devices (in slot order), resolving names from the catalog.
+            // These three are reconciled rather than rebuilt. LoadDetail
+            // runs on every registry and catalog change, and clearing an
+            // ObservableCollection destroys every row's controls — which
+            // is what made the Add and Remove buttons blink.
             var devices = catalog.Devices;
-            foreach (var id in slot.InputDeviceIds)
-            {
-                var info = devices.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase));
-                AssignedDevices.Add(new AssignableDeviceRow(id, info?.DisplayName ?? id));
-            }
+
+            // Assigned devices (in slot order), resolving names from the catalog.
+            RowSync.Apply(
+                AssignedDevices,
+                slot.InputDeviceIds
+                    .Select(id => new AssignableDeviceRow(
+                        id,
+                        devices.FirstOrDefault(d => string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase))
+                            ?.DisplayName ?? id))
+                    .ToList(),
+                row => row.Id,
+                (a, b) => string.Equals(a.DisplayName, b.DisplayName, StringComparison.Ordinal));
 
             // Available = assignable devices not already on this slot.
             //
@@ -613,20 +710,24 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
             // output — so without that check a slot could be fed from
             // another slot's output, and the chain could be extended
             // until the runtime was mapping itself in a circle.
-            foreach (var d in devices)
-            {
-                if (d.IsAssignableAsInput && !slot.InputDeviceIds.Contains(d.Id))
-                {
-                    AvailableDevices.Add(new AssignableDeviceRow(d.Id, d.DisplayName));
-                }
-            }
+            RowSync.Apply(
+                AvailableDevices,
+                devices
+                    .Where(d => d.IsAssignableAsInput && !slot.InputDeviceIds.Contains(d.Id))
+                    .Select(d => new AssignableDeviceRow(d.Id, d.DisplayName))
+                    .ToList(),
+                row => row.Id,
+                (a, b) => string.Equals(a.DisplayName, b.DisplayName, StringComparison.Ordinal));
 
             // Layered profiles (in order), resolving names from the catalog.
-            foreach (var pid in slot.ProfileIds)
-            {
-                var name = AvailableProfiles.FirstOrDefault(p => p.Id == pid)?.Name ?? pid;
-                AssignedProfiles.Add(new ProfileSummary(pid, name));
-            }
+            RowSync.Apply(
+                AssignedProfiles,
+                slot.ProfileIds
+                    .Select(pid => new ProfileSummary(
+                        pid, AvailableProfiles.FirstOrDefault(p => p.Id == pid)?.Name ?? pid))
+                    .ToList(),
+                row => row.Id,
+                (a, b) => string.Equals(a.Name, b.Name, StringComparison.Ordinal));
 
             // The Touchpad tab follows the hardware: it shows as soon as
             // any assigned device reports a touch surface. Settings are
