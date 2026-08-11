@@ -75,10 +75,17 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     /// Dashboard UI tick rate, in Hz. The per-user setting supersedes the
     /// appsettings.json value, matching the contract documented on
     /// <see cref="GameFlow.Infrastructure.Profiles.AppSettings.DashboardRefreshHz"/>.
+    ///
+    /// <para>
+    /// Defaults to 60. See <c>ShellWindow.ApplyConfiguredRefreshRate</c>
+    /// for why it is no longer 30 — a surface repaint went from ~19 ms to
+    /// under 1 ms, and the old default was spending 33 ms of latency to
+    /// save work that no longer exists.
+    /// </para>
     /// </summary>
     public int DashboardRefreshHz =>
         userSettings.Current.DashboardRefreshHz
-        ?? (runtimeOptions.DashboardRefreshHz > 0 ? runtimeOptions.DashboardRefreshHz : 30);
+        ?? (runtimeOptions.DashboardRefreshHz > 0 ? runtimeOptions.DashboardRefreshHz : 60);
     private readonly SemaphoreSlim rulesSaveGate = new(1, 1);
     private readonly SemaphoreSlim panelBackgroundSaveGate = new(1, 1);
     private int panelBackgroundPersistVersion;

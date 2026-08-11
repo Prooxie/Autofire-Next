@@ -15,8 +15,16 @@ public sealed class AppRuntimeOptions
     /// <summary>
     /// Hertz at which the dashboard view-models recompute. May be
     /// overridden per user via <c>AppSettings.DashboardRefreshHz</c>.
+    ///
+    /// <para>
+    /// 60, not 30. The old value dates from a controller surface costing
+    /// ~19 ms to repaint; it now costs a few ms, and 30 Hz was spending up
+    /// to 33 ms of latency to save work that no longer exists. The
+    /// dashboard's adaptive backoff still degrades a machine that cannot
+    /// hold it.
+    /// </para>
     /// </summary>
-    public int DashboardRefreshHz { get; set; } = 30;
+    public int DashboardRefreshHz { get; set; } = 60;
 
     /// <summary>
     /// When <see langword="true"/>, the runtime coordinator hosted

@@ -376,11 +376,11 @@ public sealed class ThemeSurface : Control
         // which is what made the whole UI sluggish whenever a controller was
         // attached. Only repaint when something the art can actually show has
         // changed; otherwise keep the latest snapshot but skip the paint.
-        // A cooling trail is an animation with no input behind it: the
-        // snapshot stops changing the moment the finger stops or lifts,
-        // and without this the trail would freeze half-faded and sit there
-        // until something else happened to force a paint.
-        if (touchTrail.HasPoints)
+        // A cooling trail and burning sparks are animations with no input
+        // behind them: the snapshot stops changing the moment the finger
+        // stops or lifts, and without this they would freeze mid-fade and
+        // sit there until something else happened to force a paint.
+        if (touchTrail.HasPoints || touchParticles.HasParticles)
         {
             lastRenderedSnapshot = newSnapshot;
             InvalidateVisual();
@@ -1403,6 +1403,9 @@ public sealed class ThemeSurface : Control
     /// <summary>Recent positions per finger, for the ember trail.</summary>
     private readonly TouchTrail touchTrail = new();
 
+    /// <summary>Sparks thrown off each fingertip, in place of a marker dot.</summary>
+    private readonly TouchParticles touchParticles = new();
+
     /// <summary>
     /// Monotonic clock for trail ageing. A Stopwatch rather than
     /// DateTime.UtcNow so a clock adjustment mid-gesture cannot make every
@@ -1454,11 +1457,12 @@ public sealed class ThemeSurface : Control
         var now = trailClock.Elapsed.TotalSeconds;
 
         // Record before the early-out on an empty contact list: a lifted
-        // finger's trail still has to finish cooling, and nothing else
-        // would be ageing it.
+        // finger's trail still has to finish cooling and its sparks still
+        // have to burn out, and nothing else would be ageing them.
         touchTrail.Record(contacts, now);
+        touchParticles.Emit(contacts, now);
 
-        if (contacts.Count == 0 && !touchTrail.HasPoints)
+        if (contacts.Count == 0 && !touchTrail.HasPoints && !touchParticles.HasParticles)
         {
             return;
         }
@@ -1509,15 +1513,52 @@ public sealed class ThemeSurface : Control
             }
         }
 
+        // Sparks, in place of the marker dot inside a ring. Drawn over the
+        // trail and under the fingertip glow, so the brightest thing on
+        // screen is still exactly where the finger is.
+        foreach (var particle in touchParticles.Particles)
+        {
+            var age = particle.Age(now);
+            var color = ContactColors[FingerColorIndex(particle.FingerIndex)];
+
+            // Same cooling ramp as the trail — white-hot, through the
+            // finger's colour, out to ember — so the sparks and the trail
+            // read as one effect rather than two overlapping ones.
+            var tint = age < 0.3
+                ? Blend(TrailCoreColor, color, age / 0.3)
+                : Blend(color, TrailEmberColor, (age - 0.3) / 0.7);
+
+            var opacity = Math.Pow(1 - age, 1.4);
+            if (opacity <= 0.02)
+            {
+                continue;
+            }
+
+            // Shrinks as it burns out, which is what makes a spark read as
+            // a spark rather than as a dot that fades.
+            var radius = particle.Scale * (3.2 * (1 - (0.7 * age)));
+            ctx.DrawEllipse(
+                new ImmutableSolidColorBrush(tint, opacity),
+                null,
+                ToSurface(particle.XAt(now), particle.YAt(now)),
+                radius,
+                radius);
+        }
+
+        // The fingertip itself: a soft glow rather than a hard dot in a
+        // ring. Two translucent discs, the outer one scaled by pressure,
+        // so the contact point stays unambiguous while the sparks do the
+        // work of looking like fire.
         for (var i = 0; i < contacts.Count && i < ContactColors.Length; i++)
         {
             var contact = contacts[i];
             var point = ToSurface(contact.X, contact.Y);
-            var brush = ContactBrushes[FingerColorIndex(contact.FingerIndex)];
-            var radius = 12 + (8 * Math.Clamp(contact.Pressure, 0f, 1f));
+            var color = ContactColors[FingerColorIndex(contact.FingerIndex)];
+            var pressure = Math.Clamp(contact.Pressure, 0f, 1f);
 
-            ctx.DrawEllipse(null, new Pen(brush, 3), point, radius, radius);
-            ctx.DrawEllipse(new ImmutableSolidColorBrush(TrailCoreColor), null, point, 5, 5);
+            ctx.DrawEllipse(new ImmutableSolidColorBrush(color, 0.22), null, point, 11 + (7 * pressure), 11 + (7 * pressure));
+            ctx.DrawEllipse(new ImmutableSolidColorBrush(color, 0.45), null, point, 6.5, 6.5);
+            ctx.DrawEllipse(new ImmutableSolidColorBrush(TrailCoreColor, 0.95), null, point, 3, 3);
         }
     }
 
