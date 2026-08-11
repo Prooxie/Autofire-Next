@@ -1511,7 +1511,7 @@
                           <StackPanel Spacing="3">
                             <TextBlock Text="{Binding StickSensitivityLabel}" Classes="fieldLabel" />
                             <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
-                              <Slider Grid.Column="0" Minimum="0.1" Maximum="10" SmallChange="0.1"
+                              <Slider Grid.Column="0" Classes="trackAligned" Minimum="0.1" Maximum="10" SmallChange="0.1"
                                       LargeChange="0.5" Value="{Binding StickSensitivity}" />
                               <TextBox Grid.Column="1" Text="{Binding StickSensitivity}"
                                        HorizontalContentAlignment="Center" />
@@ -1531,7 +1531,7 @@
                           <StackPanel Spacing="3">
                             <TextBlock Text="{Binding DpadDeadzoneLabel}" Classes="fieldLabel" />
                             <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
-                              <Slider Grid.Column="0" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                              <Slider Grid.Column="0" Classes="trackAligned" Minimum="0" Maximum="0.5" SmallChange="0.01"
                                       LargeChange="0.05" Value="{Binding DpadDeadzoneRadius}" />
                               <TextBox Grid.Column="1" Text="{Binding DpadDeadzoneRadius}"
                                        HorizontalContentAlignment="Center" />
@@ -1551,7 +1551,7 @@
                           <StackPanel Spacing="3">
                             <TextBlock Text="{Binding MouseSensitivityXLabel}" Classes="fieldLabel" />
                             <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
-                              <Slider Grid.Column="0" Minimum="0.1" Maximum="10" SmallChange="0.1"
+                              <Slider Grid.Column="0" Classes="trackAligned" Minimum="0.1" Maximum="10" SmallChange="0.1"
                                       LargeChange="0.5" Value="{Binding MouseSensitivityX}" />
                               <TextBox Grid.Column="1" Text="{Binding MouseSensitivityX}"
                                        HorizontalContentAlignment="Center" />
@@ -1560,7 +1560,7 @@
                           <StackPanel Spacing="3">
                             <TextBlock Text="{Binding MouseSensitivityYLabel}" Classes="fieldLabel" />
                             <Grid ColumnDefinitions="*,88" ColumnSpacing="10">
-                              <Slider Grid.Column="0" Minimum="0.1" Maximum="10" SmallChange="0.1"
+                              <Slider Grid.Column="0" Classes="trackAligned" Minimum="0.1" Maximum="10" SmallChange="0.1"
                                       LargeChange="0.5" Value="{Binding MouseSensitivityY}" />
                               <TextBox Grid.Column="1" Text="{Binding MouseSensitivityY}"
                                        HorizontalContentAlignment="Center" />

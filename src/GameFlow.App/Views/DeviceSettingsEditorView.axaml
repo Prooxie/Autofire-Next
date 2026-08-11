@@ -3,6 +3,7 @@
              xmlns:vm="using:GameFlow.App.ViewModels"
              xmlns:views="using:GameFlow.App.Views"
              x:Class="GameFlow.App.Views.DeviceSettingsEditorView"
+             x:Name="EditorRoot"
              x:DataType="vm:DeviceSettingsEditorViewModel"
              x:CompileBindings="True">
 
@@ -25,19 +26,9 @@
       <Setter Property="Foreground" Value="{DynamicResource AppForeground}" />
     </Style>
 
-    <!--
-        Sliders sat flush against their labels and against each other,
-        which made every effects tab read as one undifferentiated block
-        and left no room to grab a thumb near the track's ends. The row
-        grids below supply the horizontal gap; this supplies the vertical
-        breathing room and a consistent hit height, so a slider is the
-        same size to aim at on every tab.
-    -->
-    <Style Selector="Slider.row">
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="MinHeight" Value="26" />
-      <Setter Property="Margin" Value="0,1" />
-    </Style>
+    <!-- Slider spacing is handled by the app-wide Slider style now; it
+         used to carry a negative horizontal margin that ate the column
+         spacing on every row like the ones below. -->
 
     <!-- Explanatory line under a control, for settings whose name does not carry their meaning. -->
     <Style Selector="TextBlock.hint">
@@ -237,12 +228,12 @@
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto"
                     ColumnSpacing="12" RowSpacing="8">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
-                <Slider Grid.Row="0" Grid.Column="1" Classes="row" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
                         Value="{Binding LeftTriggerDeadzone}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding LeftTriggerDeadzone, StringFormat='{}{0:P0}'}" />
                 <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Full at" />
-                <Slider Grid.Row="1" Grid.Column="1" Classes="row" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
+                <Slider Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
                         Value="{Binding LeftTriggerFullAt}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                            Text="{Binding LeftTriggerFullAt, StringFormat='{}{0:P0}'}" />
@@ -256,12 +247,12 @@
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto"
                     ColumnSpacing="12" RowSpacing="8">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
-                <Slider Grid.Row="0" Grid.Column="1" Classes="row" Minimum="0" Maximum="0.5" SmallChange="0.01"
+                <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
                         Value="{Binding RightTriggerDeadzone}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding RightTriggerDeadzone, StringFormat='{}{0:P0}'}" />
                 <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Full at" />
-                <Slider Grid.Row="1" Grid.Column="1" Classes="row" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
+                <Slider Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
                         Value="{Binding RightTriggerFullAt}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                            Text="{Binding RightTriggerFullAt, StringFormat='{}{0:P0}'}" />
@@ -283,19 +274,19 @@
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto,Auto"
                     ColumnSpacing="12" RowSpacing="8">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Overall" />
-                <Slider Grid.Row="0" Grid.Column="1" Classes="row" Minimum="0" Maximum="2.0" SmallChange="0.05"
+                <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
                         Value="{Binding RumbleGain}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding RumbleGain, StringFormat='{}{0:F2}x'}" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Low motor" />
-                <Slider Grid.Row="1" Grid.Column="1" Classes="row" Minimum="0" Maximum="2.0" SmallChange="0.05"
+                <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
                         Value="{Binding RumbleLowGain}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                            Text="{Binding RumbleLowGain, StringFormat='{}{0:F2}x'}" />
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="High motor" />
-                <Slider Grid.Row="2" Grid.Column="1" Classes="row" Minimum="0" Maximum="2.0" SmallChange="0.05"
+                <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
                         Value="{Binding RumbleHighGain}" />
                 <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
                            Text="{Binding RumbleHighGain, StringFormat='{}{0:F2}x'}" />
@@ -317,15 +308,49 @@
         <ScrollViewer>
           <StackPanel Margin="4,6" Spacing="14">
             <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto"
-                  ColumnSpacing="12" RowSpacing="8">
+                  ColumnSpacing="12" RowSpacing="10">
               <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Lightbar mode" />
               <ComboBox Grid.Row="0" Grid.Column="1" MaxWidth="230" HorizontalAlignment="Left"
                         MinWidth="190"
                         ItemsSource="{Binding LightbarModeOptions}"
                         SelectedItem="{Binding LightbarMode}" />
-              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Colour (hex)" />
-              <TextBox Grid.Row="1" Grid.Column="1" Width="130" HorizontalAlignment="Left"
-                       Text="{Binding LightbarColor}" />
+
+              <!--
+                  Swatches first, hex second. A hex field alone asks you to
+                  know a colour's code before you can see it, on the one
+                  setting whose whole point is visible. The field stays for
+                  anything exact, with the current colour shown beside it
+                  so a typo is obvious.
+              -->
+              <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Colour"
+                         VerticalAlignment="Top" Margin="0,6,0,0" />
+              <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8">
+                <ItemsControl ItemsSource="{Binding LightbarPalette}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Width="30" Height="30" Padding="0" Margin="0,0,7,7"
+                              CornerRadius="6"
+                              Background="{Binding}"
+                              BorderBrush="{DynamicResource AppBorder}" BorderThickness="1"
+                              ToolTip.Tip="{Binding}"
+                              CommandParameter="{Binding}"
+                              Command="{Binding #EditorRoot.((vm:DeviceSettingsEditorViewModel)DataContext).SelectLightbarColorCommand}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Border Width="30" Height="30" CornerRadius="6"
+                          Background="{Binding LightbarColor}"
+                          BorderBrush="{DynamicResource AppBorder}" BorderThickness="1" />
+                  <TextBox Width="120" Text="{Binding LightbarColor}" VerticalAlignment="Center" />
+                </StackPanel>
+              </StackPanel>
             </Grid>
 
             <Border Classes="divider" />
@@ -333,12 +358,12 @@
             <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto"
                   ColumnSpacing="12" RowSpacing="8">
               <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Brightness" />
-              <Slider Grid.Row="0" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.05"
+              <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                       Value="{Binding LightbarBrightness}" />
               <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                          Text="{Binding LightbarBrightness, StringFormat='{}{0:P0}'}" />
               <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Player LEDs" />
-              <Slider Grid.Row="1" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.05"
+              <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                       Value="{Binding IndicatorBrightness}" />
               <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                          Text="{Binding IndicatorBrightness, StringFormat='{}{0:P0}'}" />
@@ -361,29 +386,40 @@
                           ItemsSource="{Binding AdaptiveModeOptions}"
                           SelectedItem="{Binding LeftAdaptiveMode}" />
               </Grid>
+              <TextBlock Classes="hint" Text="{Binding LeftAdaptiveModeDescription}" />
 
+              <!--
+                  Labels say what the number MEANS, not what the field is
+                  called in the report. "Start"/"End" read as times until
+                  you are told they are positions along the pull, and
+                  "Strength" does not say strength of what.
+              -->
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto,Auto,Auto"
                     ColumnSpacing="12" RowSpacing="8">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Start" />
-                <Slider Grid.Row="0" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Begins at pull"
+                           ToolTip.Tip="How far the trigger is pulled before the effect starts." />
+                <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
                         Value="{Binding LeftAdaptiveStart}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding LeftAdaptiveStart, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="End" />
-                <Slider Grid.Row="1" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Ends at pull"
+                           ToolTip.Tip="Where the effect stops. Must be past the start to do anything." />
+                <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
                         Value="{Binding LeftAdaptiveEnd}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                            Text="{Binding LeftAdaptiveEnd, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Strength" />
-                <Slider Grid.Row="2" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="How hard"
+                           ToolTip.Tip="How much the trigger pushes back, or how strongly it buzzes." />
+                <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                         Value="{Binding LeftAdaptiveStrength}" />
                 <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
                            Text="{Binding LeftAdaptiveStrength, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Frequency (Hz)" />
-                <Slider Grid.Row="3" Grid.Column="1" Classes="row" Minimum="1" Maximum="60" SmallChange="1"
+                <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Buzz speed"
+                           ToolTip.Tip="Only used by the buzzing effects. Higher is a finer, faster buzz." />
+                <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="60" SmallChange="1"
                         Value="{Binding LeftAdaptiveFrequency}" />
                 <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
-                           Text="{Binding LeftAdaptiveFrequency}" />
+                           Text="{Binding LeftAdaptiveFrequency, StringFormat='{}{0} Hz'}" />
               </Grid>
 
               <!--
@@ -400,7 +436,7 @@
               <TextBlock Classes="hint" Text="{Binding LeftFeedbackLinkDescription}" />
               <Grid ColumnDefinitions="140,*,60" ColumnSpacing="12" IsVisible="{Binding IsLeftLinked}">
                 <TextBlock Grid.Column="0" Classes="rowLabel" Text="Amount" />
-                <Slider Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                <Slider Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                         Value="{Binding LeftFeedbackAmount}" />
                 <TextBlock Grid.Column="2" Classes="readout"
                            Text="{Binding LeftFeedbackAmount, StringFormat='{}{0:P0}'}" />
@@ -418,29 +454,34 @@
                           ItemsSource="{Binding AdaptiveModeOptions}"
                           SelectedItem="{Binding RightAdaptiveMode}" />
               </Grid>
+              <TextBlock Classes="hint" Text="{Binding RightAdaptiveModeDescription}" />
 
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto,Auto,Auto"
                     ColumnSpacing="12" RowSpacing="8">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Start" />
-                <Slider Grid.Row="0" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Begins at pull"
+                           ToolTip.Tip="How far the trigger is pulled before the effect starts." />
+                <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
                         Value="{Binding RightAdaptiveStart}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding RightAdaptiveStart, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="End" />
-                <Slider Grid.Row="1" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.02"
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Ends at pull"
+                           ToolTip.Tip="Where the effect stops. Must be past the start to do anything." />
+                <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
                         Value="{Binding RightAdaptiveEnd}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                            Text="{Binding RightAdaptiveEnd, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Strength" />
-                <Slider Grid.Row="2" Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="How hard"
+                           ToolTip.Tip="How much the trigger pushes back, or how strongly it buzzes." />
+                <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                         Value="{Binding RightAdaptiveStrength}" />
                 <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
                            Text="{Binding RightAdaptiveStrength, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Frequency (Hz)" />
-                <Slider Grid.Row="3" Grid.Column="1" Classes="row" Minimum="1" Maximum="60" SmallChange="1"
+                <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Buzz speed"
+                           ToolTip.Tip="Only used by the buzzing effects. Higher is a finer, faster buzz." />
+                <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="60" SmallChange="1"
                         Value="{Binding RightAdaptiveFrequency}" />
                 <TextBlock Grid.Row="3" Grid.Column="2" Classes="readout"
-                           Text="{Binding RightAdaptiveFrequency}" />
+                           Text="{Binding RightAdaptiveFrequency, StringFormat='{}{0} Hz'}" />
               </Grid>
 
               <Grid ColumnDefinitions="140,*" ColumnSpacing="12">
@@ -452,7 +493,7 @@
               <TextBlock Classes="hint" Text="{Binding RightFeedbackLinkDescription}" />
               <Grid ColumnDefinitions="140,*,60" ColumnSpacing="12" IsVisible="{Binding IsRightLinked}">
                 <TextBlock Grid.Column="0" Classes="rowLabel" Text="Amount" />
-                <Slider Grid.Column="1" Classes="row" Minimum="0" Maximum="1.0" SmallChange="0.05"
+                <Slider Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                         Value="{Binding RightFeedbackAmount}" />
                 <TextBlock Grid.Column="2" Classes="readout"
                            Text="{Binding RightFeedbackAmount, StringFormat='{}{0:P0}'}" />

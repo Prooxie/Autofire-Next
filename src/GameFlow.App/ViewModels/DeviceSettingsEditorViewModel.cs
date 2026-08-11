@@ -160,6 +160,36 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     public ObservableCollection<AdaptiveTriggerMode> AdaptiveModeOptions { get; }
     public ObservableCollection<TriggerFeedbackLink> FeedbackLinkOptions { get; }
 
+    /// <summary>
+    /// Ready-made lightbar colours.
+    ///
+    /// <para>
+    /// A hex field was the only way to set this, which asks the user to
+    /// know a colour's hex before they can see it — on a control whose
+    /// entire purpose is visible. These are picked for a lightbar rather
+    /// than sampled off a colour wheel: fully saturated, far enough apart
+    /// to tell two pads apart across a room, and none of them so dark that
+    /// the bar reads as switched off. The hex field stays for anything
+    /// exact.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<string> LightbarPalette { get; } =
+    [
+        "#0066FF", "#00A2FF", "#00E5D0", "#22CC44", "#A6E22E",
+        "#FFD400", "#FF8C00", "#FF2D2D", "#FF3D9A", "#CC22CC",
+        "#8A2BE2", "#FFFFFF",
+    ];
+
+    /// <summary>Sets the lightbar colour from a palette swatch.</summary>
+    public CommunityToolkit.Mvvm.Input.IRelayCommand<string> SelectLightbarColorCommand =>
+        new CommunityToolkit.Mvvm.Input.RelayCommand<string>(hex =>
+        {
+            if (!string.IsNullOrWhiteSpace(hex))
+            {
+                LightbarColor = hex;
+            }
+        });
+
     public string DeviceName
     {
         get => deviceName;
@@ -381,13 +411,31 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     private TriggerFeedbackLink leftFeedbackLink, rightFeedbackLink;
     private float leftFeedbackAmount = 1f, rightFeedbackAmount = 1f;
 
-    public AdaptiveTriggerMode LeftAdaptiveMode { get => leftAdaptiveMode; set => Apply(ref leftAdaptiveMode, value, nameof(LeftAdaptiveMode)); }
+    public AdaptiveTriggerMode LeftAdaptiveMode
+    {
+        get => leftAdaptiveMode;
+        set
+        {
+            Apply(ref leftAdaptiveMode, value, nameof(LeftAdaptiveMode));
+            OnPropertyChanged(nameof(LeftAdaptiveModeDescription));
+        }
+    }
+
     public float LeftAdaptiveStart { get => leftAdaptiveStart; set => Apply(ref leftAdaptiveStart, value, nameof(LeftAdaptiveStart)); }
     public float LeftAdaptiveEnd { get => leftAdaptiveEnd; set => Apply(ref leftAdaptiveEnd, value, nameof(LeftAdaptiveEnd)); }
     public float LeftAdaptiveStrength { get => leftAdaptiveStrength; set => Apply(ref leftAdaptiveStrength, value, nameof(LeftAdaptiveStrength)); }
     public int LeftAdaptiveFrequency { get => leftAdaptiveFrequency; set => Apply(ref leftAdaptiveFrequency, value, nameof(LeftAdaptiveFrequency)); }
 
-    public AdaptiveTriggerMode RightAdaptiveMode { get => rightAdaptiveMode; set => Apply(ref rightAdaptiveMode, value, nameof(RightAdaptiveMode)); }
+    public AdaptiveTriggerMode RightAdaptiveMode
+    {
+        get => rightAdaptiveMode;
+        set
+        {
+            Apply(ref rightAdaptiveMode, value, nameof(RightAdaptiveMode));
+            OnPropertyChanged(nameof(RightAdaptiveModeDescription));
+        }
+    }
+
     public float RightAdaptiveStart { get => rightAdaptiveStart; set => Apply(ref rightAdaptiveStart, value, nameof(RightAdaptiveStart)); }
     public float RightAdaptiveEnd { get => rightAdaptiveEnd; set => Apply(ref rightAdaptiveEnd, value, nameof(RightAdaptiveEnd)); }
     public float RightAdaptiveStrength { get => rightAdaptiveStrength; set => Apply(ref rightAdaptiveStrength, value, nameof(RightAdaptiveStrength)); }
@@ -429,6 +477,40 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     public bool IsLeftLinked => leftFeedbackLink != TriggerFeedbackLink.None;
     public bool IsRightLinked => rightFeedbackLink != TriggerFeedbackLink.None;
 
+    public string LeftAdaptiveModeDescription => Describe(leftAdaptiveMode);
+    public string RightAdaptiveModeDescription => Describe(rightAdaptiveMode);
+
+    /// <summary>
+    /// Says what an adaptive-trigger effect FEELS like.
+    ///
+    /// <para>
+    /// The mode names come from the hardware's own effect set and mean
+    /// nothing without a DualSense in your hands: "Weapon", "Feedback" and
+    /// "Slope feedback" do not tell you that one catches and releases, one
+    /// pushes back evenly, and one gets heavier as you pull. Neither does
+    /// the parameter list — "Start" and "End" are positions ALONG THE
+    /// PULL, not times, which is the reading most people try first.
+    /// </para>
+    /// </summary>
+    private static string Describe(AdaptiveTriggerMode mode) => mode switch
+    {
+        AdaptiveTriggerMode.Off =>
+            "No resistance — the trigger moves freely.",
+        AdaptiveTriggerMode.Feedback =>
+            "Even resistance from the start position onward, like a stiffer spring.",
+        AdaptiveTriggerMode.Weapon =>
+            "Resists through the band, then gives way — the trigger-pull of a gun.",
+        AdaptiveTriggerMode.Vibration =>
+            "Buzzes while held, at the frequency below.",
+        AdaptiveTriggerMode.SlopeFeedback =>
+            "Gets progressively heavier across the band.",
+        AdaptiveTriggerMode.MultiplePositionFeedback =>
+            "Steps of resistance across the band, so the pull feels notched.",
+        AdaptiveTriggerMode.MultiplePositionVibration =>
+            "Buzzes in steps across the band rather than continuously.",
+        _ => string.Empty,
+    };
+
     public string LeftFeedbackLinkDescription => Describe(leftFeedbackLink);
     public string RightFeedbackLinkDescription => Describe(rightFeedbackLink);
 
@@ -466,6 +548,7 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
             nameof(RightAdaptiveMode), nameof(RightAdaptiveStart), nameof(RightAdaptiveEnd), nameof(RightAdaptiveStrength), nameof(RightAdaptiveFrequency),
             nameof(LeftFeedbackLink), nameof(LeftFeedbackAmount), nameof(IsLeftLinked), nameof(LeftFeedbackLinkDescription),
             nameof(RightFeedbackLink), nameof(RightFeedbackAmount), nameof(IsRightLinked), nameof(RightFeedbackLinkDescription),
+            nameof(LeftAdaptiveModeDescription), nameof(RightAdaptiveModeDescription),
         })
         {
             OnPropertyChanged(name);

@@ -241,20 +241,32 @@
   <!--
       A Slider's track is inset by half a thumb so the thumb can reach the
       ends without being clipped, which means its track does NOT start
-      where a neighbouring TextBox or ComboBox starts. Left unstyled it
-      reads as misaligned against every other control in the same column,
-      and vertically it sits off-centre from the value box beside it.
+      where a neighbouring TextBox or ComboBox starts.
 
-      The horizontal margin cancels that inset so the track lines up with
-      the fields above and below, and centring fixes the pairing with the
-      value box. Set once here rather than per call site — there are four
-      of these in the slot editor alone, and each new one would otherwise
-      have to remember.
+      That inset used to be cancelled here, for every slider, with a
+      negative horizontal margin. It fixed the case it was written for — a
+      slider stacked in a column under a full-width field — and broke every
+      other one: in a label/slider/value ROW the negative margin eats the
+      column spacing from both sides, so the slider ends up jammed against
+      whatever sits next to it. That is most of the sliders in the app, and
+      it is why they read as cramped.
+
+      The default is now plain vertical breathing room and nothing
+      horizontal. Sliders that genuinely need their track flush with a
+      field above opt in with Slider.trackAligned, which is the narrow case
+      it was always meant for.
   -->
   <Style Selector="Slider">
-    <Setter Property="Margin" Value="-8,0" />
+    <Setter Property="Margin" Value="0,3" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="MinHeight" Value="32" />
+  </Style>
+
+  <!-- Opt-in: pulls only the LEFT edge back so the track lines up with a
+       full-width ComboBox or TextBox stacked above it. The right side
+       keeps its spacing, because something is usually beside it. -->
+  <Style Selector="Slider.trackAligned">
+    <Setter Property="Margin" Value="-8,3,0,3" />
   </Style>
 
   <Style Selector="Slider /template/ Thumb">
