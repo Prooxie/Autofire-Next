@@ -1082,7 +1082,12 @@
                  controllers because the settings belong to a PHYSICAL
                  device (as used by a slot), and this is where physical
                  devices are already selected. -->
-            <TabItem Header="Tuning">
+            <!-- Hidden outright until a virtual controller exists. Tuning is
+                 keyed per slot AND per device, so with no slot there is
+                 nothing to save under — the tab used to render an empty
+                 picker and a line explaining it was unusable, which is a
+                 whole tab spent saying "not yet". -->
+            <TabItem Header="Tuning" IsVisible="{Binding DevicesPanel.HasTuningSlots}">
               <Grid Margin="20,16" DataContext="{Binding DevicesPanel}" RowDefinitions="Auto,*" RowSpacing="12">
 
                 <StackPanel Grid.Row="0" Spacing="6">
@@ -1102,19 +1107,13 @@
 
                 <Border Grid.Row="1" BorderThickness="1" CornerRadius="6" Padding="12"
                         BorderBrush="{DynamicResource AppBorder}">
-                  <Panel>
-                    <!-- IsVisible resolves against this control's OWN DataContext,
-                         which the line above has just set to the editor — so the
-                         path is HasDevice, not DeviceSettingsEditor.HasDevice.
-                         The longer path silently bound to nothing; compiled
-                         bindings turned that into a build error. -->
-                    <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
-                                                    IsVisible="{Binding HasDevice}" />
-                    <TextBlock Text="Create a virtual controller to begin tuning."
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Opacity="0.55"
-                               IsVisible="{Binding !DeviceSettingsEditor.HasDevice}" />
-                  </Panel>
+                  <!-- IsVisible resolves against this control's OWN DataContext,
+                       which the line below has just set to the editor — so the
+                       path is HasDevice, not DeviceSettingsEditor.HasDevice.
+                       The longer path silently bound to nothing; compiled
+                       bindings turned that into a build error. -->
+                  <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
+                                                  IsVisible="{Binding HasDevice}" />
                 </Border>
 
               </Grid>
@@ -1123,63 +1122,61 @@
             <TabItem Header="{Binding DevicesVirtualTabHeader}">
 
           <Grid x:Name="SlotsRoot" Margin="20,16" DataContext="{Binding SlotsPanel}"
-                RowDefinitions="Auto,*" RowSpacing="14">
+                RowDefinitions="Auto,Auto,*" RowSpacing="12">
 
-            <!-- Create controls -->
-            <StackPanel Grid.Row="0" Spacing="10">
-              <TextBlock Text="{Binding VirtualControllersHeader}" Classes="sectionLabel" />
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <ComboBox MinWidth="180" ItemsSource="{Binding OutputKindOptions}"
-                          SelectedItem="{Binding NewSlotKind}">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate><TextBlock Text="{Binding Label}" /></DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
-                <Button Content="{Binding AddControllerLabel}" Command="{Binding CreateSlotCommand}" />
-              </StackPanel>
-            </StackPanel>
+            <!--
+                Which controller, and adding one. This replaces a 320 px
+                master list down the left: it held one line per slot for a
+                list that is usually one or two long, cost the detail pane a
+                third of the window, and still needed a separate card to
+                repeat the selected slot's identity. A picker says the same
+                thing in one row.
+            -->
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+              <TextBlock Grid.Column="0" Text="{Binding VirtualControllersHeader}"
+                         Classes="sectionLabel" VerticalAlignment="Center" />
+              <ComboBox Grid.Column="1" MinWidth="280"
+                        ItemsSource="{Binding Slots}" SelectedItem="{Binding SelectedSlot}"
+                        PlaceholderText="{Binding NoSlotSelectedLabel}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
+                      <Panel Grid.Column="0" Width="9" Height="9" VerticalAlignment="Center">
+                        <Ellipse Width="9" Height="9"
+                                 Fill="{DynamicResource AppSuccess}"
+                                 IsVisible="{Binding Enabled}" />
+                        <Ellipse Width="9" Height="9"
+                                 Fill="{DynamicResource AppForegroundDim}"
+                                 IsVisible="{Binding !Enabled}" />
+                      </Panel>
+                      <StackPanel Grid.Column="1" Spacing="1">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="fieldLabel" TextTrimming="CharacterEllipsis">
+                          <Run Text="{Binding KindLabel}" />
+                          <Run Text=" · " />
+                          <Run Text="{Binding DeviceSummary}" />
+                        </TextBlock>
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Grid.Column="3" Classes="primary" Content="{Binding AddControllerLabel}"
+                      Command="{Binding CreateSlotCommand}" />
+            </Grid>
 
-            <Grid Grid.Row="1" ColumnSpacing="14" RowDefinitions="Auto,*" RowSpacing="10">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" MinWidth="260" />
-                <ColumnDefinition Width="*" MinWidth="420" />
-              </Grid.ColumnDefinitions>
-
-              <!-- Master: slot list -->
-              <Border Grid.Column="0" Grid.RowSpan="2" Classes="card" Width="320" Padding="6">
-                <ListBox ItemsSource="{Binding Slots}" SelectedItem="{Binding SelectedSlot}"
-                         Background="Transparent" BorderThickness="0">
-                  <ListBox.ItemTemplate>
-                    <DataTemplate>
-                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Margin="2,4">
-                        <Panel Grid.Column="0" Width="9" Height="9" VerticalAlignment="Center">
-                          <Ellipse Width="9" Height="9"
-                                    Fill="{DynamicResource AppSuccess}"
-                                   IsVisible="{Binding Enabled}" />
-                          <Ellipse Width="9" Height="9"
-                                   Fill="{DynamicResource AppForegroundDim}"
-                                   IsVisible="{Binding !Enabled}" />
-                        </Panel>
-                        <StackPanel Grid.Column="1" Spacing="1">
-                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
-                                     TextTrimming="CharacterEllipsis" />
-                          <TextBlock Classes="fieldLabel" TextTrimming="CharacterEllipsis">
-                            <Run Text="{Binding KindLabel}" />
-                            <Run Text=" · " />
-                            <Run Text="{Binding DeviceSummary}" />
-                          </TextBlock>
-                        </StackPanel>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-              </Border>
-
-              <!-- Selected-slot context stays visible while switching
-                   feature tabs, matching the output/device hierarchy in
-                   PadForge without hiding identity inside the first tab. -->
-              <Border Grid.Column="1" Grid.Row="0" Classes="card" Padding="14,11"
-                      IsVisible="{Binding HasSelectedSlot}">
+            <!--
+                Identity and lifecycle, on the page rather than inside a
+                tab. Renaming a controller or switching its type is the
+                most common thing done here, and having to leave the tab
+                you are working in to do it made the tabs feel like modes.
+                What is left in the tab below is the genuinely per-topic
+                configuration.
+            -->
+            <Border Grid.Row="1" Classes="card" Padding="14,12"
+                    IsVisible="{Binding HasSelectedSlot}">
+              <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                   <Border Grid.Column="0" Width="38" Height="38" CornerRadius="9"
                           Background="{DynamicResource AppAccentSoft}">
@@ -1187,13 +1184,9 @@
                                Foreground="{DynamicResource AppAccent}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
-                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                      <TextBlock Text="{Binding SelectedSlotLabel}" Classes="sectionLabel"
-                                 VerticalAlignment="Center" />
-                      <TextBlock Text="{Binding SlotName}" FontSize="15" FontWeight="SemiBold"
-                                 VerticalAlignment="Center" />
-                    </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <TextBox Text="{Binding SlotName}" FontSize="14" FontWeight="SemiBold"
+                             PlaceholderText="{Binding SelectedSlotLabel}" />
                     <TextBlock FontSize="10.5" Foreground="{DynamicResource AppForegroundDim}"
                                TextTrimming="CharacterEllipsis">
                       <Run Text="{Binding SelectedSlotOutput}" />
@@ -1212,23 +1205,51 @@
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                   </Border>
                 </Grid>
-              </Border>
 
-              <!-- Empty state, matching the Devices detail pane and the
-                   mapping-rule editor. Without it this half of the page
-                   is simply blank until a slot is picked. -->
-              <TextBlock Grid.Column="1" Grid.Row="1" Text="{Binding NoSlotSelectedLabel}"
-                         Foreground="{DynamicResource AppForegroundDim}"
-                         HorizontalAlignment="Center" VerticalAlignment="Center"
-                         TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"
-                         IsVisible="{Binding !HasSelectedSlot}" />
+                <!--
+                    The ONE controller-type picker. There used to be a
+                    second one beside the Add button choosing the kind for
+                    a slot that did not exist yet, which read as the same
+                    setting in two places disagreeing with each other.
+                    Adding a controller now makes one and you set its type
+                    here, where the type is a property of something real.
+                -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
+                  <TextBlock Grid.Column="0" Text="{Binding TemplateEditor.OutputDeviceLabel}"
+                             Classes="fieldLabel" VerticalAlignment="Center" />
+                  <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" MaxWidth="300"
+                            ItemsSource="{Binding TemplateEditor.OutputKindOptions}"
+                            SelectedItem="{Binding TemplateEditor.SelectedOutputKind}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate><TextBlock Text="{Binding Label}" /></DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <CheckBox Grid.Column="2" Content="{Binding SlotEnabledLabel}"
+                            IsChecked="{Binding SlotEnabled}" VerticalAlignment="Center" />
+                  <Button Grid.Column="3" Classes="ghost" Content="{Binding SlotDuplicateLabel}"
+                          Command="{Binding DuplicateSlotCommand}" />
+                  <Button Grid.Column="4" Classes="primary" Content="{Binding SlotSaveLabel}"
+                          Command="{Binding SaveSlotCommand}" />
+                  <Button Grid.Column="5" Classes="danger" Content="{Binding SlotDeleteLabel}"
+                          Command="{Binding DeleteSlotCommand}" />
+                </Grid>
+              </StackPanel>
+            </Border>
 
-              <!-- Detail. Tabbed rather than one long scroll: the
-                   Touchpad tab only exists for slots whose hardware has a
-                   touch surface, and a section that silently appears and
-                   disappears part-way down a scroll reads as a glitch. -->
-              <TabControl Grid.Column="1" Grid.Row="1" IsVisible="{Binding HasSelectedSlot}"
-                          ClipToBounds="True">
+            <!-- Empty state. Without it this page is simply blank until a
+                 controller exists. -->
+            <TextBlock Grid.Row="2" Text="{Binding NoSlotSelectedLabel}"
+                       Foreground="{DynamicResource AppForegroundDim}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"
+                       IsVisible="{Binding !HasSelectedSlot}" />
+
+            <!-- Detail. Tabbed rather than one long scroll: the
+                 Touchpad tab only exists for slots whose hardware has a
+                 touch surface, and a section that silently appears and
+                 disappears part-way down a scroll reads as a glitch. -->
+            <TabControl Grid.Row="2" IsVisible="{Binding HasSelectedSlot}"
+                        ClipToBounds="True">
                 <TabItem Header="{Binding PreviewTabHeader}">
                   <ScrollViewer>
                     <StackPanel Spacing="12" Margin="0,10,0,0">
@@ -1278,21 +1299,9 @@
                 <ScrollViewer>
                 <StackPanel Spacing="14" Margin="0,10,0,0">
 
-                  <!-- Identity + lifecycle -->
-                  <StackPanel Spacing="8">
-                    <StackPanel Spacing="3">
-                      <TextBlock Text="Name" Classes="fieldLabel" />
-                      <TextBox Text="{Binding SlotName}" />
-                    </StackPanel>
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
-                      <CheckBox Grid.Column="0" Content="{Binding SlotEnabledLabel}" IsChecked="{Binding SlotEnabled}" />
-                      <Button Grid.Column="1" Classes="ghost" Content="{Binding SlotDuplicateLabel}" Command="{Binding DuplicateSlotCommand}" />
-                      <Button Grid.Column="2" Classes="primary" Content="{Binding SlotSaveLabel}" Command="{Binding SaveSlotCommand}" />
-                      <Button Grid.Column="3" Classes="danger" Content="{Binding SlotDeleteLabel}" Command="{Binding DeleteSlotCommand}" />
-                    </Grid>
-                  </StackPanel>
-
-                  <Border Classes="divider" />
+                  <!-- Identity and lifecycle live above the tabs now, so
+                       renaming a controller does not mean leaving the tab
+                       you are working in. -->
 
                   <!-- Device assignment -->
                   <StackPanel Spacing="6">
@@ -1387,17 +1396,10 @@
                     <CheckBox Content="{Binding EmitLabel}"
                               ToolTip.Tip="{Binding EmitTooltip}"
                               IsChecked="{Binding Enabled}" />
-                    <StackPanel Spacing="3">
-                      <TextBlock Text="{Binding OutputDeviceLabel}" Classes="fieldLabel" />
-                      <ComboBox ItemsSource="{Binding OutputKindOptions}"
-                                SelectedItem="{Binding SelectedOutputKind}"
-                                HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                          <DataTemplate><TextBlock Text="{Binding Label}" /></DataTemplate>
-                        </ComboBox.ItemTemplate>
-                      </ComboBox>
-                    </StackPanel>
-                    <!-- Output backend is implicit now: HIDMaestro is the
+                    <!-- The controller-type picker lives above the tabs —
+                         there is exactly one of it, and it belongs with the
+                         controller's identity rather than repeated here.
+                         Output backend is implicit too: HIDMaestro is the
                          sole Windows output backend, so there's nothing to
                          pick — the old provider combo box was one item of
                          dead choice. -->
@@ -1698,7 +1700,6 @@
                   </ScrollViewer>
                 </TabItem>
               </TabControl>
-            </Grid>
           </Grid>
             </TabItem>
           </TabControl>

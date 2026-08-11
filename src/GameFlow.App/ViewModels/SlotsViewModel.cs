@@ -322,7 +322,7 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
     }
 
     public string TouchpadTabHeader => Loc("DevicesTouchpadTab", "Touchpad");
-    public string SlotSettingsTabHeader => Loc("DevicesSlotSetupTab", "Setup");
+    public string SlotSettingsTabHeader => Loc("DevicesSlotSetupTab", "Devices & profiles");
 
     /// <summary>
     /// Shown in place of the slot detail pane while no slot is selected.
@@ -356,6 +356,19 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// The kind a newly created controller starts as.
+    ///
+    /// <para>
+    /// No longer bound to a picker beside the Add button. There were two
+    /// controller-type combo boxes on that page — one choosing the type of
+    /// a slot that did not exist yet, one changing the type of the
+    /// selected slot — which read as the same setting in two places
+    /// disagreeing. Adding a controller now creates one at this default
+    /// and the single picker above the tabs sets its type, where the type
+    /// belongs to something real.
+    /// </para>
+    /// </summary>
     private OutputKindOption newSlotKind;
     public OutputKindOption NewSlotKind
     {

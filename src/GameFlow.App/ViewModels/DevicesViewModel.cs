@@ -308,6 +308,20 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
     public IRelayCommand ResetTuningCommand { get; }
 
+    /// <summary>
+    /// Whether there is anything to tune at all.
+    ///
+    /// <para>
+    /// Tuning is per slot AND per device, so with no virtual controller
+    /// there is no key to save under and nothing the tab can do. It used
+    /// to render anyway — an empty slot picker, a disabled editor and a
+    /// line explaining that a controller was needed — which is a whole tab
+    /// spent telling the user it is not usable yet. The tab now hides
+    /// until a slot exists.
+    /// </para>
+    /// </summary>
+    public bool HasTuningSlots => TuningSlotOptions.Count > 0;
+
     private readonly GameFlow.Infrastructure.Runtime.Slots.SlotRegistry slotRegistry;
     private GameFlow.Infrastructure.Runtime.Slots.ControllerSlot? selectedTuningSlot;
 
@@ -342,6 +356,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         selectedTuningSlot = TuningSlotOptions.FirstOrDefault(s => s.Id == previousId)
             ?? TuningSlotOptions.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedTuningSlot));
+        OnPropertyChanged(nameof(HasTuningSlots));
     }
 
     private bool TuningSlotsMatch(IReadOnlyList<GameFlow.Infrastructure.Runtime.Slots.ControllerSlot> slots)
