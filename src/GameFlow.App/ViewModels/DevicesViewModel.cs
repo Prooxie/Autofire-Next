@@ -50,7 +50,9 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     // Calibration wizard state.
     private int calibrationIndex = -1;
     private readonly Dictionary<ButtonId, int> capturedMap = new();
+    private readonly Dictionary<ButtonId, GameFlow.Infrastructure.Runtime.Input.HatDirectionBinding> capturedHats = new();
     private HashSet<int> lastPressedRaw = [];
+    private List<byte> lastHats = [];
 
     public DevicesViewModel(InputDeviceCatalog catalog, ILocalizationService localization, GameFlow.Infrastructure.Runtime.Templates.DeviceTemplateStore templateStore, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog, DeviceCategoryOverrideStore categoryOverrides,
         GameFlow.Infrastructure.Runtime.DeviceSettingsStore deviceSettingsStore,
@@ -717,8 +719,11 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
             return;
         }
         capturedMap.Clear();
-        // Ignore buttons already held when the wizard starts.
+        capturedHats.Clear();
+        // Ignore anything already held when the wizard starts — including a
+        // hat someone is resting a thumb on.
         lastPressedRaw = RawButtons.Where(b => b.IsPressed).Select(b => b.Index).ToHashSet();
+        lastHats = RawHats.Select(h => h.Mask).ToList();
         calibrationIndex = 0;
         NotifyCalibrationState();
     }
@@ -726,24 +731,34 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     private void CaptureCalibrationPress()
     {
         var pressedNow = RawButtons.Where(b => b.IsPressed).Select(b => b.Index).ToHashSet();
-        // Rising edge: a raw button pressed now that wasn't pressed last tick.
-        int? captured = null;
-        foreach (var index in pressedNow)
-        {
-            if (!lastPressedRaw.Contains(index))
-            {
-                captured = index;
-                break;
-            }
-        }
-        lastPressedRaw = pressedNow;
+        var hatsNow = RawHats.Select(h => h.Mask).ToList();
 
-        if (captured is null)
+        // Hats are watched as well as buttons. Without them the wizard
+        // could not capture a D-pad at all: on nearly every gamepad,
+        // including the DualSense, the D-pad is a HAT, so pressing it
+        // changed nothing this loop was looking at and the wizard sat on
+        // "Press: D-pad Up" forever. From the outside that reads as the
+        // D-pad not being recognized.
+        var captured = ButtonCapture.Detect(lastPressedRaw, pressedNow, lastHats, hatsNow);
+
+        lastPressedRaw = pressedNow;
+        lastHats = hatsNow;
+
+        if (captured is not { } press)
         {
             return;
         }
 
-        capturedMap[CalibrationTargets[calibrationIndex].Id] = captured.Value;
+        var target = CalibrationTargets[calibrationIndex].Id;
+        if (press.ButtonIndex is { } buttonIndex)
+        {
+            capturedMap[target] = buttonIndex;
+        }
+        else if (press.Hat is { } hat)
+        {
+            capturedHats[target] = hat;
+        }
+
         Advance();
     }
 
@@ -770,12 +785,13 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
     private void FinishCalibration()
     {
-        if (SelectedDevice is not null && capturedMap.Count > 0)
+        if (SelectedDevice is not null && (capturedMap.Count > 0 || capturedHats.Count > 0))
         {
             buttonMapStore.Save(new GameFlow.Infrastructure.Runtime.Input.DeviceButtonMap
             {
                 DeviceId = SelectedDevice.Id,
                 Buttons = new Dictionary<ButtonId, int>(capturedMap),
+                Hats = new Dictionary<ButtonId, GameFlow.Infrastructure.Runtime.Input.HatDirectionBinding>(capturedHats),
             });
         }
         calibrationIndex = -1;

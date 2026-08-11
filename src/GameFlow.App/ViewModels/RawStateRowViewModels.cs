@@ -71,6 +71,12 @@ public sealed class RawHatRowViewModel(int index) : ViewModelBase
     public int Index { get; } = index;
     public string Label => $"Hat {Index}";
 
+    /// <summary>
+    /// The raw SDL direction mask. Exposed so the calibration wizard can
+    /// watch hats for a rising edge — a D-pad is a hat, not four buttons.
+    /// </summary>
+    public byte Mask => mask;
+
     public string Direction => mask switch
     {
         0 => "Centered",

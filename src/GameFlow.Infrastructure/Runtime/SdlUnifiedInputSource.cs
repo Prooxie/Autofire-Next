@@ -996,7 +996,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     private void ApplyButtonMap(OpenedDevice device, Dictionary<ButtonId, bool> buttons)
     {
         var map = buttonMapStore.GetOrNull(device.DeviceId);
-        if (map is null || map.Buttons.Count == 0)
+        if (map is null || map.IsEmpty)
         {
             return;
         }
@@ -1012,6 +1012,30 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         foreach (var (buttonId, rawIndex) in map.Buttons)
         {
             buttons[buttonId] = SdlInterop.GetJoystickButton(joystick, rawIndex);
+        }
+
+        // A calibrated D-pad arrives here, because a D-pad is a hat on
+        // nearly every pad and hats cannot be expressed as button indices.
+        if (map.Hats.Count == 0)
+        {
+            return;
+        }
+
+        var hatCount = SdlInterop.GetNumJoystickHats(joystick);
+        if (hatCount <= 0)
+        {
+            return;
+        }
+
+        var hats = new byte[hatCount];
+        for (var hat = 0; hat < hatCount; hat++)
+        {
+            hats[hat] = SdlInterop.GetJoystickHat(joystick, hat);
+        }
+
+        foreach (var (buttonId, binding) in map.Hats)
+        {
+            buttons[buttonId] = ButtonCapture.IsPressed(binding, hats);
         }
     }
 
