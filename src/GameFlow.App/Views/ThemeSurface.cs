@@ -58,6 +58,57 @@ public sealed class ThemeSurface : Control
     private static readonly ConcurrentDictionary<string, byte> DecodesInFlight = new();
 
     /// <summary>
+    /// Display-sized copies of theme art, keyed on the absolute resolved
+    /// path — the same key <see cref="BitmapCache"/> uses, so one entry
+    /// serves every surface drawing that image.
+    ///
+    /// <para>
+    /// This exists so the per-frame draw can use a CHEAP filter without
+    /// the art getting worse. Theme images are authored at document
+    /// resolution — a DualSense body is 1467x816 — and drawn into a panel
+    /// a few hundred pixels wide, which is a large enough downscale that a
+    /// cheap filter aliases visibly. Resampling once, at high quality,
+    /// into a copy the size it is actually drawn at moves that cost off
+    /// the frame: what remains is a near-1:1 draw, where the filter choice
+    /// stops mattering. See <see cref="Render"/> for the measurements.
+    /// </para>
+    ///
+    /// <para>
+    /// One entry per path rather than one per (path, size): a superseded
+    /// size is dropped on the next request. The old bitmap is NOT disposed
+    /// — the compositor may still hold it for a frame already submitted,
+    /// and a disposed bitmap there is a crash, whereas an unreferenced one
+    /// is a collection. Sizes are rounded up to
+    /// <see cref="ScaleQuantum"/> so dragging a window edge re-scales in
+    /// steps instead of once per pixel of drag.
+    /// </para>
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, ScaledBitmap> ScaledCache = new();
+
+    /// <summary>Paths currently being re-scaled, so concurrent surfaces queue one scale between them.</summary>
+    private static readonly ConcurrentDictionary<string, byte> ScalesInFlight = new();
+
+    /// <summary>A display-sized copy of one theme image, and the size it was built for.</summary>
+    private readonly record struct ScaledBitmap(Bitmap Bitmap, PixelSize Size);
+
+    /// <summary>
+    /// Target sizes are rounded up to a multiple of this. A window being
+    /// dragged produces a new width every frame, and without the step each
+    /// one would queue a fresh scale of every image in the theme. Small
+    /// enough that the residual downscale from a cached copy to its
+    /// destination stays under the point where a cheap filter shows.
+    /// </summary>
+    private const int ScaleQuantum = 32;
+
+    /// <summary>
+    /// Only pre-scale when the source is at least this many times larger
+    /// than the target, by area. Below it the resampling being avoided is
+    /// not worth a second copy of the image in memory, and scaling to a
+    /// near-identical size would visibly soften the art for nothing.
+    /// </summary>
+    private const double ScaleWorthwhileRatio = 2.0;
+
+    /// <summary>
     /// Raised on the UI thread when a background decode lands, so surfaces
     /// that drew without the art can pick it up. Static because the cache
     /// is: one decode serves every surface using that image.
@@ -409,6 +460,16 @@ public sealed class ThemeSurface : Control
     /// </summary>
     private (double Scale, double OffsetX, double OffsetY) lastTransform;
 
+    /// <summary>
+    /// Theme units to DEVICE pixels for the frame being drawn — the
+    /// uniform fit scale times the top level's render scaling. What
+    /// <see cref="ForDisplay"/> needs in order to know the size a bitmap
+    /// will actually occupy on the physical display, which is not the
+    /// same as its size in the control's own coordinates at any DPI other
+    /// than 100%.
+    /// </summary>
+    private double frameDeviceScale = 1.0;
+
     // ─── Hover + click-to-map highlight state ────────────────────────────
     //
     // Painted on top of all the regular theme content at the end of
@@ -605,14 +666,47 @@ public sealed class ThemeSurface : Control
         // re-walking the document. Stored in display (control) pixels.
         lastTransform = (uniform, offsetX, offsetY);
 
-        // High-quality scaling for the controller art. Avalonia defaults to a
-        // fast/low-quality bitmap filter; for our static-ish 30 Hz surface the
-        // CPU cost is negligible compared to the visual gain. EdgeMode.Antialias
-        // smooths the implicit transform edges that the PNG's alpha channel
-        // crosses at non-1:1 scales.
+        // Device pixels per theme unit, for the display-sized bitmap cache.
+        // Uses the same scaling the origin snap above rounds against, so a
+        // cached copy is built for the size the art is genuinely rasterised
+        // at rather than for its size in control coordinates.
+        frameDeviceScale = uniform * (scaling > 0 ? scaling : 1.0);
+
+        // The frame's default filter is the CHEAP one. This is the single
+        // largest lever on repaint cost, and the earlier note in
+        // docs/known-issues.md — that HighQuality versus LowQuality made no
+        // measurable difference — is wrong. Measured directly on
+        // 2026-08-11 against the seven layers an idle DualSense panel
+        // composites, drawing into a RenderTargetBitmap the size of a real
+        // panel:
+        //
+        //   panel width          430      700     1100
+        //   authored + High     2.98     7.79    10.66  ms/frame
+        //   authored + Low      0.35     0.89     2.03
+        //   prescaled + High    1.60     4.32    10.60
+        //   prescaled + Low     0.34     0.83     2.08
+        //
+        // Three things follow. The cost is the high-quality FILTER, per
+        // DESTINATION pixel — 1100-wide costs 3.5x what 430-wide does off
+        // identical sources, so it is not the source size and not the layer
+        // count. Pre-scaling alone buys under 2x and nothing at all once
+        // the panel is large. And pre-scaling plus the cheap filter is
+        // indistinguishable from the cheap filter alone.
+        //
+        // So the filter is what makes it fast, and ScaledCache is what
+        // makes the filter safe: a cheap filter aliases when it is doing a
+        // 3x downscale, which is exactly what the authored art needs.
+        // Drawing a display-sized copy instead leaves it doing almost
+        // nothing, where cheap and expensive look the same. DrawImage
+        // pushes HighQuality back for the frame or two before a copy
+        // exists, so the art never passes through a cheap large downscale.
+        //
+        // EdgeMode.Antialias stays: it smooths the implicit transform edges
+        // that the PNG's alpha channel crosses at non-1:1 scales, and it is
+        // not what costs.
         using (context.PushRenderOptions(new RenderOptions
         {
-            BitmapInterpolationMode = BitmapInterpolationMode.HighQuality,
+            BitmapInterpolationMode = BitmapInterpolationMode.LowQuality,
             EdgeMode = EdgeMode.Antialias,
         }))
         using (context.PushTransform(Matrix.CreateScale(uniform, uniform) *
@@ -677,17 +771,17 @@ public sealed class ThemeSurface : Control
                 var avgMs = renderCostAccumMs / renderCostSamples;
                 if (avgMs > 15.0)
                 {
-                    // Measured 2026-08-10: neither the renderer nor the
-                    // interpolation filter moves this number. GPU (ANGLE)
-                    // vs software differed by ~6%, and HighQuality vs
-                    // LowQuality not at all. The cost is the SHEER COUNT of
-                    // large alpha-blended layers — a DualSense theme
-                    // composites ~47 roughly megapixel images every frame.
-                    // The fix is to stop redrawing the static ones; see
-                    // docs/known-issues.md P1.
+                    // The bitmap filter — the thing that used to dominate
+                    // this number — is no longer in the frame path; see the
+                    // measurements in Render. If this still fires, the cost
+                    // is somewhere this has not looked: the node walk, the
+                    // expression evaluation, or the lightbar's opacity
+                    // mask, which still stretches an authored-size source.
+                    // Do not assume it is the layer count; that answer was
+                    // measured and turned out to be wrong once already.
                     Log.Warning(
                         "ThemeSurface[{Mode}] repaint averaging {AvgMs:F1} ms over {Frames} frames — paint cost is "
-                        + "throttling the UI. The layer count of this theme is the cost, not the renderer.",
+                        + "throttling the UI, and it is no longer the bitmap filter. See docs/known-issues.md P1.",
                         isPhysicalView ? "physical" : "virtual", avgMs, renderCostSamples);
                 }
                 else
@@ -1135,7 +1229,7 @@ public sealed class ThemeSurface : Control
     /// already-translated coordinate space.
     /// </para>
     /// </summary>
-    private static void DrawImage(DrawingContext ctx, ImageNode image, InstalledTheme owner)
+    private void DrawImage(DrawingContext ctx, ImageNode image, InstalledTheme owner)
     {
         var bmp = LoadBitmap(image.ImagePath, owner);
         if (bmp is null) { return; }
@@ -1144,7 +1238,160 @@ public sealed class ThemeSurface : Control
         var h  = image.Height > 0 ? image.Height : bmp.PixelSize.Height;
         var dx = image.Center ? -w / 2 : 0;
         var dy = image.Center ? -h / 2 : 0;
-        ctx.DrawImage(bmp, new Rect(dx, dy, w, h));
+        DrawFitted(ctx, bmp, owner, image.ImagePath, new Rect(dx, dy, w, h));
+    }
+
+    /// <summary>
+    /// Draws one theme bitmap into <paramref name="destination"/> using its
+    /// display-sized copy, falling back to the authored source — under the
+    /// expensive filter — for the frame or two before that copy exists.
+    ///
+    /// <para>
+    /// The filter is pushed here rather than once per frame because it has
+    /// to follow which bitmap was actually returned. The frame's default is
+    /// cheap, which is correct for a copy already at its drawn size and
+    /// wrong for a source three times too big: that combination is the one
+    /// that aliases.
+    /// </para>
+    /// </summary>
+    private void DrawFitted(
+        DrawingContext ctx, Bitmap source, InstalledTheme owner, string imagePath, Rect destination)
+    {
+        var bitmap = ForDisplay(source, owner, imagePath, destination.Width, destination.Height, out var isDisplaySized);
+
+        if (isDisplaySized)
+        {
+            ctx.DrawImage(bitmap, destination);
+            return;
+        }
+
+        using (ctx.PushRenderOptions(new RenderOptions
+        {
+            BitmapInterpolationMode = BitmapInterpolationMode.HighQuality,
+            EdgeMode = EdgeMode.Antialias,
+        }))
+        {
+            ctx.DrawImage(bitmap, destination);
+        }
+    }
+
+    /// <summary>
+    /// Returns the copy of <paramref name="source"/> closest to the size it
+    /// is about to be drawn at, queueing one if it does not exist yet.
+    ///
+    /// <para>
+    /// Never blocks and never returns null: while a copy is being built the
+    /// caller gets the full-size original, or the previous size's copy if
+    /// there is one. Building it on the UI thread instead would cost a
+    /// visible stall on every window resize, across every surface on
+    /// screen.
+    /// </para>
+    ///
+    /// <para>
+    /// <paramref name="isDisplaySized"/> reports whether the returned
+    /// bitmap is close enough to its destination to be drawn with a cheap
+    /// filter. It is true both for a fresh copy and for an image that never
+    /// needed one because it was already near its drawn size.
+    /// </para>
+    /// </summary>
+    private Bitmap ForDisplay(
+        Bitmap source, InstalledTheme owner, string imagePath,
+        double drawWidth, double drawHeight, out bool isDisplaySized)
+    {
+        isDisplaySized = true;
+
+        if (frameDeviceScale <= 0 || drawWidth <= 0 || drawHeight <= 0)
+        {
+            return source;
+        }
+
+        var targetWidth = Math.Min(Quantize(drawWidth * frameDeviceScale), source.PixelSize.Width);
+        var targetHeight = Math.Min(Quantize(drawHeight * frameDeviceScale), source.PixelSize.Height);
+        if (targetWidth <= 0 || targetHeight <= 0)
+        {
+            return source;
+        }
+
+        var sourceArea = (double)source.PixelSize.Width * source.PixelSize.Height;
+        var targetArea = (double)targetWidth * targetHeight;
+        if (sourceArea < targetArea * ScaleWorthwhileRatio)
+        {
+            // Already close enough to its drawn size — the cheap filter has
+            // almost nothing to do, and a copy would cost memory to save
+            // nothing.
+            return source;
+        }
+
+        var target = new PixelSize(targetWidth, targetHeight);
+        var key = $"{owner.Id}|{imagePath}";
+
+        if (ScaledCache.TryGetValue(key, out var cached))
+        {
+            if (cached.Size != target)
+            {
+                BeginScale(key, source, target);
+            }
+
+            // A copy built for a nearby size is still a display-sized
+            // bitmap; the residual is at most one quantum and the cheap
+            // filter handles it.
+            return cached.Bitmap;
+        }
+
+        BeginScale(key, source, target);
+        isDisplaySized = false;
+        return source;
+    }
+
+    /// <summary>Rounds a device-pixel extent up to <see cref="ScaleQuantum"/>.</summary>
+    private static int Quantize(double devicePixels)
+    {
+        if (!double.IsFinite(devicePixels) || devicePixels <= 0)
+        {
+            return 0;
+        }
+
+        var steps = (int)Math.Ceiling(devicePixels / ScaleQuantum);
+        return steps * ScaleQuantum;
+    }
+
+    /// <summary>
+    /// Builds a display-sized copy off the UI thread, then asks every
+    /// surface to repaint so it gets picked up — the same hand-off the
+    /// initial decode uses, for the same reason.
+    /// </summary>
+    private static void BeginScale(string key, Bitmap source, PixelSize target)
+    {
+        // One scale per image, however many surfaces ask at once. A
+        // dashboard of eight slots sharing a theme would otherwise do the
+        // same work eight times over.
+        if (!ScalesInFlight.TryAdd(key, 0))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var scaled = source.CreateScaledBitmap(target, BitmapInterpolationMode.HighQuality);
+                ScaledCache[key] = new ScaledBitmap(scaled, target);
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(
+                    static () => BitmapDecoded?.Invoke(),
+                    Avalonia.Threading.DispatcherPriority.Background);
+            }
+            catch (Exception ex)
+            {
+                // Losing the scaled copy costs frame time, not correctness —
+                // the full-size source still draws. Debug, not Warning.
+                Log.Debug(ex, "Could not build a display-sized copy of {Image}.", key);
+            }
+            finally
+            {
+                _ = ScalesInFlight.TryRemove(key, out _);
+            }
+        });
     }
 
     /// <summary>
@@ -1312,7 +1559,7 @@ public sealed class ThemeSurface : Control
         }
     }
 
-    private static void DrawTrailPadMarker(DrawingContext ctx, TrailPadNode trailPad, InstalledTheme owner)
+    private void DrawTrailPadMarker(DrawingContext ctx, TrailPadNode trailPad, InstalledTheme owner)
     {
         if (string.IsNullOrWhiteSpace(trailPad.ImagePath)) { return; }
 
@@ -1321,7 +1568,7 @@ public sealed class ThemeSurface : Control
 
         var width = trailPad.Width > 0 ? trailPad.Width : bitmap.PixelSize.Width;
         var height = trailPad.Height > 0 ? trailPad.Height : bitmap.PixelSize.Height;
-        ctx.DrawImage(bitmap, new Rect(-width / 2, -height / 2, width, height));
+        DrawFitted(ctx, bitmap, owner, trailPad.ImagePath, new Rect(-width / 2, -height / 2, width, height));
     }
 
     private void DrawLightbar(DrawingContext ctx, LightbarNode lightbar, InstalledTheme owner)
@@ -1380,7 +1627,11 @@ public sealed class ThemeSurface : Control
             {
                 using (ctx.PushClip(fillRect))
                 {
-                    ctx.DrawImage(bmp, new Rect(dx, dy, w, h));
+                    // Full rect, clipped to the fill — so the whole image
+                    // is filtered however little of it shows, which is why
+                    // this draw goes through the display-sized copy like
+                    // any other.
+                    DrawFitted(ctx, bmp, owner, bar.ImagePath, new Rect(dx, dy, w, h));
                 }
             }
             return;
