@@ -167,6 +167,69 @@ public sealed class DeviceSettingsStoreTests
         }
     }
 
+    [Fact]
+    public void Rumble_linked_trigger_settings_survive_a_restart()
+    {
+        var path = TemporarySettingsPath();
+        try
+        {
+            var store = CreateStore(path);
+            var tuned = DeviceSettings.Default with
+            {
+                RightAdaptiveTrigger = new AdaptiveTriggerSettings
+                {
+                    Mode = AdaptiveTriggerMode.Weapon,
+                    Strength = 0.9f,
+                    FrequencyHz = 27,
+                    FeedbackLink = TriggerFeedbackLink.Vibration,
+                    FeedbackAmount = 0.4f,
+                },
+            };
+
+            store.Set("slot-a", "pad-1", tuned);
+
+            var restored = CreateStore(path);
+            var loaded = restored.GetEffective("slot-a", "pad-1").RightAdaptiveTrigger;
+
+            Assert.Equal(TriggerFeedbackLink.Vibration, loaded.FeedbackLink);
+            Assert.Equal(0.4f, loaded.FeedbackAmount);
+            Assert.Equal(27, loaded.FrequencyHz);
+        }
+        finally
+        {
+            DeleteTemporarySettings(path);
+        }
+    }
+
+    [Fact]
+    public void A_settings_file_written_before_the_rumble_link_existed_loads_with_it_off()
+    {
+        // Every profile on disk predates these two fields. Absent must
+        // mean "unlinked at full amount", not "linked at zero" — the
+        // latter would silently disable a trigger somebody had tuned.
+        var path = TemporarySettingsPath();
+        try
+        {
+            File.WriteAllText(path, """
+            {
+              "slot-a::pad-1": {
+                "rightAdaptiveTrigger": { "mode": 2, "strength": 0.9, "frequencyHz": 27 }
+              }
+            }
+            """);
+
+            var loaded = CreateStore(path).GetEffective("slot-a", "pad-1").RightAdaptiveTrigger;
+
+            Assert.Equal(AdaptiveTriggerMode.Weapon, loaded.Mode);
+            Assert.Equal(TriggerFeedbackLink.None, loaded.FeedbackLink);
+            Assert.Equal(1.0f, loaded.FeedbackAmount);
+        }
+        finally
+        {
+            DeleteTemporarySettings(path);
+        }
+    }
+
     private static DeviceSettingsStore CreateStore(string path) =>
         new(NullLogger<DeviceSettingsStore>.Instance, path);
 

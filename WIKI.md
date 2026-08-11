@@ -176,6 +176,10 @@ Shaping is **radial**, not per-axis: deadzone and saturation apply to the stick'
 
 **Rumble, Lighting, Adaptive Triggers:** settings persist immediately and are delivered on the effects thread to an assigned, supported physical controller while it is connected.
 
+**React to rumble** (Adaptive tab) links a trigger to the game's live rumble. *Resistance* scales the configured effect's strength with the rumble level — free travel when the game is quiet, the strength you set at full rumble; the effect you picked still decides the shape of the resistance, the link only moves how hard it pushes back. *Vibration* replaces the effect with the trigger's own actuator buzzing at the rumble level and your configured frequency, and hands back to the configured effect between events so a trigger tuned to resist is not slack in the quiet. **Amount** (0–100%) scales the link, and turning it to zero leaves the static effect running rather than silencing the trigger.
+
+Both links read the *overall* rumble level — the louder of the two motors — rather than pairing the left trigger to the low motor and the right to the high. Splitting them reads better on paper than it works: a game that drives only one motor would leave one trigger permanently dead, which from the outside is indistinguishable from the feature being broken. The level is taken after the Rumble tab's gain, so a pad whose rumble you turned off has quiet triggers too. Firmware runs one effect per trigger, so *Vibration* overrides the configured mode rather than blending with it. The linked level is quantized to 16 steps: the actuator cannot resolve finer, and every distinct value is another report on a Bluetooth link already writing at 60 Hz.
+
 ---
 
 ## Cross-Platform Input & Output

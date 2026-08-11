@@ -280,3 +280,162 @@ public sealed class RumbleResolutionTests
         Assert.Equal(0.0, low, precision: 4);
     }
 }
+
+/// <summary>
+/// The rumble-linked adaptive triggers. None of this is observable by
+/// looking at a pad — a trigger that resists at the wrong moment feels
+/// like a trigger that does not work — so the decision is pinned here
+/// rather than left to be judged by hand.
+/// </summary>
+public sealed class AdaptiveTriggerSceneTests
+{
+    private static EffectSceneContext AtRumble(double level) =>
+        new(ElapsedSeconds: 0, RumbleLevel: level);
+
+    private static AdaptiveTriggerSettings Weapon(
+        TriggerFeedbackLink link = TriggerFeedbackLink.None,
+        float strength = 0.8f,
+        float amount = 1.0f) =>
+        new()
+        {
+            Mode = AdaptiveTriggerMode.Weapon,
+            StartPosition = 0.25f,
+            EndPosition = 0.75f,
+            Strength = strength,
+            FrequencyHz = 23,
+            FeedbackLink = link,
+            FeedbackAmount = amount,
+        };
+
+    [Fact]
+    public void NoLinkPassesEverySavedValueThroughUntouched()
+    {
+        // The default for every profile that existed before the link did.
+        var settings = Weapon();
+
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(settings, AtRumble(1.0));
+
+        Assert.Equal(ResolvedAdaptiveTrigger.From(settings), resolved);
+    }
+
+    [Fact]
+    public void ResistanceKeepsTheConfiguredShapeAndMovesOnlyTheStrength()
+    {
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Resistance, strength: 1.0f), AtRumble(0.5));
+
+        Assert.Equal(AdaptiveTriggerMode.Weapon, resolved.Mode);
+        Assert.Equal(0.25f, resolved.StartPosition);
+        Assert.Equal(0.75f, resolved.EndPosition);
+        Assert.Equal(23, resolved.FrequencyHz);
+        Assert.Equal(0.5f, resolved.Strength, precision: 3);
+    }
+
+    [Fact]
+    public void ResistanceReachesTheConfiguredStrengthAtFullRumbleAndNoFurther()
+    {
+        // The saved Strength is the ceiling, not a starting point: a link
+        // that pushed past what the user tuned would make the slider a
+        // suggestion.
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Resistance, strength: 0.6f), AtRumble(1.0));
+
+        Assert.Equal(0.6f, resolved.Strength, precision: 3);
+    }
+
+    [Fact]
+    public void ResistanceFallsToFreeTravelWhenTheGameIsQuiet()
+    {
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Resistance), AtRumble(0));
+
+        Assert.Equal(AdaptiveTriggerMode.Weapon, resolved.Mode);
+        Assert.Equal(0f, resolved.Strength);
+    }
+
+    [Fact]
+    public void MotorNoiseDoesNotHoldTheTriggerEngaged()
+    {
+        // A motor idling at 1/255 is not a game asking for anything.
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Resistance), AtRumble(1 / 255d));
+
+        Assert.Equal(0f, resolved.Strength);
+    }
+
+    [Fact]
+    public void VibrationOverridesTheConfiguredModeWhileTheGameRumbles()
+    {
+        // One effect per trigger in firmware, so this replaces rather than
+        // blends with the configured Weapon shape.
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Vibration), AtRumble(1.0));
+
+        Assert.Equal(AdaptiveTriggerMode.Vibration, resolved.Mode);
+        Assert.Equal(1f, resolved.Strength, precision: 3);
+        Assert.Equal(23, resolved.FrequencyHz);
+    }
+
+    [Fact]
+    public void VibrationHandsBackToTheConfiguredEffectBetweenEvents()
+    {
+        // Otherwise a trigger tuned to resist would go slack the moment
+        // the game stopped shaking, which reads as the effect breaking.
+        var settings = Weapon(TriggerFeedbackLink.Vibration);
+
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(settings, AtRumble(0));
+
+        Assert.Equal(ResolvedAdaptiveTrigger.From(settings), resolved);
+    }
+
+    [Fact]
+    public void AmountScalesHowFarTheGameCanMoveTheTrigger()
+    {
+        var half = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Vibration, amount: 0.5f), AtRumble(1.0));
+
+        Assert.Equal(0.5f, half.Strength, precision: 3);
+    }
+
+    [Fact]
+    public void AmountOfZeroLeavesTheStaticEffectRunning()
+    {
+        // Turning the link down to nothing must not silence the trigger —
+        // it means "the game does not drive this", not "off".
+        var settings = Weapon(TriggerFeedbackLink.Vibration, amount: 0f);
+
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(settings, AtRumble(1.0));
+
+        Assert.Equal(ResolvedAdaptiveTrigger.From(settings), resolved);
+    }
+
+    [Fact]
+    public void DriveIsQuantizedSoImperceptibleChangesDoNotBecomeReports()
+    {
+        // Two rumble levels inside the same 1/16 step must resolve to the
+        // identical effect, or the queue writes to the pad every frame.
+        var a = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Vibration), AtRumble(0.50));
+        var b = EffectSceneResolver.ResolveAdaptiveTrigger(
+            Weapon(TriggerFeedbackLink.Vibration), AtRumble(0.52));
+
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void ALinkedTriggerLeftInOffModeStaysOff()
+    {
+        // Mode picks the feel; the link only animates it. With no feel
+        // configured there is nothing to animate, and inventing one would
+        // make Off mean something different on a linked trigger.
+        var resolved = EffectSceneResolver.ResolveAdaptiveTrigger(
+            new AdaptiveTriggerSettings
+            {
+                Mode = AdaptiveTriggerMode.Off,
+                FeedbackLink = TriggerFeedbackLink.Resistance,
+            },
+            AtRumble(1.0));
+
+        Assert.Equal(AdaptiveTriggerMode.Off, resolved.Mode);
+    }
+}

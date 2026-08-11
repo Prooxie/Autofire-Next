@@ -21,6 +21,37 @@ public readonly record struct EffectSceneContext(
     double RumbleLevel = 0,
     double TriggerLevel = 0);
 
+/// <summary>
+/// One adaptive-trigger effect with any live modulation already folded in
+/// — the same five values <see cref="AdaptiveTriggerSettings"/> carries,
+/// but describing this instant rather than the saved configuration.
+///
+/// <para>
+/// Deliberately still in Core units (0..1 positions, Hz) rather than the
+/// report's bytes. The byte layout is a firmware contract that belongs
+/// with the encoder; what belongs here is the decision about WHICH effect
+/// to send, which is the part worth testing without a controller.
+/// </para>
+/// </summary>
+public readonly record struct ResolvedAdaptiveTrigger(
+    AdaptiveTriggerMode Mode,
+    float StartPosition,
+    float EndPosition,
+    float Strength,
+    int FrequencyHz)
+{
+    public static ResolvedAdaptiveTrigger From(AdaptiveTriggerSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return new ResolvedAdaptiveTrigger(
+            settings.Mode,
+            settings.StartPosition,
+            settings.EndPosition,
+            settings.Strength,
+            settings.FrequencyHz);
+    }
+}
+
 /// <summary>An 8-bit RGB triple. Core has no drawing dependency, so this is defined here.</summary>
 public readonly record struct LightColor(byte R, byte G, byte B)
 {
@@ -191,6 +222,86 @@ public static class EffectSceneResolver
 
         return (low, high);
     }
+
+    /// <summary>
+    /// Rumble below this is treated as silence. SDL and the games
+    /// themselves both leave a motor sitting at a value that rounds to one
+    /// or two of 255 rather than a clean zero, and without a floor that
+    /// noise would hold a trigger permanently engaged.
+    /// </summary>
+    private const double FeedbackLinkFloor = 0.02;
+
+    /// <summary>
+    /// Steps the linked drive is quantized to. The trigger actuator cannot
+    /// resolve finer than this, and every distinct value is another effect
+    /// report — over Bluetooth, at the producer's 60 Hz ceiling, that is
+    /// the difference between reacting to the game and flooding the link
+    /// with changes nobody can feel.
+    /// </summary>
+    private const double FeedbackLinkSteps = 16;
+
+    /// <summary>
+    /// The adaptive-trigger effect a pad should be running right now.
+    ///
+    /// <para>
+    /// With no link configured this is the saved settings unchanged, which
+    /// is what every existing profile gets. A link reads
+    /// <see cref="EffectSceneContext.RumbleLevel"/> — the level AFTER
+    /// <see cref="ResolveRumble"/>, so silencing rumble for a pad silences
+    /// what its triggers do too, rather than leaving the triggers reacting
+    /// to a game the motors are ignoring.
+    /// </para>
+    /// </summary>
+    public static ResolvedAdaptiveTrigger ResolveAdaptiveTrigger(
+        AdaptiveTriggerSettings settings, in EffectSceneContext context)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var resolved = ResolvedAdaptiveTrigger.From(settings);
+
+        if (settings.FeedbackLink == TriggerFeedbackLink.None)
+        {
+            return resolved;
+        }
+
+        var drive = Quantize(
+            Math.Clamp(context.RumbleLevel, 0d, 1d) *
+            Math.Clamp(settings.FeedbackAmount, 0f, 1f));
+
+        if (drive <= FeedbackLinkFloor)
+        {
+            // Quiet game. Resistance falls to free travel because that IS
+            // the link's resting state; vibration hands back to whatever
+            // static effect the user tuned, so the trigger is not dead
+            // between events.
+            return settings.FeedbackLink == TriggerFeedbackLink.Resistance
+                ? resolved with { Strength = 0f }
+                : resolved;
+        }
+
+        return settings.FeedbackLink switch
+        {
+            TriggerFeedbackLink.Resistance =>
+                resolved with { Strength = (float)(Math.Clamp(settings.Strength, 0f, 1f) * drive) },
+
+            // Overrides the configured mode outright rather than blending:
+            // the firmware runs ONE effect per trigger, so a buzz and a
+            // resistance curve cannot both be live. Frequency stays the
+            // user's, since that is the pitch of the buzz they tuned.
+            TriggerFeedbackLink.Vibration =>
+                resolved with
+                {
+                    Mode = AdaptiveTriggerMode.Vibration,
+                    Strength = (float)drive,
+                },
+
+            _ => resolved,
+        };
+    }
+
+    /// <summary>Rounds to <see cref="FeedbackLinkSteps"/> discrete levels.</summary>
+    private static double Quantize(double value) =>
+        Math.Round(value * FeedbackLinkSteps, MidpointRounding.AwayFromZero) / FeedbackLinkSteps;
 
     /// <summary>Green above 60%, amber to 25%, red below. Charging shows a breathing green.</summary>
     private static LightColor BatteryColor(in EffectSceneContext context)

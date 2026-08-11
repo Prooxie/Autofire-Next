@@ -149,8 +149,10 @@ public sealed class ControllerEffectProducer(
                     LowFrequencyRumble = low,
                     HighFrequencyRumble = high,
                     LedColor = color is { } c ? new EffectColor(c.R, c.G, c.B) : null,
-                    LeftTrigger = ToCommand(settings.LeftAdaptiveTrigger),
-                    RightTrigger = ToCommand(settings.RightAdaptiveTrigger),
+                    LeftTrigger = ToCommand(
+                        EffectSceneResolver.ResolveAdaptiveTrigger(settings.LeftAdaptiveTrigger, context)),
+                    RightTrigger = ToCommand(
+                        EffectSceneResolver.ResolveAdaptiveTrigger(settings.RightAdaptiveTrigger, context)),
                 });
 
                 if (publishedDevices.Add(deviceId))
@@ -229,8 +231,15 @@ public sealed class ControllerEffectProducer(
     }
 
     /// <summary>
-    /// Turns saved adaptive-trigger settings into the device-neutral
+    /// Turns a resolved adaptive-trigger effect into the device-neutral
     /// command the queue carries.
+    ///
+    /// <para>
+    /// Takes the RESOLVED effect rather than the saved settings so that a
+    /// trigger linked to rumble and a trigger tuned statically travel the
+    /// same path from here on. The link is a Core decision; this is the
+    /// unit conversion.
+    /// </para>
     ///
     /// <para>
     /// <see cref="AdaptiveTriggerMode.Off"/> is an explicit command, not
@@ -238,7 +247,7 @@ public sealed class ControllerEffectProducer(
     /// until a release report reaches it.
     /// </para>
     /// </summary>
-    internal static AdaptiveTriggerCommand ToCommand(AdaptiveTriggerSettings settings)
+    internal static AdaptiveTriggerCommand ToCommand(ResolvedAdaptiveTrigger settings)
     {
         var effect = settings.Mode switch
         {

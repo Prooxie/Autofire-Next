@@ -43,6 +43,7 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
         CurveOptions = new ObservableCollection<StickCurve>(Enum.GetValues<StickCurve>());
         LightbarModeOptions = new ObservableCollection<LightbarMode>(Enum.GetValues<LightbarMode>());
         AdaptiveModeOptions = new ObservableCollection<AdaptiveTriggerMode>(Enum.GetValues<AdaptiveTriggerMode>());
+        FeedbackLinkOptions = new ObservableCollection<TriggerFeedbackLink>(Enum.GetValues<TriggerFeedbackLink>());
     }
 
     /// <summary>
@@ -157,6 +158,7 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     public ObservableCollection<StickCurve> CurveOptions { get; }
     public ObservableCollection<LightbarMode> LightbarModeOptions { get; }
     public ObservableCollection<AdaptiveTriggerMode> AdaptiveModeOptions { get; }
+    public ObservableCollection<TriggerFeedbackLink> FeedbackLinkOptions { get; }
 
     public string DeviceName
     {
@@ -227,12 +229,16 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
             leftAdaptiveEnd = settings.LeftAdaptiveTrigger.EndPosition;
             leftAdaptiveStrength = settings.LeftAdaptiveTrigger.Strength;
             leftAdaptiveFrequency = settings.LeftAdaptiveTrigger.FrequencyHz;
+            leftFeedbackLink = settings.LeftAdaptiveTrigger.FeedbackLink;
+            leftFeedbackAmount = settings.LeftAdaptiveTrigger.FeedbackAmount;
 
             rightAdaptiveMode = settings.RightAdaptiveTrigger.Mode;
             rightAdaptiveStart = settings.RightAdaptiveTrigger.StartPosition;
             rightAdaptiveEnd = settings.RightAdaptiveTrigger.EndPosition;
             rightAdaptiveStrength = settings.RightAdaptiveTrigger.Strength;
             rightAdaptiveFrequency = settings.RightAdaptiveTrigger.FrequencyHz;
+            rightFeedbackLink = settings.RightAdaptiveTrigger.FeedbackLink;
+            rightFeedbackAmount = settings.RightAdaptiveTrigger.FeedbackAmount;
         }
         finally
         {
@@ -292,11 +298,13 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
             {
                 Mode = leftAdaptiveMode, StartPosition = leftAdaptiveStart, EndPosition = leftAdaptiveEnd,
                 Strength = leftAdaptiveStrength, FrequencyHz = leftAdaptiveFrequency,
+                FeedbackLink = leftFeedbackLink, FeedbackAmount = leftFeedbackAmount,
             },
             RightAdaptiveTrigger = new AdaptiveTriggerSettings
             {
                 Mode = rightAdaptiveMode, StartPosition = rightAdaptiveStart, EndPosition = rightAdaptiveEnd,
                 Strength = rightAdaptiveStrength, FrequencyHz = rightAdaptiveFrequency,
+                FeedbackLink = rightFeedbackLink, FeedbackAmount = rightFeedbackAmount,
             },
         });
     }
@@ -370,6 +378,8 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     private float leftAdaptiveStart = 0.2f, leftAdaptiveEnd = 0.8f, leftAdaptiveStrength = 0.8f;
     private float rightAdaptiveStart = 0.2f, rightAdaptiveEnd = 0.8f, rightAdaptiveStrength = 0.8f;
     private int leftAdaptiveFrequency = 10, rightAdaptiveFrequency = 10;
+    private TriggerFeedbackLink leftFeedbackLink, rightFeedbackLink;
+    private float leftFeedbackAmount = 1f, rightFeedbackAmount = 1f;
 
     public AdaptiveTriggerMode LeftAdaptiveMode { get => leftAdaptiveMode; set => Apply(ref leftAdaptiveMode, value, nameof(LeftAdaptiveMode)); }
     public float LeftAdaptiveStart { get => leftAdaptiveStart; set => Apply(ref leftAdaptiveStart, value, nameof(LeftAdaptiveStart)); }
@@ -382,6 +392,61 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
     public float RightAdaptiveEnd { get => rightAdaptiveEnd; set => Apply(ref rightAdaptiveEnd, value, nameof(RightAdaptiveEnd)); }
     public float RightAdaptiveStrength { get => rightAdaptiveStrength; set => Apply(ref rightAdaptiveStrength, value, nameof(RightAdaptiveStrength)); }
     public int RightAdaptiveFrequency { get => rightAdaptiveFrequency; set => Apply(ref rightAdaptiveFrequency, value, nameof(RightAdaptiveFrequency)); }
+
+    // ── Rumble link ──
+    //
+    // The amount slider is hidden rather than disabled while the link is
+    // None: a live control that changes nothing is a worse explanation
+    // than an absent one. IsLinked* drives that, and each link setter
+    // raises it so the row appears the moment the mode changes.
+
+    public TriggerFeedbackLink LeftFeedbackLink
+    {
+        get => leftFeedbackLink;
+        set
+        {
+            Apply(ref leftFeedbackLink, value, nameof(LeftFeedbackLink));
+            OnPropertyChanged(nameof(IsLeftLinked));
+            OnPropertyChanged(nameof(LeftFeedbackLinkDescription));
+        }
+    }
+
+    public float LeftFeedbackAmount { get => leftFeedbackAmount; set => Apply(ref leftFeedbackAmount, value, nameof(LeftFeedbackAmount)); }
+
+    public TriggerFeedbackLink RightFeedbackLink
+    {
+        get => rightFeedbackLink;
+        set
+        {
+            Apply(ref rightFeedbackLink, value, nameof(RightFeedbackLink));
+            OnPropertyChanged(nameof(IsRightLinked));
+            OnPropertyChanged(nameof(RightFeedbackLinkDescription));
+        }
+    }
+
+    public float RightFeedbackAmount { get => rightFeedbackAmount; set => Apply(ref rightFeedbackAmount, value, nameof(RightFeedbackAmount)); }
+
+    public bool IsLeftLinked => leftFeedbackLink != TriggerFeedbackLink.None;
+    public bool IsRightLinked => rightFeedbackLink != TriggerFeedbackLink.None;
+
+    public string LeftFeedbackLinkDescription => Describe(leftFeedbackLink);
+    public string RightFeedbackLinkDescription => Describe(rightFeedbackLink);
+
+    /// <summary>
+    /// Says what the chosen link actually does. The enum names alone
+    /// ("Resistance", "Vibration") do not distinguish a trigger that
+    /// stiffens during rumble from one that buzzes with it, and both
+    /// sound like things the Mode dropdown above already offers.
+    /// </summary>
+    private static string Describe(TriggerFeedbackLink link) => link switch
+    {
+        TriggerFeedbackLink.Resistance =>
+            "The trigger stiffens as the game rumbles — free at rest, reaching the strength above at full rumble.",
+        TriggerFeedbackLink.Vibration =>
+            "The trigger buzzes along with the game's rumble. Between events the effect above applies unchanged.",
+        _ =>
+            "The effect above is sent exactly as tuned, whatever the game is doing.",
+    };
 
     private void RaiseAll()
     {
@@ -399,6 +464,8 @@ public sealed class DeviceSettingsEditorViewModel : ViewModelBase
             nameof(LightbarMode), nameof(LightbarColor), nameof(LightbarBrightness), nameof(IndicatorBrightness),
             nameof(LeftAdaptiveMode), nameof(LeftAdaptiveStart), nameof(LeftAdaptiveEnd), nameof(LeftAdaptiveStrength), nameof(LeftAdaptiveFrequency),
             nameof(RightAdaptiveMode), nameof(RightAdaptiveStart), nameof(RightAdaptiveEnd), nameof(RightAdaptiveStrength), nameof(RightAdaptiveFrequency),
+            nameof(LeftFeedbackLink), nameof(LeftFeedbackAmount), nameof(IsLeftLinked), nameof(LeftFeedbackLinkDescription),
+            nameof(RightFeedbackLink), nameof(RightFeedbackAmount), nameof(IsRightLinked), nameof(RightFeedbackLinkDescription),
         })
         {
             OnPropertyChanged(name);

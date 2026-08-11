@@ -167,6 +167,43 @@ public enum AdaptiveTriggerMode
     MultiplePositionVibration
 }
 
+/// <summary>
+/// Ties an adaptive trigger to the rumble the game is currently asking
+/// for, so the trigger reacts to play instead of holding one configured
+/// feel forever.
+///
+/// <para>
+/// Both linked modes read the OVERALL rumble level — the louder of the two
+/// motors — rather than pairing left trigger to the low motor and right to
+/// the high. Splitting them reads well on paper and fails in practice: a
+/// game that drives only one motor would leave one trigger permanently
+/// dead, and from the outside that is indistinguishable from the feature
+/// not working.
+/// </para>
+/// </summary>
+public enum TriggerFeedbackLink
+{
+    /// <summary>No link — the configured effect is sent exactly as tuned.</summary>
+    None,
+
+    /// <summary>
+    /// Resistance tracks rumble: free travel when the game is quiet,
+    /// rising to the configured <see cref="AdaptiveTriggerSettings.Strength"/>
+    /// at full rumble. The configured mode still decides the SHAPE of the
+    /// resistance; the link only moves how hard it pushes back.
+    /// </summary>
+    Resistance,
+
+    /// <summary>
+    /// The trigger's own actuator buzzes along with the game's rumble —
+    /// what an Xbox title's impulse triggers would have done, routed onto
+    /// a DualSense. While the game is quiet the configured effect applies
+    /// unchanged, so a trigger tuned to resist still resists between
+    /// events.
+    /// </summary>
+    Vibration
+}
+
 public sealed record AdaptiveTriggerSettings
 {
     [JsonPropertyName("mode")]
@@ -187,6 +224,24 @@ public sealed record AdaptiveTriggerSettings
     /// <summary>Vibration frequency in Hz for the vibration-based modes.</summary>
     [JsonPropertyName("frequencyHz")]
     public int FrequencyHz { get; init; } = 10;
+
+    /// <summary>
+    /// Whether — and how — live game rumble drives this trigger. Defaults
+    /// to <see cref="TriggerFeedbackLink.None"/> so an existing profile
+    /// keeps the static feel it was tuned for.
+    /// </summary>
+    [JsonPropertyName("feedbackLink")]
+    public TriggerFeedbackLink FeedbackLink { get; init; } = TriggerFeedbackLink.None;
+
+    /// <summary>
+    /// How much of the rumble signal reaches the trigger, 0..1. Scales the
+    /// linked drive, not the configured <see cref="Strength"/>: at 0.5 a
+    /// game at full rumble moves the trigger half as far as it otherwise
+    /// would. Separate from <see cref="RumbleSettings.Gain"/> because that
+    /// one also changes what the motors do.
+    /// </summary>
+    [JsonPropertyName("feedbackAmount")]
+    public float FeedbackAmount { get; init; } = 1.0f;
 }
 
 /// <summary>
