@@ -12,8 +12,8 @@ public static class ProfileDefaults
         {
             Id = "default-profile",
             Name = "Default Profile",
-            Version = 4,
-            PollingRateHz = 250,
+            Version = 5,
+            PollingRateHz = 1000,
             InputProvider = "sdl",
             // The platform's sole real output backend (HIDMaestro on
             // Windows; preview elsewhere) — see OutputProviderPolicy.

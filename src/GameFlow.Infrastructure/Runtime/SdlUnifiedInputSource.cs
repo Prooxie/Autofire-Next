@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace GameFlow.Infrastructure.Runtime;
 
-public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructure.Runtime.Slots.IMultiDeviceInputSource
+public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFlow.Infrastructure.Runtime.Slots.IMultiDeviceInputSource
 {
     private readonly Lock syncRoot = new();
     private readonly ILogger<SdlUnifiedInputSource> logger;
@@ -59,6 +59,15 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
     /// <summary>Guards the elevated "no devices" advice so it is logged once per dry spell, not per 250 ms refresh.</summary>
     private bool warnedElevatedNoDevices;
+
+    private int targetPollingHz = 250;
+
+    /// <inheritdoc/>
+    public int TargetPollingHz
+    {
+        get => Volatile.Read(ref targetPollingHz);
+        set => Volatile.Write(ref targetPollingHz, Math.Clamp(value, 30, 1000));
+    }
 
     // ── Dedicated SDL worker (owns every SDL call after the ctor) ──
     private Thread? worker;
@@ -202,7 +211,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     private void WorkerLoop()
     {
         logger.LogInformation("SDL worker thread started (owns all SDL device I/O).");
-        var interval = TimeSpan.FromMilliseconds(4);
+        var interval = PollingInterval(TargetPollingHz);
 
         while (!stopRequested && !disposed)
         {
@@ -268,14 +277,41 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
             _ = Interlocked.Exchange(ref lastLoopTimestampTicks, DateTime.UtcNow.Ticks);
 
-            // Drift-free pacing against an absolute deadline. Sleep(1) is
-            // bounded by the OS timer resolution (1–15.6 ms), so the real
-            // rate lands between ~64 Hz and ~250 Hz depending on the
-            // system — plenty for input, and no busy spinning.
+            // Drift-free pacing against an absolute deadline, at whatever
+            // rate the active profile asked for.
+            //
+            // Sleeping the whole wait cannot reach the top of that range.
+            // Thread.Sleep(1) is bounded by the OS timer resolution, which
+            // on Windows is 1–15.6 ms, so a pure-sleep loop lands somewhere
+            // between ~64 Hz and ~250 Hz whatever it was aiming for — the
+            // 1000 Hz the profile can be set to was never actually
+            // reachable. So: sleep while there is time worth sleeping, then
+            // yield through the last millisecond, which the scheduler can
+            // honour far more precisely.
+            //
+            // Yielding rather than spinning. SpinWait would hit the rate
+            // more exactly and burn a core doing it; Thread.Yield lets
+            // anything else runnable go first, which on a machine with work
+            // to do is the difference between a responsive system and a
+            // pegged one.
+            interval = PollingInterval(TargetPollingHz);
             var deadline = started + interval;
-            for (var left = deadline - DateTime.UtcNow; left > TimeSpan.Zero; left = deadline - DateTime.UtcNow)
+            while (true)
             {
-                Thread.Sleep(1);
+                var left = deadline - DateTime.UtcNow;
+                if (left <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                if (left > TimeSpan.FromMilliseconds(2))
+                {
+                    Thread.Sleep(1);
+                }
+                else
+                {
+                    _ = Thread.Yield();
+                }
             }
         }
 
@@ -1316,6 +1352,10 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
     /// be exercised without elevating.
     /// </para>
     /// </summary>
+    /// <summary>Sample period for a rate in Hz, clamped to the range the profile allows.</summary>
+    private static TimeSpan PollingInterval(int hz) =>
+        TimeSpan.FromMilliseconds(1000d / Math.Clamp(hz, 30, 1000));
+
     private void ApplyElevationWorkarounds()
     {
         if (!OperatingSystem.IsWindows() || !Environment.IsPrivilegedProcess)
@@ -1356,6 +1396,22 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
         // reconnect-order-stable, ids rather than colliding into one.
         var seenSignatureCounts = new Dictionary<string, int>(StringComparer.Ordinal);
 
+        // OS device paths already added this pass.
+        //
+        // Two backends can both enumerate ONE physical pad, and then the
+        // signature above cannot tell that apart from two identical pads:
+        // it sees the same vid/pid/name twice and hands out a "-2" id, so
+        // the user gets a phantom second controller and a slot assignment
+        // that can bind to whichever copy came first. The OS path is the
+        // one value that identifies the hardware rather than the way it
+        // was found, so it is what decides whether something is a
+        // duplicate.
+        //
+        // Which backends are live is not fixed — it varies with the
+        // elevation workaround and with SDL's own defaults per Windows
+        // build — so this cannot be left to "the right hints are set".
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         string BuildStableId(string kindTag, ushort vid, ushort pid, string name)
         {
             var signature = $"{vid:X4}:{pid:X4}:{name}";
@@ -1379,13 +1435,20 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
                 var vid = SdlInterop.GetGamepadVendorForId(instanceId);
                 var pid = SdlInterop.GetGamepadProductForId(instanceId);
+
+                // A virtual pad impersonates real hardware down to VID/PID,
+                // so the OS path is the only thing that gives it away — and
+                // the only thing that identifies one physical pad seen by
+                // two backends as one pad.
+                var gamepadPath = SdlInterop.ReadString(SdlInterop.GetGamepadPathForIdPointer(instanceId));
+                if (!string.IsNullOrEmpty(gamepadPath) && !seenPaths.Add(gamepadPath))
+                {
+                    continue;
+                }
+
                 var gamepadId = BuildStableId("gamepad", vid, pid, name);
                 liveMap[gamepadId] = instanceId;
                 var power = GetCachedPower(gamepadId);
-
-                // A virtual pad impersonates real hardware down to VID/PID,
-                // so the OS path is the only thing that gives it away.
-                var gamepadPath = SdlInterop.ReadString(SdlInterop.GetGamepadPathForIdPointer(instanceId));
 
                 devices.Add(new InputDeviceInfo(
                     gamepadId,
@@ -1428,11 +1491,20 @@ public sealed class SdlUnifiedInputSource : IInputSource, GameFlow.Infrastructur
 
                 var vid = SdlInterop.GetJoystickVendorForId(instanceId);
                 var pid = SdlInterop.GetJoystickProductForId(instanceId);
+
+                // Same dedupe as the gamepad pass, and sharing its set: a
+                // pad can surface as a gamepad through one backend and a
+                // bare joystick through another, which would otherwise list
+                // the same hardware twice under two categories.
+                var joystickPath = SdlInterop.ReadString(SdlInterop.GetJoystickPathForIdPointer(instanceId));
+                if (!string.IsNullOrEmpty(joystickPath) && !seenPaths.Add(joystickPath))
+                {
+                    continue;
+                }
+
                 var joystickId = BuildStableId("joystick", vid, pid, name);
                 liveMap[joystickId] = instanceId;
                 var power = GetCachedPower(joystickId);
-
-                var joystickPath = SdlInterop.ReadString(SdlInterop.GetJoystickPathForIdPointer(instanceId));
 
                 devices.Add(new InputDeviceInfo(
                     joystickId,

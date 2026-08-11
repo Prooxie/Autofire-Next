@@ -4,8 +4,16 @@ public sealed record ProfileDocument
 {
     public string Id { get; init; } = "speedrunner-default";
     public string Name { get; init; } = "Speedrunner Default";
-    public int Version { get; init; } = 4;
-    public int PollingRateHz { get; init; } = 250;
+    public int Version { get; init; } = 5;
+    /// <summary>
+    /// Mapping ticks per second, 30–1000. Defaults to the maximum: the
+    /// pipeline tick is cheap next to the input read it wraps, and the
+    /// lower default only added latency between a press and the virtual
+    /// controller reporting it. A pad that reports at 250 Hz does not
+    /// report faster for being asked more often — this is a ceiling, and
+    /// the cost of the ceiling being high is small.
+    /// </summary>
+    public int PollingRateHz { get; init; } = 1000;
     public string InputProvider { get; init; } = "sdl";
 
     /// <summary>

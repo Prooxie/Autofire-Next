@@ -77,15 +77,28 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     /// <see cref="GameFlow.Infrastructure.Profiles.AppSettings.DashboardRefreshHz"/>.
     ///
     /// <para>
-    /// Defaults to 60. See <c>ShellWindow.ApplyConfiguredRefreshRate</c>
-    /// for why it is no longer 30 — a surface repaint went from ~19 ms to
-    /// under 1 ms, and the old default was spending 33 ms of latency to
+    /// Resolution order: the user's explicit setting, then an explicit
+    /// appsettings.json value, then <b>the display's own refresh rate</b>,
+    /// then 60. Following the monitor is the point — drawing 60 frames
+    /// into a 144 Hz panel wastes its headroom, and drawing 60 into a
+    /// 50 Hz one produces frames nobody sees. A value of 0 in
+    /// appsettings.json means "follow the display" rather than being
+    /// invalid.
+    /// </para>
+    ///
+    /// <para>
+    /// This is a ceiling, not a promise: see
+    /// <c>ShellWindow.ApplyConfiguredRefreshRate</c> and its adaptive
+    /// backoff. It stopped being 30 because a surface repaint went from
+    /// ~19 ms to under 1 ms, and 30 Hz was spending 33 ms of latency to
     /// save work that no longer exists.
     /// </para>
     /// </summary>
     public int DashboardRefreshHz =>
         userSettings.Current.DashboardRefreshHz
-        ?? (runtimeOptions.DashboardRefreshHz > 0 ? runtimeOptions.DashboardRefreshHz : 60);
+        ?? (runtimeOptions.DashboardRefreshHz > 0
+            ? runtimeOptions.DashboardRefreshHz
+            : GameFlow.App.Platform.DisplayRefreshRate.TryGetPrimaryHz() ?? 60);
     private readonly SemaphoreSlim rulesSaveGate = new(1, 1);
     private readonly SemaphoreSlim panelBackgroundSaveGate = new(1, 1);
     private int panelBackgroundPersistVersion;

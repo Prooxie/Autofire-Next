@@ -97,7 +97,17 @@ public partial class ShellWindow : Window
         if (refreshTimer.Interval != interval)
         {
             refreshTimer.Interval = interval;
-            Log.Information("Dashboard UI tick set to {Hz} Hz ({Interval:F1} ms).", hz, interval.TotalMilliseconds);
+
+            // Says where the number came from. "60 Hz" alone cannot be
+            // told apart from the fallback that is also 60, and those two
+            // mean very different things when someone is asking why a
+            // 144 Hz monitor is not being used.
+            var detected = Platform.DisplayRefreshRate.TryGetPrimaryHz();
+            Log.Information(
+                "Dashboard UI tick set to {Hz} Hz ({Interval:F1} ms); display reports {Display}.",
+                hz,
+                interval.TotalMilliseconds,
+                detected is { } displayHz ? $"{displayHz} Hz" : "no rate");
         }
     }
 

@@ -263,19 +263,36 @@ public sealed class ProfileSession(IProfileRepository repository, ILogger<Profil
         await SaveCurrentProfileAsync(profile, cancellationToken);
     }
 
+    /// <summary>Polling rate shipped as the default in profile versions up to 4.</summary>
+    private const int LegacyDefaultPollingRateHz = 250;
+
     private static ProfileDocument MigrateProfile(ProfileDocument profile)
     {
         var inputProvider = NormalizeInputProvider(profile.InputProvider);
         var preferredInputDeviceId = profile.PreferredInputDeviceId?.Trim() ?? string.Empty;
-        var version = Math.Max(profile.Version, 4);
+        var version = Math.Max(profile.Version, 5);
+
+        // v5: the polling-rate default went from 250 Hz to 1000.
+        //
+        // Only rewritten when it still holds EXACTLY the old default on a
+        // profile written before v5 — that value was shipped, not chosen,
+        // and leaving it would mean the new default never reaching anyone
+        // who already had a profile, which is everyone. Any other value is
+        // a deliberate choice and is left alone, including a deliberate
+        // 250 set after this migration has stamped the version.
+        var pollingRateHz = profile.Version < 5 && profile.PollingRateHz == LegacyDefaultPollingRateHz
+            ? 1000
+            : profile.PollingRateHz;
 
         return version == profile.Version &&
+            pollingRateHz == profile.PollingRateHz &&
             string.Equals(inputProvider, profile.InputProvider, StringComparison.Ordinal) &&
             string.Equals(preferredInputDeviceId, profile.PreferredInputDeviceId, StringComparison.Ordinal)
             ? profile
             : (profile with
             {
                 Version = version,
+                PollingRateHz = pollingRateHz,
                 InputProvider = inputProvider,
                 PreferredInputDeviceId = preferredInputDeviceId
             });

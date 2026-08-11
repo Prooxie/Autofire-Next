@@ -134,6 +134,10 @@ public sealed class RuntimeCoordinator(
                     pipeline.Dispose(); // releases the outgoing pipeline's compiled Lua scripts
                     pipeline = new ControllerMappingPipeline(activeProfile);
                     interval = GetPollingInterval(activeProfile.PollingRateHz);
+                    if (currentInputSource is IPollRateAware rateAware)
+                    {
+                        rateAware.TargetPollingHz = activeProfile.PollingRateHz;
+                    }
                     nextTickAt = DateTimeOffset.UtcNow;
 
                     if (logger.IsEnabled(LogLevel.Information))
@@ -361,6 +365,16 @@ public sealed class RuntimeCoordinator(
             // not the mechanism doing the hiding.
             inputDeviceCatalog.SetIgnoredDeviceIds([]);
             currentInputSource = inputSourceFactory.Create(profile.InputProvider);
+
+            // A source that polls hardware on its own thread has to be told
+            // the rate too. Ticking the pipeline at 1000 Hz over a source
+            // still sampling at 250 just reads the same snapshot four times
+            // — the configured rate would look applied and change nothing
+            // a user could feel.
+            if (currentInputSource is IPollRateAware pollRateAware)
+            {
+                pollRateAware.TargetPollingHz = profile.PollingRateHz;
+            }
 
             _ = await currentInputSource.ReadAsync(cancellationToken);
 
