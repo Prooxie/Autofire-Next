@@ -105,6 +105,25 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
     private string panelId = "physical";
 
     /// <summary>
+    /// Whether this panel is showing a keyboard.
+    ///
+    /// <para>
+    /// A keyboard is drawn by <c>KeyboardSurface</c> — the ANSI 104-key
+    /// layout built from <c>KeyboardPhysicalLayout</c> — rather than
+    /// through a theme pack. There were two keyboard renderings, and the
+    /// theme-pack one was the worse of them: it is a gamepad-shaped
+    /// pipeline being asked to draw a keyboard, one of its two packs ships
+    /// none of its art at all (see D1), and the result did not match the
+    /// keyboard the Devices page shows for the same hardware. One
+    /// keyboard, drawn one way.
+    /// </para>
+    /// </summary>
+    public bool IsKeyboardStyle => visualStyle == ControllerVisualStyle.Keyboard;
+
+    /// <summary>Whether this panel is drawn by the theme engine — everything that is not a keyboard.</summary>
+    public bool IsThemedStyle => !IsKeyboardStyle;
+
+    /// <summary>
     /// Lazy-loaded asset-pack overlay PNG for <see cref="visualStyle"/>.
     /// Refreshed when the style changes; <see langword="null"/> when no
     /// matching file is installed.
@@ -210,6 +229,12 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
         PanelTitle = panelTitle;
         snapshot = newSnapshot;
         visualStyle = newStyle;
+
+        if (styleChanged)
+        {
+            OnPropertyChanged(nameof(IsKeyboardStyle));
+            OnPropertyChanged(nameof(IsThemedStyle));
+        }
 
         if (styleChanged)
         {

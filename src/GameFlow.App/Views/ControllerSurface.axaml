@@ -32,10 +32,25 @@
             already outlines on hover; matching it here signals the panel
             is interactive, and on this side a click opens the slot's
             settings editor.
+
+            BorderBrush ONLY — the thickness stays put. Thickening the
+            border on hover changes the panel's content box, which resizes
+            the ThemeSurface inside it, which rescales the artwork and
+            moves every element under the cursor. The element highlight is
+            positioned from the theme geometry the frame BEFORE that
+            reflow, so it lands offset from the control it belongs to, and
+            it does so only while hovering — which is the one moment you
+            are looking at it. That is why the highlight still read as
+            misplaced here after the drawing itself was fixed.
+
+            The panel therefore carries its 2px border at all times and
+            only changes colour, so hovering costs no layout at all.
         -->
+        <Style Selector="Border#PanelRoot">
+          <Setter Property="BorderThickness" Value="2" />
+        </Style>
         <Style Selector="Border#PanelRoot:pointerover">
           <Setter Property="BorderBrush" Value="{DynamicResource AppAccent}" />
-          <Setter Property="BorderThickness" Value="2" />
         </Style>
       </Border.Styles>
       <Border Padding="18,14" CornerRadius="14"
@@ -100,8 +115,22 @@
                            Foreground="{DynamicResource AppForegroundDim}" FontSize="12"
                            Text="No controller theme installed for this style. Drop a VSCView-compatible theme folder into %LocalAppData%\GAMEFLOW\themes." />
                 <views:ThemeSurface x:Name="ThemedSurface"
+                                    IsVisible="{Binding IsThemedStyle}"
                                     HorizontalAlignment="Stretch"
                                     VerticalAlignment="Stretch" />
+
+                <!--
+                    Keyboards get the real keyboard, not a theme pack.
+                    This is the same control the Devices page draws, so
+                    the same hardware now looks the same in both places —
+                    it did not before, because the dashboard went through
+                    the theme engine and one of its two keyboard packs
+                    ships no art at all.
+                -->
+                <Viewbox IsVisible="{Binding IsKeyboardStyle}"
+                         Stretch="Uniform" StretchDirection="DownOnly">
+                  <views:KeyboardSurface />
+                </Viewbox>
             </Grid>
 
             <!-- Live pressed-button readout. Single line by contract:

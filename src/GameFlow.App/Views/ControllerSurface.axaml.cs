@@ -116,9 +116,32 @@ public partial class ControllerSurface : UserControl
             surface.Clicked += OnSurfaceClicked;
         }
 
-        pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+        // Follows the dashboard's rate rather than a hardcoded 33 ms.
+        //
+        // This timer is what pushes fresh snapshots into the surface, so
+        // it — not the shell's tick — is the real ceiling on how current
+        // the artwork is. Raising the dashboard to the display's refresh
+        // rate did nothing for the panels while this was still pinned at
+        // 30 Hz: the surface was being asked to repaint more often than it
+        // was being given anything new to draw.
+        pollTimer = new DispatcherTimer { Interval = ResolvePollInterval() };
         pollTimer.Tick += OnPollTick;
         pollTimer.Start();
+    }
+
+    /// <summary>
+    /// The dashboard's configured rate, resolved the same way the shell
+    /// resolves it — user setting, then appsettings, then the display.
+    /// Falls back to 60 Hz when the shell view model is not reachable
+    /// from here, which happens in design-time previews.
+    /// </summary>
+    private TimeSpan ResolvePollInterval()
+    {
+        var hz = (TopLevel.GetTopLevel(this)?.DataContext as ShellViewModel)?.DashboardRefreshHz
+                 ?? Platform.DisplayRefreshRate.TryGetPrimaryHz()
+                 ?? 60;
+
+        return TimeSpan.FromMilliseconds(1000d / Math.Clamp(hz, 30, 1000));
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)

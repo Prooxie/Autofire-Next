@@ -4,7 +4,7 @@
         x:Class="GameFlow.App.Views.SettingsDialog"
         x:DataType="vm:SettingsDialogViewModel"
         Width="640"
-        Height="560"
+        Height="760"
         MinWidth="540"
         MinHeight="380"
         MaxHeight="900"
@@ -55,10 +55,26 @@
       </Border>
 
 
-      <!-- Scrollable form content -->
+      <!--
+          Scrollable form content.
+
+          AllowAutoHide=False, and the bar is always VISIBLE rather than
+          Auto, because this dialog reads as truncated otherwise. Its last
+          section is the DSU / Cemuhook motion server, and the content is
+          taller than the window: an auto-hidden bar gives no sign that
+          anything is below the fold, and the obvious way to look — the
+          mouse wheel — silently does nothing useful, because the pointer
+          is usually over a ComboBox or a NumericUpDown, and those consume
+          the wheel to change their own value. So the page appeared to end
+          early and the motion-server settings appeared to be missing.
+
+          The same AllowAutoHide reasoning is on the dashboard's scroller;
+          this is the second place it mattered.
+      -->
       <ScrollViewer
                     HorizontalScrollBarVisibility="Disabled"
-                    VerticalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Visible"
+                    AllowAutoHide="False"
                     Padding="24,20">
         <StackPanel Spacing="20">
 
