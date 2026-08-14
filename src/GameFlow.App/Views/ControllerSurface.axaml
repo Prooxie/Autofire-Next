@@ -70,10 +70,22 @@
             means live text can change freely without the artwork moving
             a pixel.
         -->
-        <Grid RowDefinitions="22,Auto,*,20" MinHeight="260">
+        <!--
+            Row heights INCLUDE their content's margins.
+
+            They did not, and that is what made the readouts overlap. The
+            title row was 22 px tall holding content with an 8 px bottom
+            margin, and the footer row 20 px holding a 4 px top margin —
+            so each asked for more space than its row had, and a fixed row
+            does not grow. The surplus was drawn over the neighbouring row
+            instead. Rows are deliberately fixed here (see above), which
+            means a margin inside one is not a spacing choice, it is an
+            overflow: 22+8 and 20+4 are now simply 30 and 24.
+        -->
+        <Grid RowDefinitions="30,Auto,*,24" MinHeight="260">
 
             <!-- Title row -->
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,0,0,8">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10" VerticalAlignment="Top">
                 <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis"
@@ -136,8 +148,8 @@
             <!-- Live pressed-button readout. Single line by contract:
                  see the note on the row definitions above. -->
             <TextBlock Grid.Row="3" Text="{Binding PressedButtonsText}"
-                       Margin="0,4,0,0" FontSize="11"
-                       VerticalAlignment="Center"
+                       FontSize="11"
+                       VerticalAlignment="Bottom"
                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                        Foreground="{DynamicResource AppForegroundDim}" />
         </Grid>
