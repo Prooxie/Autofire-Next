@@ -211,13 +211,22 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
 
         var styleChanged = newStyle != visualStyle;
 
-        var liveChanged =
-            newSnapshot.LeftStick != snapshot.LeftStick ||
-            newSnapshot.RightStick != snapshot.RightStick ||
-            Math.Abs(newSnapshot.LeftTrigger - snapshot.LeftTrigger) > 0.005f ||
-            Math.Abs(newSnapshot.RightTrigger - snapshot.RightTrigger) > 0.005f ||
-            newSnapshot.TouchContactCount != snapshot.TouchContactCount ||
-            ButtonsChanged(newSnapshot.Buttons, snapshot.Buttons);
+        // Delegated to Core rather than compared here. This used to be a
+        // hand-rolled list that asked only how MANY fingers were on the
+        // pad, so a drag — same count, same buttons, same sticks — read as
+        // "nothing changed" and returned below without assigning
+        // `snapshot`. RawSnapshot then kept handing ControllerSurface the
+        // frame the finger landed on, and the surface's own (correct)
+        // dirty check compared that stale frame against itself and
+        // declined to repaint. The dot froze exactly as it did before V5,
+        // one layer further up: V5 fixed this comparison in the surface
+        // and left the copy in front of it untouched.
+        //
+        // SnapshotVisuals.AreEquivalent is the single answer to "would
+        // these two paint the same", and it is where any newly drawable
+        // field gets its case. Note it ignores device identity and
+        // panel title on purpose — `identityChanged` above covers those.
+        var liveChanged = !SnapshotVisuals.AreEquivalent(newSnapshot, snapshot);
 
         // Nothing changed at all — skip entirely (common when idle)
         if (!identityChanged && !styleChanged && !liveChanged)
@@ -733,22 +742,6 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
             .Take(6)
             .ToArray();
         PressedButtonsText = pressed.Length == 0 ? "—" : string.Join(" · ", pressed);
-    }
-
-    private static bool ButtonsChanged(
-        IReadOnlyDictionary<ButtonId, bool> a,
-        IReadOnlyDictionary<ButtonId, bool> b)
-    {
-        foreach (var key in a.Keys)
-        {
-            var aVal = a.TryGetValue(key, out var av) && av;
-            var bVal = b.TryGetValue(key, out var bv) && bv;
-            if (aVal != bVal)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static bool ContainsAny(string haystack, params string[] needles)
