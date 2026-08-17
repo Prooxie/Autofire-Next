@@ -104,11 +104,11 @@ sudo usermod -aG input $USER
 ### macOS
 
 * Gamepad input: SDL3, works out of the box.
-* Keyboard/mouse-as-gamepad: real, via `CGEventTap` — reads system-wide (no per-device distinction; see the wiki).
+* Keyboard/mouse-as-gamepad: real, via `IOHIDManager` — per physical device, same as Windows and Linux.
 * Mouse output: real, via `CGEventPost`.
 * Virtual **gamepad** output: not built yet — Preview only.
 
-Keyboard/mouse capture needs **Input Monitoring** permission (System Settings → Privacy \& Security → Input Monitoring) — without it the app runs fine, that one source just reads as empty.
+Keyboard/mouse capture needs **Input Monitoring** permission (System Settings → Privacy \& Security → Input Monitoring). GameFlow asks for it on first run and writes the answer to the log either way — if the permission is refused, keyboards and mice still appear on the Devices page and simply never register a press, so the log line is the only thing that tells a refusal apart from a bug. macOS shows that prompt once and once only; after a refusal, System Settings is the only way back.
 
 \---
 
@@ -231,7 +231,7 @@ GameFlow/
 Physical input                 Keyboard/mouse            Phone browser
   (SDL3 gamepad/joystick)     (Win Raw Input /              (WebSocket)
         │                      Linux evdev /                    │
-        │                      macOS CGEventTap)                │
+        │                      macOS IOHIDManager)              │
         ▼                            ▼                          ▼
      InputSource.ReadAsync() / ReadDevice() ─────────────────────┘
                     │
@@ -268,7 +268,7 @@ Documented here rather than discovered by surprise:
 
 * **No virtual *gamepad* output on Linux or macOS.** Mouse output is real on both; a real virtual controller (via `uinput`'s gamepad mode, or DriverKit on macOS) is future work.
 * **Bundled controller theme placement is known-imperfect** on some skins — several were generated from asset-pack sprites without authoritative layout data. Fixing this properly needs template-matching each sprite against its base image; tracked, not yet done.
-* **CGEventTap (macOS) has no per-device keyboard/mouse distinction** — one aggregate stream for the whole system, not per-physical-device like Windows/Linux.
+* **The macOS input path has never run on a Mac.** It is written against IOKit's documented HID API, but there is no macOS toolchain in the build environment, so nothing about it has been exercised on hardware — unlike the Linux interop, which was checked against real kernel headers. Absolute-mode pointers (some tablets) are also unsupported by it, and the volume/mute keys are not mappable there because they are Consumer-page usages the reader does not claim.
 * **Remote Link, per-app profile switching** — on the roadmap, not started.
 * **The DSU/Cemuhook motion server addresses 4 pads, not 16.** That is the protocol's own limit, not an implementation shortcut — DSU has no way to describe a fifth pad. The first four *enabled* slots are the ones emulators see.
 

@@ -29,7 +29,7 @@ public sealed class RawInputEnumerationService(
     {
         if (!OperatingSystem.IsWindows() && !OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
-            return; // Raw Input / evdev / CGEventTap: nothing to enumerate on this platform.
+            return; // Raw Input / evdev / IOHIDManager: nothing to enumerate on this platform.
         }
 
         while (!stoppingToken.IsCancellationRequested)

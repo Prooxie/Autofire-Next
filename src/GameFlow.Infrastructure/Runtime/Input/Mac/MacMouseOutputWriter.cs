@@ -22,12 +22,12 @@ namespace GameFlow.Infrastructure.Runtime.Input.Mac;
 /// (anything tracking cursor position frame-to-frame, which is most
 /// UI and many games) work fine with that. A game reading raw HID
 /// deltas directly (bypassing cursor tracking entirely, common for
-/// "mouse-look" in some titles) may not respond to this. The delta
-/// field's exact CGEventField index is one of the least-certain
-/// constants in this whole macOS effort (see MacEventInterop.cs) —
-/// setting it wrong risks corrupting some OTHER field on the event
-/// silently, which is worse than the honest limitation of only
-/// supporting absolute-tracking consumers.
+/// "mouse-look" in some titles) may not respond to this. Setting the
+/// delta would mean reintroducing the CGEventField enum, whose exact
+/// ordering was recalled rather than read from a header and which left
+/// this file when the read path moved to IOHIDManager — a wrong index
+/// silently writes some OTHER field on the event, which is worse than
+/// the honest limitation of only serving absolute-tracking consumers.
 /// </para>
 ///
 /// <para>Not verified against a live device — no macOS SDK or

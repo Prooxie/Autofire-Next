@@ -57,13 +57,15 @@ public static class DependencyInjection
         }
         else if (OperatingSystem.IsMacOS())
         {
-            // CGEventTap (read) + CGEventPost (write) — see
-            // Runtime/Input/Mac/. No per-device distinction exists at
-            // this API level (one aggregate stream for every
-            // keyboard/mouse), so IKeyboardStateSource/IMouseStateSource
-            // route through the aggregate-read fallback path those
-            // interfaces already define. No window-attach concept here
-            // either — same NullRawInputAttacher as Linux.
+            // IOHIDManager (read) + CGEventPost (write) — see
+            // Runtime/Input/Mac/. Reading moved off CGEventTap because
+            // IOHIDManager reports which device a value came from, so
+            // IKeyboardStateSource/IMouseStateSource answer per-device
+            // here now, with the aggregate reads kept as the union and
+            // as those interfaces' documented fallback. Reading needs
+            // Input Monitoring consent, which MacRawInputReader requests
+            // and logs explicitly. No window-attach concept here either
+            // — same NullRawInputAttacher as Linux.
             _ = services.AddSingleton<Runtime.Input.Mac.MacRawInputReader>();
             _ = services.AddSingleton<Runtime.Input.IKeyboardStateSource>(sp => sp.GetRequiredService<Runtime.Input.Mac.MacRawInputReader>());
             _ = services.AddSingleton<Runtime.Input.IMouseStateSource>(sp => sp.GetRequiredService<Runtime.Input.Mac.MacRawInputReader>());

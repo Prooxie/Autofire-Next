@@ -34,6 +34,17 @@ internal static partial class MacHidInterop
     internal const int UsageMouse = 0x02;
     internal const int UsagePointer = 0x01;
 
+    // Element-level usage pages. Device matching (above) asks "what kind
+    // of device is this"; these answer "what did this particular value
+    // come from" inside the input callback.
+    internal const uint UsagePageKeyboard = 0x07; // Keyboard/Keypad — one element per key, value 1 = down
+    internal const uint UsagePageButton = 0x09;   // Button — usage 1 = left, 2 = right, 3 = middle, 4/5 = side
+
+    // Generic Desktop axis usages, as they appear on a pointer's elements.
+    internal const uint UsageX = 0x30;
+    internal const uint UsageY = 0x31;
+    internal const uint UsageWheel = 0x38;
+
     // IOHIDDevice property keys, as CFStrings.
     internal const string KeyProduct = "Product";
     internal const string KeyManufacturer = "Manufacturer";
@@ -66,6 +77,50 @@ internal static partial class MacHidInterop
 
     /// <summary>kIOHIDRequestTypeListenEvent — the "read input in the background" permission.</summary>
     internal const uint RequestTypeListenEvent = 1;
+
+    /// <summary>
+    /// <see cref="CheckAccess"/>, tolerating the symbol being absent.
+    /// Both access functions arrived in macOS 10.15 — on anything older
+    /// the P/Invoke throws <see cref="EntryPointNotFoundException"/> on
+    /// first call rather than failing at load. There is also no Input
+    /// Monitoring consent to check on those releases, so "not askable"
+    /// and "no gate exists" are the same answer: <see langword="null"/>,
+    /// meaning carry on and let opening the manager decide.
+    /// </summary>
+    internal static AccessType? TryCheckAccess()
+    {
+        try
+        {
+            return CheckAccess(RequestTypeListenEvent);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="RequestAccess"/>, tolerating the symbol being absent.
+    ///
+    /// <para>
+    /// Blocks until the user answers the system prompt. It only ever
+    /// prompts once per app: after a refusal it returns
+    /// <see langword="false"/> immediately and the only way back is
+    /// System Settings, which is precisely why the caller has to say so
+    /// in the log rather than retry.
+    /// </para>
+    /// </summary>
+    internal static bool? TryRequestAccess()
+    {
+        try
+        {
+            return RequestAccess(RequestTypeListenEvent);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
 
     [LibraryImport(IOKit, EntryPoint = "IOHIDManagerCreate")]
     internal static partial IntPtr ManagerCreate(IntPtr allocator, uint options);
@@ -108,6 +163,20 @@ internal static partial class MacHidInterop
 
     [LibraryImport(IOKit, EntryPoint = "IOHIDElementGetDevice")]
     internal static partial IntPtr ElementGetDevice(IntPtr element);
+
+    /// <summary>
+    /// Whether an element reports a delta or an absolute reading. This is
+    /// the guard that keeps a tablet or an absolute-mode trackpad from
+    /// being read as if it were a mouse: its X would be "1180 pixels from
+    /// the left", and accumulating that as movement would fling the stick
+    /// to full deflection and hold it there.
+    /// </summary>
+    [LibraryImport(IOKit, EntryPoint = "IOHIDElementIsRelative")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    internal static partial bool ElementIsRelative(IntPtr element);
+
+    /// <summary>kIOReturnSuccess. Every other IOReturn is a failure whose exact value is not worth decoding here — it is logged in hex for a tester to look up.</summary>
+    internal const int ReturnSuccess = 0;
 
     // ── CoreFoundation ───────────────────────────────────────────────
     // Needed because every IOKit property is a CF object. Kept minimal:
@@ -168,6 +237,24 @@ internal static partial class MacHidInterop
 
     internal const uint EncodingUtf8 = 0x08000100;
     internal const nint CFNumberIntType = 9;   // kCFNumberIntType
+
+    /// <summary>
+    /// A CFString equal to <c>kCFRunLoopDefaultMode</c>, for scheduling
+    /// the manager on a run loop.
+    ///
+    /// <para>
+    /// That constant is an exported CFStringRef global, not a function,
+    /// and P/Invoke cannot read a data export without <c>dlopen</c> /
+    /// <c>dlsym</c> gymnastics. Building an equal string instead works
+    /// because run loop modes are compared by value (CFEqual), not by
+    /// pointer, and the global's contents are literally the characters
+    /// "kCFRunLoopDefaultMode".
+    /// </para>
+    ///
+    /// <para>Caller owns the result and must <see cref="CFRelease"/> it.</para>
+    /// </summary>
+    internal static IntPtr CreateDefaultRunLoopMode() =>
+        CFStringCreateWithCString(IntPtr.Zero, "kCFRunLoopDefaultMode", EncodingUtf8);
 
     /// <summary>UTF-8 string out of a CFString. Returns null when the value is absent or not a string.</summary>
     internal static string? ReadString(IntPtr cfString)

@@ -187,15 +187,21 @@ Both links read the *overall* rumble level — the louder of the two motors — 
 | Capability | Windows | Linux | macOS |
 |---|---|---|---|
 | Gamepad/joystick input | SDL3 | SDL3 | SDL3 |
-| Keyboard/mouse as source | Raw Input | `evdev` direct reads | `CGEventTap` |
+| Keyboard/mouse as source | Raw Input | `evdev` direct reads | `IOHIDManager` |
 | Mouse cursor output | `SendInput` | `uinput` | `CGEventPost` |
 | Virtual gamepad output | HIDMaestro | — | — |
 
 ### Verification notes
 
-The Linux `evdev`/`uinput` interop (struct layouts, ioctl numbers) was verified by compiling small C programs against the actual kernel headers and cross-checking the output — not derived from memory. The macOS `CGEventTap`/`CGEventPost` interop is written against Apple's documented, stable API surface, but **could not be verified against real headers or hardware** during development (no macOS toolchain was available) — treat it as a good-faith implementation that hasn't had a hardware pass yet.
+The Linux `evdev`/`uinput` interop (struct layouts, ioctl numbers) was verified by compiling small C programs against the actual kernel headers and cross-checking the output — not derived from memory. The macOS `IOHIDManager`/`CGEventPost` interop is written against Apple's documented, stable API surface, but **could not be verified against real headers or hardware** during development (no macOS toolchain was available) — treat it as a good-faith implementation that hasn't had a hardware pass yet.
 
-**macOS specifically:** `CGEventTap` has no per-device concept — one aggregate stream for every keyboard/mouse system-wide, unlike evdev's one-file-per-device or Raw Input's per-handle model. Per-device selection in the UI on macOS falls back to that aggregate.
+**macOS specifically:** reading used to go through `CGEventTap`, which has no per-device concept — one aggregate stream for every keyboard and mouse system-wide, so per-device selection in the UI could only fall back to that aggregate. It now goes through `IOHIDManager`, which reports which device each value came from, so macOS matches evdev's one-file-per-device and Raw Input's per-handle model. Output stays on `CGEventPost`: synthesis has no per-device dimension to lose.
+
+Three consequences of that move are worth knowing:
+
+* **Input Monitoring consent is checked explicitly** (`IOHIDCheckAccess` / `IOHIDRequestAccess`) and logged whichever way it goes. It has to be: without consent the manager still creates, still opens and still enumerates devices, and only the value callback goes quiet — a refusal is otherwise indistinguishable from a reader that does not work. macOS prompts once, so a refusal can only be undone in System Settings.
+* **Hot-plug works for reading.** The manager keeps matching devices after it opens, so a keyboard plugged in later reports without a restart — Linux, which opens its fds once at construction, still needs one.
+* **Two small gaps came with it.** Absolute-mode pointers are ignored rather than misread as deltas (their X is a position, not a movement), and the volume/mute keys are gone — they are Consumer-page usages, on a HID device the reader deliberately does not claim.
 
 **Linux permissions:** `/dev/input/eventN` needs the `input` group (see [README](README.md#linux)). Without it, GameFlow runs fine — that input source just reads as empty, logged once.
 

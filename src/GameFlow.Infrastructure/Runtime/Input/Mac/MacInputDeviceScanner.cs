@@ -125,37 +125,24 @@ internal static class MacInputDeviceScanner
 
     private static InputDeviceInfo? Describe(IntPtr device)
     {
-        var vendor = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyVendorId) ?? 0;
-        var product = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyProductId) ?? 0;
-        var location = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyLocationId);
-
-        var name = MacHidInterop.GetStringProperty(device, MacHidInterop.KeyProduct);
-        var maker = MacHidInterop.GetStringProperty(device, MacHidInterop.KeyManufacturer);
-
         var category = ClassifyDevice(device);
         if (category == DeviceCategory.Unknown)
         {
             return null;
         }
 
-        // Location id is preferred because it is stable per physical port
-        // across reconnects; VID/PID alone collides the moment someone
-        // plugs in two identical keyboards. Serial is the better key when
-        // present, which it usually is not for HID peripherals.
-        var serial = MacHidInterop.GetStringProperty(device, MacHidInterop.KeySerialNumber);
-        var discriminator = !string.IsNullOrWhiteSpace(serial)
-            ? serial
-            : location?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0";
+        var vendor = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyVendorId) ?? 0;
+        var product = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyProductId) ?? 0;
 
-        var kind = category == DeviceCategory.Keyboard ? "keyboard" : "mouse";
-        var id = $"mac-{kind}-{vendor:x4}{product:x4}-{discriminator}";
+        var name = MacHidInterop.GetStringProperty(device, MacHidInterop.KeyProduct);
+        var maker = MacHidInterop.GetStringProperty(device, MacHidInterop.KeyManufacturer);
 
         var display = string.IsNullOrWhiteSpace(name)
             ? $"{(category == DeviceCategory.Keyboard ? "Keyboard" : "Mouse")} {vendor:X4}:{product:X4}"
             : string.IsNullOrWhiteSpace(maker) ? name : $"{maker} {name}";
 
         return new InputDeviceInfo(
-            Id: id,
+            Id: BuildDeviceId(device, category),
             DisplayName: display,
             VendorId: (ushort)vendor,
             ProductId: (ushort)product,
@@ -163,11 +150,44 @@ internal static class MacInputDeviceScanner
     }
 
     /// <summary>
+    /// The catalog id for one IOHIDDevice.
+    ///
+    /// <para>
+    /// Shared with <see cref="MacRawInputReader"/>, which has to arrive at
+    /// the exact same string from the device handle the input callback
+    /// hands it — a device whose keystrokes file under a different id than
+    /// the one the Devices page published would look assignable and then
+    /// never register a press.
+    /// </para>
+    ///
+    /// <para>
+    /// Location id is preferred because it is stable per physical port
+    /// across reconnects; VID/PID alone collides the moment someone plugs
+    /// in two identical keyboards. Serial is the better key when present,
+    /// which it usually is not for HID peripherals.
+    /// </para>
+    /// </summary>
+    internal static string BuildDeviceId(IntPtr device, DeviceCategory category)
+    {
+        var vendor = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyVendorId) ?? 0;
+        var product = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyProductId) ?? 0;
+        var location = MacHidInterop.GetIntProperty(device, MacHidInterop.KeyLocationId);
+
+        var serial = MacHidInterop.GetStringProperty(device, MacHidInterop.KeySerialNumber);
+        var discriminator = !string.IsNullOrWhiteSpace(serial)
+            ? serial
+            : location?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "0";
+
+        var kind = category == DeviceCategory.Keyboard ? "keyboard" : "mouse";
+        return $"mac-{kind}-{vendor:x4}{product:x4}-{discriminator}";
+    }
+
+    /// <summary>
     /// Classifies from the device's primary usage. Read from the device
     /// rather than inferred from its name — names are marketing strings
     /// and routinely say nothing useful ("USB Receiver").
     /// </summary>
-    private static DeviceCategory ClassifyDevice(IntPtr device)
+    internal static DeviceCategory ClassifyDevice(IntPtr device)
     {
         var usage = MacHidInterop.GetIntProperty(device, "PrimaryUsage");
         var page = MacHidInterop.GetIntProperty(device, "PrimaryUsagePage");

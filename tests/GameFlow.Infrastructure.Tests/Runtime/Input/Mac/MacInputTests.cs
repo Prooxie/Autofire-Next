@@ -5,84 +5,81 @@ using Xunit;
 
 namespace GameFlow.Infrastructure.Tests.Runtime.Input.Mac;
 
-public sealed class MacKeyCodeMapTests
+public sealed class MacHidKeyCodeMapTests
 {
     [Theory]
-    [InlineData(0x00, 0x41)] // kVK_ANSI_A -> VK_A
-    [InlineData(0x06, 0x5A)] // kVK_ANSI_Z -> VK_Z (Mac's own non-alphabetic scancode order)
-    [InlineData(0x31, 0x20)] // kVK_Space -> VK_SPACE
-    [InlineData(0x24, 0x0D)] // kVK_Return -> VK_RETURN
-    [InlineData(0x35, 0x1B)] // kVK_Escape -> VK_ESCAPE
-    [InlineData(0x33, 0x08)] // kVK_Delete (Mac's Backspace) -> VK_BACK
-    [InlineData(0x75, 0x2E)] // kVK_ForwardDelete (PC-style Delete) -> VK_DELETE
-    [InlineData(0x7E, 0x26)] // kVK_UpArrow -> VK_UP
-    [InlineData(0x38, 0xA0)] // kVK_Shift -> VK_LSHIFT
-    [InlineData(0x37, 0x5B)] // kVK_Command -> VK_LWIN
-    [InlineData(0x18, 0xBB)] // kVK_ANSI_Equal -> VK_OEM_PLUS
-    [InlineData(0x7A, 0x70)] // kVK_F1 -> VK_F1
-    [InlineData(0x52, 0x60)] // kVK_ANSI_Keypad0 -> VK_NUMPAD0
-    [InlineData(0x4C, KeyboardVirtualKeys.NumpadEnter)]
-    public void MacToVirtualKey_MapsKnownCodesCorrectly(int macKeycode, int expectedVirtualKey)
+    [InlineData(0x04, 0x41)] // HID Keyboard a -> VK_A (HID letter usages are alphabetical, unlike Carbon)
+    [InlineData(0x1D, 0x5A)] // HID Keyboard z -> VK_Z
+    [InlineData(0x2C, 0x20)] // HID Spacebar -> VK_SPACE
+    [InlineData(0x28, 0x0D)] // HID Return -> VK_RETURN
+    [InlineData(0x29, 0x1B)] // HID Escape -> VK_ESCAPE
+    [InlineData(0x2A, 0x08)] // HID Backspace (Mac's "delete") -> VK_BACK
+    [InlineData(0x4C, 0x2E)] // HID Delete Forward -> VK_DELETE
+    [InlineData(0x52, 0x26)] // HID Up Arrow -> VK_UP
+    [InlineData(0xE1, 0xA0)] // HID Left Shift -> VK_LSHIFT
+    [InlineData(0xE3, 0x5B)] // HID Left GUI (Command) -> VK_LWIN
+    [InlineData(0x2E, 0xBB)] // HID = and + -> VK_OEM_PLUS
+    [InlineData(0x3A, 0x70)] // HID F1 -> VK_F1
+    [InlineData(0x62, 0x60)] // HID Keypad 0 -> VK_NUMPAD0
+    [InlineData(0x58, KeyboardVirtualKeys.NumpadEnter)]
+    public void HidUsageToVirtualKey_MapsKnownUsagesCorrectly(int hidUsage, int expectedVirtualKey)
     {
-        Assert.True(MacKeyCodeMap.MacToVirtualKey.TryGetValue(macKeycode, out var vk));
+        Assert.True(MacHidKeyCodeMap.HidUsageToVirtualKey.TryGetValue(hidUsage, out var vk));
         Assert.Equal(expectedVirtualKey, vk);
     }
 
     [Fact]
-    public void MacToVirtualKey_CoversEveryLetter()
+    public void HidUsageToVirtualKey_CoversEveryLetter()
     {
-        int[] letterCodes = [0x00, 0x0B, 0x08, 0x02, 0x0E, 0x03, 0x05, 0x04, 0x22, 0x26, 0x28, 0x25,
-            0x2E, 0x2D, 0x1F, 0x23, 0x0C, 0x0F, 0x01, 0x11, 0x20, 0x09, 0x0D, 0x07, 0x10, 0x06];
-        Assert.Equal(26, letterCodes.Length);
-        foreach (var code in letterCodes)
+        for (var usage = 0x04; usage <= 0x1D; usage++)
         {
-            Assert.True(MacKeyCodeMap.MacToVirtualKey.ContainsKey(code), $"Mac keycode {code:X} has no VK mapping");
+            Assert.True(MacHidKeyCodeMap.HidUsageToVirtualKey.ContainsKey(usage), $"HID usage {usage:X} has no VK mapping");
         }
     }
 
     [Fact]
-    public void MacToVirtualKey_CoversAllTenDigits()
+    public void HidUsageToVirtualKey_CoversAllTenDigits()
     {
-        int[] digitCodes = [0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19, 0x1D];
-        Assert.Equal(10, digitCodes.Length);
-        foreach (var code in digitCodes)
+        for (var usage = 0x1E; usage <= 0x27; usage++)
         {
-            Assert.True(MacKeyCodeMap.MacToVirtualKey.ContainsKey(code), $"Mac keycode {code:X} has no VK mapping");
+            Assert.True(MacHidKeyCodeMap.HidUsageToVirtualKey.ContainsKey(usage), $"HID usage {usage:X} has no VK mapping");
         }
     }
 
     [Fact]
-    public void MacToVirtualKey_HasNoDuplicateVirtualKeyTargets()
+    public void HidUsageToVirtualKey_HasNoDuplicateVirtualKeyTargets()
     {
-        var values = MacKeyCodeMap.MacToVirtualKey.Values.ToList();
+        var values = MacHidKeyCodeMap.HidUsageToVirtualKey.Values.ToList();
         Assert.Equal(values.Count, values.Distinct().Count());
+    }
+
+    [Fact]
+    public void HidUsageToVirtualKey_IgnoresTheKeyboardErrorCodes()
+    {
+        // 0x00 is reserved and 0x01-0x03 are ErrorRollOver / POSTFail /
+        // ErrorUndefined — what a keyboard sends when it CANNOT report
+        // the real state. Mapping any of them would turn "too many keys
+        // held at once" into a phantom keypress that never releases.
+        for (var usage = 0x00; usage < MacHidKeyCodeMap.FirstRealKeyUsage; usage++)
+        {
+            Assert.False(MacHidKeyCodeMap.HidUsageToVirtualKey.ContainsKey(usage), $"HID usage {usage:X} is an error code, not a key");
+        }
+    }
+
+    [Fact]
+    public void HidUsageToVirtualKey_DistinguishesPrintScreenFromF13()
+    {
+        // The Carbon table could not: it had no Print Screen keycode at
+        // all, so a PC keyboard's Print Screen arrived as F13 and the map
+        // guessed the legend from the physical position. HID reports both
+        // separately, and conflating them again would be a regression.
+        Assert.Equal(0x2C, MacHidKeyCodeMap.HidUsageToVirtualKey[0x46]); // Print Screen -> VK_SNAPSHOT
+        Assert.Equal(0x7C, MacHidKeyCodeMap.HidUsageToVirtualKey[0x68]); // F13 -> VK_F13
     }
 }
 
 public sealed class MacEventInteropTests
 {
-    [Fact]
-    public void EventMask_SetsExactlyOneBitPerEventType()
-    {
-        var mask = MacEventInterop.EventMask(MacEventInterop.kCGEventKeyDown, MacEventInterop.kCGEventKeyUp);
-
-        Assert.Equal((1UL << 10) | (1UL << 11), mask);
-        Assert.NotEqual(0UL, mask & (1UL << (int)MacEventInterop.kCGEventKeyDown));
-        Assert.NotEqual(0UL, mask & (1UL << (int)MacEventInterop.kCGEventKeyUp));
-        Assert.Equal(0UL, mask & (1UL << (int)MacEventInterop.kCGEventMouseMoved)); // NOT requested — must stay clear
-    }
-
-    [Fact]
-    public void EventMask_CombinesManyTypesWithoutCollision()
-    {
-        var mask = MacEventInterop.EventMask(
-            MacEventInterop.kCGEventLeftMouseDown, MacEventInterop.kCGEventLeftMouseUp,
-            MacEventInterop.kCGEventMouseMoved, MacEventInterop.kCGEventOtherMouseDown);
-
-        var expected = (1UL << 1) | (1UL << 2) | (1UL << 5) | (1UL << 25);
-        Assert.Equal(expected, mask);
-    }
-
     [Fact]
     public void CGPoint_MarshalsAsTwoDoubles()
     {
@@ -92,6 +89,38 @@ public sealed class MacEventInteropTests
         // a real header.
         var size = System.Runtime.InteropServices.Marshal.SizeOf<MacEventInterop.CGPoint>();
         Assert.Equal(16, size);
+    }
+}
+
+public sealed class MacHidInteropTests
+{
+    [Fact]
+    public void AccessTypeMatchesTheIOHIDCheckAccessContract()
+    {
+        // IOHIDCheckAccess returns kIOHIDAccessTypeGranted(0) /
+        // Denied(1) / Unknown(2). The reader branches on these values to
+        // decide whether a missing input stream is a consent decision or
+        // a real failure, so the numbering is load-bearing: shifting it
+        // would report a denial as "granted" and send a tester hunting
+        // for a bug that is really an unticked checkbox.
+        Assert.Equal(0, (int)MacHidInterop.AccessType.Granted);
+        Assert.Equal(1, (int)MacHidInterop.AccessType.Denied);
+        Assert.Equal(2, (int)MacHidInterop.AccessType.Unknown);
+    }
+
+    [Fact]
+    public void TheElementUsagePagesAreTheOnesTheCallbackSwitchesOn()
+    {
+        // Keyboard values, mouse buttons and mouse axes are told apart
+        // purely by their element's usage page. These three constants are
+        // the whole routing table in MacRawInputReader.HandleValue.
+        Assert.Equal(0x07u, MacHidInterop.UsagePageKeyboard);
+        Assert.Equal(0x09u, MacHidInterop.UsagePageButton);
+        Assert.Equal(0x01, MacHidInterop.UsagePageGenericDesktop);
+
+        Assert.Equal(0x30u, MacHidInterop.UsageX);
+        Assert.Equal(0x31u, MacHidInterop.UsageY);
+        Assert.Equal(0x38u, MacHidInterop.UsageWheel);
     }
 }
 
