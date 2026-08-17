@@ -98,12 +98,33 @@ public sealed class MacEventInteropTests
 public sealed class MacInputDeviceScannerTests
 {
     [Fact]
-    public void Scan_ReturnsExactlyOneKeyboardAndOneMouseEntry()
+    public void ScanReportsNothingOffMacOS()
     {
-        var devices = MacInputDeviceScanner.Scan();
+        // The contract changed with the IOHIDManager rewrite. It used to
+        // publish two fixed aggregate rows on EVERY platform, because
+        // CGEventTap could not tell devices apart and there was nothing
+        // real to enumerate. Now there is, so a non-macOS host — which
+        // has no IOKit to ask — reports nothing rather than inventing
+        // devices that do not exist.
+        //
+        // This is the only assertion about Scan that can run here. The
+        // enumeration itself needs a Mac; see MacHidInterop's note.
+        if (OperatingSystem.IsMacOS())
+        {
+            return;
+        }
 
-        Assert.Equal(2, devices.Count);
-        Assert.Contains(devices, d => d.Category == DeviceCategory.Keyboard && d.Id == MacInputDeviceScanner.AggregateKeyboardId);
-        Assert.Contains(devices, d => d.Category == DeviceCategory.Mouse && d.Id == MacInputDeviceScanner.AggregateMouseId);
+        Assert.Empty(MacInputDeviceScanner.Scan());
+    }
+
+    [Fact]
+    public void TheAggregateIdsAreKeptForProfilesSavedBeforePerDeviceEnumeration()
+    {
+        // A slot saved on the old build references one of these. Dropping
+        // the constants would compile fine and silently lose that slot's
+        // assignment on upgrade, which is the kind of break nobody
+        // notices until their setup is gone.
+        Assert.False(string.IsNullOrWhiteSpace(MacInputDeviceScanner.AggregateKeyboardId));
+        Assert.False(string.IsNullOrWhiteSpace(MacInputDeviceScanner.AggregateMouseId));
     }
 }
