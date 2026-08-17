@@ -6,6 +6,7 @@ using GameFlow.Infrastructure.Runtime;
 using GameFlow.Infrastructure.Updates;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GameFlow.Infrastructure;
 
@@ -40,6 +41,7 @@ public static class DependencyInjection
             _ = services.AddSingleton<Runtime.Input.IMouseStateSource>(sp => sp.GetRequiredService<Runtime.Input.WindowsRawInputReader>());
             _ = services.AddSingleton<Runtime.Input.IRawInputAttacher>(sp => sp.GetRequiredService<Runtime.Input.WindowsRawInputReader>());
             _ = services.AddSingleton<Runtime.Input.IMouseOutputWriter, Runtime.Input.Win32MouseOutputWriter>();
+            _ = services.AddSingleton<Runtime.Profiles.IForegroundAppReader, Runtime.Profiles.WindowsForegroundAppReader>();
         }
         else if (OperatingSystem.IsLinux())
         {
@@ -79,6 +81,19 @@ public static class DependencyInjection
             _ = services.AddSingleton<Runtime.Input.IRawInputAttacher, Runtime.Input.NullRawInputAttacher>();
             _ = services.AddSingleton<Runtime.Input.IMouseOutputWriter, Runtime.Input.NullMouseOutputWriter>();
         }
+        // Foreground-window reading is Windows-only for now; the null
+        // reader leaves ProfileAutoSwitchService inert rather than
+        // guessing, so the service, its settings and its UI all behave
+        // the same everywhere and simply never fire off Windows.
+        // Registered after the platform branches so it fills the gap
+        // without any of them having to opt out.
+        // TryAdd, not Add: the Windows branch above already registered the
+        // real reader, and it returns void rather than the builder, so no
+        // discard here.
+        services.TryAddSingleton<Runtime.Profiles.IForegroundAppReader, Runtime.Profiles.NullForegroundAppReader>();
+        _ = services.AddSingleton<Runtime.Profiles.ProfileAutoSwitchService>();
+        _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Profiles.ProfileAutoSwitchService>());
+
         _ = services.AddSingleton<Runtime.Slots.SlotRegistry>();
         _ = services.AddSingleton<Runtime.Slots.SlotSnapshotStore>();
         _ = services.AddSingleton<IInputSourceFactory, DefaultInputSourceFactory>();

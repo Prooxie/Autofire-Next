@@ -214,6 +214,57 @@
 
           <Border Classes="divider" />
 
+          <!-- Per-app profile switching. The "in front now" line and the
+               Use button exist because a rule matches an EXECUTABLE name,
+               which nobody can guess from a game's title — without them
+               the first rule anyone writes silently never fires. -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="Per-app profiles" Classes="sectionHeading" />
+            <CheckBox IsChecked="{Binding AppProfiles.IsEnabled, Mode=TwoWay}"
+                      Content="Switch profile automatically when an app comes to the front"
+                      Foreground="{DynamicResource AppForeground}" />
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="{Binding AppProfiles.Status}" />
+
+            <ItemsControl ItemsSource="{Binding AppProfiles.Rules}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:AppProfileRuleViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
+                    <CheckBox Grid.Column="0" IsChecked="{Binding Enabled, Mode=TwoWay}" />
+                    <TextBlock Grid.Column="1" Text="{Binding ProcessName}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource AppForeground}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="2" Text="{Binding ProfileName}"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource AppForegroundDim}"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button Grid.Column="3" Classes="ghost" Content="Remove"
+                            Command="{Binding $parent[ItemsControl].((vm:AppProfilePanelViewModel)DataContext).RemoveRuleCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Grid ColumnDefinitions="*,Auto,160,Auto" ColumnSpacing="8">
+              <TextBox Grid.Column="0" PlaceholderText="Executable name"
+                       Text="{Binding AppProfiles.NewProcessName, Mode=TwoWay}" />
+              <Button Grid.Column="1" Classes="ghost" Content="Use current"
+                      Command="{Binding AppProfiles.UseCurrentAppCommand}" />
+              <ComboBox Grid.Column="2" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding AppProfiles.Profiles}"
+                        SelectedItem="{Binding AppProfiles.NewProfile, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Label}" />
+              <Button Grid.Column="3" Content="Add"
+                      Command="{Binding AppProfiles.AddRuleCommand}" />
+            </Grid>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Rules are checked top to bottom and the first match wins. An app with no rule leaves the current profile alone, so alt-tabbing to a browser mid-game changes nothing." />
+          </StackPanel>
+
+          <Border Classes="divider" />
+
           <!-- Stream overlay. Builds a URL rather than showing a preview:
                the browser source is what renders it, and the app has no
                way to know how OBS will size or crop the result. Nothing

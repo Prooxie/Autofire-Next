@@ -111,6 +111,13 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     /// </summary>
     public OverlayPanelViewModel Overlay { get; }
 
+    /// <summary>
+    /// The per-app profile section. Persists on change like
+    /// <see cref="MotionServer"/>, so it too sits outside
+    /// <see cref="ApplyAsync"/> / <see cref="RestoreDefaults"/>.
+    /// </summary>
+    public AppProfilePanelViewModel AppProfiles { get; }
+
     // ─── Localised labels ─────────────────────────────────────────────────────
 
     /// <summary>Window title.</summary>
@@ -153,12 +160,14 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
         ILocalizationService localization,
         MotionServerPanelViewModel motionServer,
         OverlayPanelViewModel overlay,
+        AppProfilePanelViewModel appProfiles,
         ILogger<SettingsDialogViewModel> logger)
     {
         this.userSettings = userSettings ?? throw new ArgumentNullException(nameof(userSettings));
         this.localization = localization ?? throw new ArgumentNullException(nameof(localization));
         MotionServer = motionServer ?? throw new ArgumentNullException(nameof(motionServer));
         Overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
+        AppProfiles = appProfiles ?? throw new ArgumentNullException(nameof(appProfiles));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Subscribe to culture changes so the dialog's labels follow

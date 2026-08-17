@@ -168,4 +168,31 @@ public sealed record AppSettings
     /// it means reconfiguring the emulator to match.
     /// </summary>
     public int MotionServerPort { get; init; } = 26760;
+
+    // ---------------------------------------------------------------------
+    // Per-app profile switching.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// When <see langword="true"/>,
+    /// <see cref="Runtime.Profiles.ProfileAutoSwitchService"/> watches the
+    /// foreground application and activates the profile a matching rule
+    /// names.
+    ///
+    /// <para>
+    /// Off by default. Changing the user's active profile is a visible,
+    /// surprising thing for software to do on its own, and someone who
+    /// has not written any rules would only ever notice this as their
+    /// mappings changing for no reason they can see. The switch and the
+    /// rules are separate so a user can park the whole feature without
+    /// losing what they configured.
+    /// </para>
+    /// </summary>
+    public bool AutoSwitchProfilesByApp { get; init; }
+
+    /// <summary>
+    /// Process-name → profile rules, in priority order (first match
+    /// wins). See <see cref="Runtime.Profiles.AppProfileMatcher"/>.
+    /// </summary>
+    public IReadOnlyList<Runtime.Profiles.AppProfileRule> AppProfileRules { get; init; } = [];
 }

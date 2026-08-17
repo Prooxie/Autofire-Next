@@ -122,6 +122,11 @@ public static class HostBuilderFactory
                 // and a singleton would just be a stale copy of both.
                 _ = services.AddTransient<OverlayPanelViewModel>();
 
+                // Per-app profile rules. Transient for the same reason:
+                // it reloads from settings on construction, so a fresh
+                // one per dialog is always current.
+                _ = services.AddTransient<AppProfilePanelViewModel>();
+
                 _ = services.AddSingleton<ShellViewModel>();
                 _ = services.AddSingleton<ShellWindow>();
             });

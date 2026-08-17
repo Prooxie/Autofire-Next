@@ -1768,6 +1768,16 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         {
             var dialogViewModel = serviceProvider.GetRequiredService<SettingsDialogViewModel>();
             dialogViewModel.Shell = this;
+
+            // Both of these read lists that change while the app runs —
+            // installed themes and slots for the overlay URL, saved
+            // profiles and the foreground app for the per-app rules. They
+            // are refreshed here rather than in their constructors
+            // because "what is in front right now" has to be read when
+            // the user is looking at it, not when the VM was built.
+            dialogViewModel.Overlay.Refresh();
+            await dialogViewModel.AppProfiles.RefreshAsync();
+
             var dialog = new SettingsDialog
             {
                 DataContext = dialogViewModel,
