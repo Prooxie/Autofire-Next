@@ -29,14 +29,32 @@ namespace GameFlow.Infrastructure.Runtime.Web;
 /// distinction matters: silently serving only localhost would look
 /// identical to "my phone can't connect" with no explanation.
 /// </para>
+///
+/// <para>
+/// <b>Two directions, two routes.</b> <c>/</c> is the phone gamepad and
+/// carries input INWARD. <c>/overlay</c> is the OBS browser source and
+/// carries state OUTWARD — see
+/// <see cref="Overlay.OverlayProgram"/>. They share this listener and
+/// nothing else.
+/// </para>
 /// </summary>
 public sealed class WebControllerServer(
     WebControllerHub hub,
+    Overlay.OverlayFeed overlay,
     ILogger<WebControllerServer> logger) : BackgroundService
 {
     private readonly WebControllerHub hub = hub;
+    private readonly Overlay.OverlayFeed overlay = overlay;
     private readonly ILogger<WebControllerServer> logger = logger;
     private HttpListener? listener;
+
+    /// <summary>
+    /// How often an overlay socket sends a frame. 60 Hz matches the
+    /// dashboard's own tick and is comfortably past what a stream
+    /// encoded at 60 fps can show; the socket is a few hundred bytes a
+    /// frame, so the cost of being generous here is negligible.
+    /// </summary>
+    private static readonly TimeSpan OverlayFrameInterval = TimeSpan.FromMilliseconds(1000.0 / 60);
 
     /// <summary>Default matches the port shown on the Dashboard's Web Controller card.</summary>
     public int Port { get; set; } = 8080;
@@ -145,10 +163,15 @@ public sealed class WebControllerServer(
             var path = context.Request.Url?.AbsolutePath ?? "/";
             if (path is "/" or "/index.html")
             {
-                var bytes = Encoding.UTF8.GetBytes(WebControllerAssets.ControllerPage);
-                context.Response.ContentType = "text/html; charset=utf-8";
-                context.Response.ContentLength64 = bytes.Length;
-                await context.Response.OutputStream.WriteAsync(bytes, stoppingToken);
+                await WriteHtmlAsync(context, WebControllerAssets.ControllerPage, stoppingToken);
+            }
+            else if (path is "/overlay" or "/overlay/")
+            {
+                await WriteHtmlAsync(context, Overlay.OverlayAssets.OverlayPage, stoppingToken);
+            }
+            else if (path is "/overlay/asset")
+            {
+                await WriteOverlayAssetAsync(context, stoppingToken);
             }
             else
             {
@@ -163,8 +186,85 @@ public sealed class WebControllerServer(
         }
     }
 
+    private static async Task WriteHtmlAsync(HttpListenerContext context, string html, CancellationToken stoppingToken)
+    {
+        var bytes = Encoding.UTF8.GetBytes(html);
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.ContentLength64 = bytes.Length;
+        await context.Response.OutputStream.WriteAsync(bytes, stoppingToken);
+    }
+
+    /// <summary>
+    /// Serves one image out of a compiled theme, addressed by INDEX.
+    ///
+    /// <para>
+    /// There is deliberately no path parameter to sanitise here. The only
+    /// files this can return are ones
+    /// <see cref="Overlay.OverlayProgramBuilder"/> already resolved out of
+    /// the requested theme, so the usual traversal question — can a
+    /// caller walk out of the themes folder — cannot arise. An index the
+    /// program does not have is a 404.
+    /// </para>
+    /// </summary>
+    private async Task WriteOverlayAssetAsync(HttpListenerContext context, CancellationToken stoppingToken)
+    {
+        var query = context.Request.QueryString;
+        var theme = overlay.ResolveTheme(new Overlay.OverlayFeed.Request(query["theme"], SlotId: null, Physical: false));
+        if (theme is null || !int.TryParse(query["i"], out var index))
+        {
+            context.Response.StatusCode = 404;
+            return;
+        }
+
+        var program = Overlay.OverlayProgramBuilder.Build(theme);
+        if (index < 0 || index >= program.ImagePaths.Count)
+        {
+            context.Response.StatusCode = 404;
+            return;
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = await File.ReadAllBytesAsync(program.ImagePaths[index], stoppingToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The art was there when the theme compiled and is not now —
+            // a pack uninstalled mid-stream. 404 so the page simply draws
+            // without it, which is what it already does for art a pack
+            // never shipped.
+            logger.LogDebug(exception, "Overlay: asset {Index} of theme {Theme} could not be read.", index, theme.Id);
+            context.Response.StatusCode = 404;
+            return;
+        }
+
+        context.Response.ContentType = ContentTypeFor(program.ImagePaths[index]);
+        context.Response.ContentLength64 = bytes.Length;
+        // Art is immutable for the life of a compiled theme, and OBS
+        // re-requests every image on each source reload.
+        context.Response.Headers["Cache-Control"] = "public, max-age=86400";
+        await context.Response.OutputStream.WriteAsync(bytes, stoppingToken);
+    }
+
+    private static string ContentTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".gif" => "image/gif",
+        ".webp" => "image/webp",
+        ".bmp" => "image/bmp",
+        _ => "application/octet-stream"
+    };
+
     private async Task HandleWebSocketAsync(HttpListenerContext context, CancellationToken stoppingToken)
     {
+        if ((context.Request.Url?.AbsolutePath ?? "/") is "/overlay/ws")
+        {
+            await HandleOverlaySocketAsync(context, stoppingToken);
+            return;
+        }
+
         WebSocketContext socketContext;
         try
         {
@@ -237,6 +337,100 @@ public sealed class WebControllerServer(
                 hub.ReleasePad(padIndex);
                 logger.LogInformation("Web controller: pad #{Pad} disconnected.", padIndex + 1);
             }
+            try { socket.Dispose(); } catch { /* already gone */ }
+        }
+    }
+
+    /// <summary>
+    /// Streams one browser source. Sends the compiled theme once, then a
+    /// frame per tick for as long as the source stays connected.
+    ///
+    /// <para>
+    /// The loop never READS from the socket. An overlay is output-only,
+    /// and giving the page no way to talk back is the cheapest way to be
+    /// sure a browser source — pointed at a server that anyone on the LAN
+    /// can reach — cannot influence the runtime.
+    /// </para>
+    ///
+    /// <para>
+    /// Frames go out unconditionally rather than only on change. A
+    /// dirty check would save bandwidth that is already negligible, and
+    /// it would mean a source that connected during an idle moment sat
+    /// blank until someone pressed a button.
+    /// </para>
+    /// </summary>
+    private async Task HandleOverlaySocketAsync(HttpListenerContext context, CancellationToken stoppingToken)
+    {
+        WebSocketContext socketContext;
+        try
+        {
+            socketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Overlay: WebSocket upgrade failed.");
+            return;
+        }
+
+        var query = context.Request.QueryString;
+        var request = new Overlay.OverlayFeed.Request(
+            query["theme"],
+            query["slot"],
+            // Virtual is the default: it is what the game receives, which
+            // is what an input-display overlay is for. The physical pad
+            // is a query away for anyone who wants the hardware instead.
+            Physical: string.Equals(query["side"], "physical", StringComparison.OrdinalIgnoreCase));
+
+        var socket = socketContext.WebSocket;
+        try
+        {
+            var theme = overlay.ResolveTheme(request);
+            if (theme is null)
+            {
+                await SendAsync(socket, Overlay.OverlayProtocol.BuildError(
+                    "No theme to draw. Pick one in GameFlow, or add ?theme=<id> to this URL."), stoppingToken);
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "no theme", stoppingToken);
+                return;
+            }
+
+            var program = Overlay.OverlayProgramBuilder.Build(theme);
+            if (program.MissingImages.Count > 0)
+            {
+                logger.LogWarning(
+                    "Overlay: theme {Theme} references {Count} image(s) that are not on disk; they will not draw.",
+                    theme.Id, program.MissingImages.Count);
+            }
+
+            await SendAsync(socket, Overlay.OverlayProtocol.BuildProgram(program), stoppingToken);
+            logger.LogInformation("Overlay: a browser source connected, drawing theme {Theme}.", theme.Id);
+
+            // One symbol table for the life of the connection — rebinding
+            // a snapshot is a field assignment, and this runs 60x/sec.
+            var symbols = new Theming.ControllerStateSymbols();
+            using var ticker = new PeriodicTimer(OverlayFrameInterval);
+
+            while (socket.State == WebSocketState.Open && await ticker.WaitForNextTickAsync(stoppingToken))
+            {
+                var frame = Overlay.OverlayProtocol.BuildFrame(
+                    program, symbols, overlay.Snapshot(request), overlay.LightColor(request));
+                await SendAsync(socket, frame, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // shutting down — normal
+        }
+        catch (WebSocketException)
+        {
+            // OBS closed the source or reloaded the page — normal
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Overlay: session ended unexpectedly.");
+        }
+        finally
+        {
+            logger.LogInformation("Overlay: a browser source disconnected.");
             try { socket.Dispose(); } catch { /* already gone */ }
         }
     }

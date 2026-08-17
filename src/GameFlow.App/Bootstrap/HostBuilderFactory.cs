@@ -116,6 +116,12 @@ public static class HostBuilderFactory
                 // view of the same thing.
                 _ = services.AddSingleton<MotionServerPanelViewModel>();
 
+                // Stream-overlay panel. Transient: it holds no state worth
+                // keeping between dialogs — the pickers are rebuilt from
+                // the live theme and slot lists each time it is shown —
+                // and a singleton would just be a stale copy of both.
+                _ = services.AddTransient<OverlayPanelViewModel>();
+
                 _ = services.AddSingleton<ShellViewModel>();
                 _ = services.AddSingleton<ShellWindow>();
             });

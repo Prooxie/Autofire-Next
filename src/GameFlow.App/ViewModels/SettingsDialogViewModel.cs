@@ -102,6 +102,15 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     /// </summary>
     public MotionServerPanelViewModel MotionServer { get; }
 
+    /// <summary>
+    /// The stream-overlay section: builds the URL for an OBS browser
+    /// source. Like <see cref="MotionServer"/> it is outside
+    /// <see cref="ApplyAsync"/> / <see cref="RestoreDefaults"/> — it
+    /// persists nothing at all, so there is neither anything to apply nor
+    /// anything to restore.
+    /// </summary>
+    public OverlayPanelViewModel Overlay { get; }
+
     // ─── Localised labels ─────────────────────────────────────────────────────
 
     /// <summary>Window title.</summary>
@@ -143,11 +152,13 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
         IUserSettingsService userSettings,
         ILocalizationService localization,
         MotionServerPanelViewModel motionServer,
+        OverlayPanelViewModel overlay,
         ILogger<SettingsDialogViewModel> logger)
     {
         this.userSettings = userSettings ?? throw new ArgumentNullException(nameof(userSettings));
         this.localization = localization ?? throw new ArgumentNullException(nameof(localization));
         MotionServer = motionServer ?? throw new ArgumentNullException(nameof(motionServer));
+        Overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Subscribe to culture changes so the dialog's labels follow

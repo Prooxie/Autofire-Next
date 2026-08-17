@@ -55,6 +55,52 @@ public sealed class ThemeRegistry
     private readonly object syncRoot = new();
     private IReadOnlyList<InstalledTheme> themes = [];
 
+    /// <summary>
+    /// The process-wide registry, refreshed on first touch.
+    ///
+    /// <para>
+    /// Scanning and parsing the themes folder is the expensive part, and
+    /// there are now two unrelated consumers of it — the dashboard's
+    /// surfaces and the OBS overlay server, which live in different
+    /// assemblies and are constructed by different machinery (an Avalonia
+    /// control with no constructor injection, and a DI singleton). This
+    /// is what they share so the folder is walked once and both see the
+    /// same theme ids.
+    /// </para>
+    ///
+    /// <para>
+    /// It is registered in DI as well, and injecting it is the preferred
+    /// way to reach it. This property exists for the one caller that
+    /// cannot.
+    /// </para>
+    /// </summary>
+    public static ThemeRegistry Shared => LazyShared.Value;
+
+    private static readonly Lazy<ThemeRegistry> LazyShared = new(() =>
+    {
+        var registry = new ThemeRegistry();
+        try
+        {
+            registry.Refresh();
+            Log.Information("Theme registry refreshed: {Count} theme(s) found.", registry.Themes.Count);
+            foreach (var theme in registry.Themes)
+            {
+                Log.Information(
+                    "  - id='{Id}' style={Style} name='{Name}' dir='{Dir}'",
+                    theme.Id, theme.PreferredStyle, theme.DisplayName, theme.DirectoryPath);
+            }
+        }
+        catch (Exception exception)
+        {
+            // A themes folder that cannot be read leaves an empty
+            // registry, and every surface falls back to programmatic art
+            // — which is the same path a fresh install with no themes
+            // takes, so it is already exercised.
+            Log.Warning(exception, "Initial theme registry refresh failed.");
+        }
+        return registry;
+    }, isThreadSafe: true);
+
     /// <summary>Every theme discovered by the last <see cref="Refresh"/> call.</summary>
     public IReadOnlyList<InstalledTheme> Themes
     {

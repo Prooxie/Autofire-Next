@@ -39,7 +39,10 @@ namespace GameFlow.App.Views;
 /// </summary>
 public partial class ControllerSurface : UserControl
 {
-    private static readonly ThemeRegistry SharedRegistry = CreateAndRefresh();
+    // A control has no constructor injection, so this one reaches the
+    // process-wide registry directly rather than through DI. It is the
+    // same instance the overlay server is handed — see ThemeRegistry.Shared.
+    private static ThemeRegistry SharedRegistry => ThemeRegistry.Shared;
 
     private DispatcherTimer? pollTimer;
     private ControllerVisualStateViewModel? boundViewModel;
@@ -79,29 +82,6 @@ public partial class ControllerSurface : UserControl
                 ? new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
                 : Avalonia.Input.Cursor.Default;
         }
-    }
-
-    private static ThemeRegistry CreateAndRefresh()
-    {
-        var registry = new ThemeRegistry();
-        try
-        {
-            registry.Refresh();
-            Serilog.Log.Information(
-                "ControllerSurface theme registry refreshed: {Count} theme(s) found.",
-                registry.Themes.Count);
-            foreach (var t in registry.Themes)
-            {
-                Serilog.Log.Information(
-                    "  - id='{Id}' style={Style} name='{Name}' dir='{Dir}'",
-                    t.Id, t.PreferredStyle, t.DisplayName, t.DirectoryPath);
-            }
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Warning(ex, "Initial theme registry refresh failed.");
-        }
-        return registry;
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

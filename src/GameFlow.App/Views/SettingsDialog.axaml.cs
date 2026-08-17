@@ -1,5 +1,8 @@
 using GameFlow.App.ViewModels;
 using Avalonia.Controls;
+// SetTextAsync is an extension in Avalonia 12 — IClipboard itself only
+// speaks IAsyncDataTransfer now.
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -52,6 +55,45 @@ public partial class SettingsDialog : Window
         if (DataContext is SettingsDialogViewModel vm)
         {
             vm.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Puts the overlay URL on the clipboard.
+    ///
+    /// <para>
+    /// In the code-behind rather than behind a command because the
+    /// clipboard hangs off the <see cref="TopLevel"/>, which a view-model
+    /// has no handle on. The alternative — a clipboard service injected
+    /// into the VM — would be the right shape if anything else needed
+    /// one; nothing does, and one button does not justify the seam.
+    /// </para>
+    /// </summary>
+    private async void OnCopyOverlayUrl(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsDialogViewModel vm)
+        {
+            return;
+        }
+
+        var clipboard = GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            Log.Warning("Settings: no clipboard available; the overlay URL was not copied.");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(vm.Overlay.Url);
+            vm.StatusMessage = "Overlay URL copied — paste it into an OBS Browser source.";
+        }
+        catch (Exception exception)
+        {
+            // A clipboard owned by another process, which Windows does
+            // transiently. The URL is in a read-only text box right next
+            // to the button, so the user can still select it by hand.
+            Log.Warning(exception, "Settings: copying the overlay URL failed.");
         }
     }
 

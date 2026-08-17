@@ -212,6 +212,48 @@
                        Text="{Binding MotionServer.Status}" />
           </StackPanel>
 
+          <Border Classes="divider" />
+
+          <!-- Stream overlay. Builds a URL rather than showing a preview:
+               the browser source is what renders it, and the app has no
+               way to know how OBS will size or crop the result. Nothing
+               here is saved — see OverlayPanelViewModel. -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="Stream overlay" Classes="sectionHeading" />
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Add a Browser source in OBS and paste this URL. The background is transparent, so it composites straight over your scene." />
+
+            <Grid ColumnDefinitions="180,*" RowDefinitions="Auto,Auto" RowSpacing="6">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="Controller"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource AppForeground}" />
+              <ComboBox Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Overlay.Slots}"
+                        SelectedItem="{Binding Overlay.SelectedSlot, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Label}" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="Skin"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource AppForeground}" />
+              <ComboBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Overlay.Themes}"
+                        SelectedItem="{Binding Overlay.SelectedTheme, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Label}" />
+            </Grid>
+
+            <CheckBox IsChecked="{Binding Overlay.ShowPhysical, Mode=TwoWay}"
+                      Content="Show the physical pad instead of the virtual output"
+                      Foreground="{DynamicResource AppForeground}" />
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox Grid.Column="0" IsReadOnly="True"
+                       Text="{Binding Overlay.Url, Mode=OneWay}" />
+              <Button Grid.Column="1" Content="Copy"
+                      IsEnabled="{Binding Overlay.CanCopy}"
+                      Click="OnCopyOverlayUrl" />
+            </Grid>
+          </StackPanel>
+
           <Border Height="8" />
 
         </StackPanel>

@@ -99,7 +99,14 @@ public static class DependencyInjection
         // both must see the same instance.
         _ = services.AddSingleton<Runtime.DeviceSettingsStore>();
 
+        // The theme registry is a process-wide singleton rather than a
+        // container-owned one because an Avalonia control also needs it
+        // and cannot be injected into. Registering the shared instance
+        // means both reach the same scan.
+        _ = services.AddSingleton(_ => Theming.ThemeRegistry.Shared);
+
         _ = services.AddSingleton<Runtime.Web.WebControllerHub>();
+        _ = services.AddSingleton<Runtime.Web.Overlay.OverlayFeed>();
         _ = services.AddSingleton<Runtime.Web.WebControllerServer>();
         _ = services.AddHostedService(sp => sp.GetRequiredService<Runtime.Web.WebControllerServer>());
         _ = services.AddHostedService<Runtime.Web.WebControllerEnumerationService>();
