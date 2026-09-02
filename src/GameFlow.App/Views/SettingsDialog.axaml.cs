@@ -1,12 +1,14 @@
-using GameFlow.App.ViewModels;
+using System.Diagnostics;
 using Avalonia.Controls;
-// SetTextAsync is an extension in Avalonia 12 — IClipboard itself only
-// speaks IAsyncDataTransfer now.
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using GameFlow.App.ViewModels;
 using Serilog;
+
+// SetTextAsync is an extension in Avalonia 12 — IClipboard itself only
+// speaks IAsyncDataTransfer now.
 
 namespace GameFlow.App.Views;
 
@@ -17,6 +19,8 @@ namespace GameFlow.App.Views;
 /// Owns three small responsibilities:
 /// <list type="bullet">
 ///   <item><description>Wiring the folder pickers (Profiles dir, Logs dir).</description></item>
+///   <item><description>Copying phone-controller and OBS URLs through the
+///     window-owned clipboard.</description></item>
 ///   <item><description>Routing the Apply button through the
 ///     <see cref="SettingsDialogViewModel.ApplyAsync"/> command and
 ///     closing on success.</description></item>
@@ -37,7 +41,26 @@ public partial class SettingsDialog : Window
     public SettingsDialog()
     {
         InitializeComponent();
+        Opened += OnOpened;
         Closed += OnClosed;
+    }
+
+    /// <summary>
+    /// Kicks off the firewall check once the dialog is on screen.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately fire-and-forget rather than awaited before showing:
+    /// the check shells out to netsh, and the dialog should not wait on a
+    /// process launch to appear. The banner it feeds is hidden until the
+    /// answer arrives, so a slow or failed check simply shows nothing
+    /// rather than a wrong reassurance.
+    /// </remarks>
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        if (DataContext is SettingsDialogViewModel vm)
+        {
+            _ = vm.Overlay.RefreshReachabilityAsync();
+        }
     }
 
     private void InitializeComponent()
@@ -76,24 +99,147 @@ public partial class SettingsDialog : Window
             return;
         }
 
-        var clipboard = GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        await CopyUrlAsync(
+            vm.Overlay.Url,
+            "Overlay URL copied — paste it into an OBS Browser source.",
+            "overlay");
+    }
+
+    /// <summary>Puts the phone-controller address on the clipboard.</summary>
+    private async void OnCopyPhoneControllerUrl(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsDialogViewModel vm)
         {
-            Log.Warning("Settings: no clipboard available; the overlay URL was not copied.");
+            return;
+        }
+
+        await CopyUrlAsync(
+            vm.Overlay.PhoneControllerUrl,
+            "Phone controller address copied — open it in a phone browser.",
+            "phone controller");
+    }
+
+    /// <summary>
+    /// Re-runs the first-run walkthrough on demand.
+    /// </summary>
+    /// <remarks>
+    /// Parented to this dialog rather than the shell, so it behaves like
+    /// the modal it is and returns here when closed. The view-model is
+    /// resolved through the shell's own service provider: the walkthrough
+    /// needs the live device catalog and slot registry, and re-creating
+    /// either would give it a private, empty view of the machine.
+    /// </remarks>
+    private async void OnRunWalkthrough(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsDialogViewModel vm)
+        {
             return;
         }
 
         try
         {
-            await clipboard.SetTextAsync(vm.Overlay.Url);
-            vm.StatusMessage = "Overlay URL copied — paste it into an OBS Browser source.";
+            var walkthrough = vm.CreateWalkthrough();
+            var window = new SetupWalkthroughWindow { DataContext = walkthrough };
+            await window.ShowDialog(this);
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Settings: could not open the setup walkthrough.");
+            vm.StatusMessage = "The setup walkthrough could not be opened.";
+        }
+    }
+
+    /// <summary>
+    /// Opens the phone-controller page in this PC's default browser.
+    /// </summary>
+    /// <remarks>
+    /// Copying the address was the only thing this section could do, and
+    /// a copied URL cannot tell you whether the server is actually
+    /// reachable — the usual first symptom is a phone that just times
+    /// out. Opening it here answers the "is it serving at all?" half of
+    /// that question without involving a second device.
+    /// </remarks>
+    private void OnOpenPhoneControllerUrl(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsDialogViewModel vm && vm.Overlay.CanCopyPhoneControllerUrl)
+        {
+            LaunchInBrowser(vm.Overlay.PhoneControllerUrl, "phone controller");
+        }
+    }
+
+    /// <summary>
+    /// Opens the built overlay URL in a browser so the streamer can see
+    /// what OBS will render before creating the source.
+    /// </summary>
+    private void OnOpenOverlayUrl(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsDialogViewModel vm && vm.Overlay.CanCopy)
+        {
+            LaunchInBrowser(vm.Overlay.Url, "overlay");
+        }
+    }
+
+    /// <summary>
+    /// Hands a URL to the shell's default handler.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ProcessStartInfo.UseShellExecute"/> must be true: without
+    /// it .NET tries to execute the URL as a program and throws. Only
+    /// http/https are passed through — the URLs here are built from the
+    /// server's own listen address, but routing arbitrary strings to the
+    /// shell is the kind of thing that quietly turns into a launch
+    /// primitive, so the scheme is checked at the one place that launches.
+    /// </remarks>
+    private void LaunchInBrowser(string url, string logLabel)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            Log.Warning("Settings: refusing to open the {Label} URL {Url} — not an http(s) address.", logLabel, url);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            if (DataContext is SettingsDialogViewModel vm)
+            {
+                vm.StatusMessage = $"Opened {uri.AbsoluteUri} in your browser.";
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Settings: opening the {Label} URL in a browser failed.", logLabel);
+            if (DataContext is SettingsDialogViewModel vm)
+            {
+                vm.StatusMessage = "Could not open a browser. Use Copy and paste the address instead.";
+            }
+        }
+    }
+
+    private async Task CopyUrlAsync(string url, string successMessage, string logLabel)
+    {
+        var clipboard = GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            Log.Warning("Settings: no clipboard available; the {Label} URL was not copied.", logLabel);
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(url);
+            if (DataContext is SettingsDialogViewModel vm)
+            {
+                vm.StatusMessage = successMessage;
+            }
         }
         catch (Exception exception)
         {
             // A clipboard owned by another process, which Windows does
             // transiently. The URL is in a read-only text box right next
             // to the button, so the user can still select it by hand.
-            Log.Warning(exception, "Settings: copying the overlay URL failed.");
+            Log.Warning(exception, "Settings: copying the {Label} URL failed.", logLabel);
         }
     }
 

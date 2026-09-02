@@ -1260,3 +1260,27 @@ msgstr "Checkmark"
 
 msgid "TouchButtonNone"
 msgstr "— none —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Devices & profiles"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Preview"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Output"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Mappings"
+
+msgid "RuleKindButtonRemapLabel"
+msgstr "Button Remap"
+
+msgid "RuleKindButtonRemapDescription"
+msgstr "Route one physical button to the selected virtual output."
+
+msgid "SidebarWalkthrough"
+msgstr "Setup guide"
+
+msgid "SidebarPhoneController"
+msgstr "Use a phone"

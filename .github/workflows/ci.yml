@@ -138,8 +138,37 @@ jobs:
         with:
           path: artifacts
 
+      # The tag's own notes, if CHANGELOG.md has a section for it. Kept
+      # out of the release step so a missing or renamed section is a
+      # visible skip in the log rather than a release that quietly ships
+      # with nothing but an auto-generated commit list.
+      - name: Extract release notes for this tag
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f CHANGELOG.md ]; then
+            echo "No CHANGELOG.md — falling back to generated notes only."
+            exit 0
+          fi
+          # Everything between this version's heading and the next one.
+          awk -v tag="## ${GITHUB_REF_NAME}" '
+            $0 == tag        { capture = 1; next }
+            /^## /           { if (capture) exit }
+            capture          { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ -s release-notes.md ]; then
+            echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
+            echo "Using CHANGELOG.md section for ${GITHUB_REF_NAME}."
+          else
+            echo "::warning::CHANGELOG.md has no '## ${GITHUB_REF_NAME}' section; using generated notes only."
+          fi
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          # body_path supplies the curated notes; generate_release_notes
+          # appends the commit and contributor list underneath them.
+          body_path: ${{ steps.notes.outputs.path }}
           generate_release_notes: true
           files: artifacts/**/*

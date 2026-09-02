@@ -1145,11 +1145,19 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
         // healthy and any remaining stall is downstream (pipeline / output / LED).
         ReadBreadcrumb("gamepad: snapshot built OK");
 
+        // Charge travels WITH the frame. A DualSense or DS4 output report
+        // has a battery field, so whatever the sink emits is what Windows
+        // and the game believe; sending the source pad's real level is the
+        // only way for that to be true rather than a default.
+        var power = GetCachedPower(device.DeviceId);
+
         return new ControllerSnapshot
         {
             DeviceName = device.DisplayName,
             VendorId   = vendorId,
             ProductId  = productId,
+            BatteryPercent = power.Percentage,
+            BatteryCharging = power.State == DeviceBatteryState.Charging,
             LeftStick = leftStick,
             RightStick = rightStick,
             LeftTrigger = leftTrigger,
@@ -1626,6 +1634,17 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
 
         foreach (var write in writes)
         {
+            // Browser controllers are physical inputs from the pipeline's
+            // perspective, but they deliberately have no SDL handle. Route
+            // their motor state back through the owning WebSocket before the
+            // SDL lookup below; previously that lookup simply discarded every
+            // web-pad-* write, so the documented phone rumble never ran.
+            if (Web.WebControllerEffectBridge.TryRoute(
+                    webControllerHub, write.DeviceId, write.State))
+            {
+                continue;
+            }
+
             if (!slotHandles.TryGetValue(write.DeviceId, out var device) &&
                 !telemetryHandles.TryGetValue(write.DeviceId, out device))
             {

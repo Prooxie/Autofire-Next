@@ -1,4 +1,4 @@
-using GameFlow.Core.Enums;
+﻿using GameFlow.Core.Enums;
 
 namespace GameFlow.Core.Models;
 
@@ -53,6 +53,31 @@ public sealed record ControllerSnapshot
 
     /// <summary>True when the source pad actually reports gyro data — distinguishes "not moving" from "no sensor", which read identically as all-zero otherwise.</summary>
     public bool HasGyro { get; init; }
+
+    /// <summary>
+    /// Charge level of the source device, 0‥100, or <see langword="null"/>
+    /// when it has no battery or does not report one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Carried on the snapshot so it reaches the output sink, which is
+    /// the only place that can pass it on to the game.
+    /// </para>
+    /// <para>
+    /// This is why it matters: a DualSense or DualShock 4 HID report has
+    /// a battery field, so whatever GameFlow emits, Windows and the game
+    /// believe. Leaving it unset does not mean "no battery" — it means a
+    /// report full of zeroes, which decodes as almost flat. Every virtual
+    /// pad therefore announced itself at roughly 10% charge, permanently,
+    /// including when the source was a wired pad, a keyboard, or nothing
+    /// at all. <see langword="null"/> here is passed on as "full", which
+    /// is what a wired controller reports and what stops the warning.
+    /// </para>
+    /// </remarks>
+    public int? BatteryPercent { get; init; }
+
+    /// <summary>True when the source device is charging.</summary>
+    public bool BatteryCharging { get; init; }
 
     /// <summary>
     /// Canonical keyboard key codes currently held. Standard keys use

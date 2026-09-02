@@ -495,11 +495,25 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>
+  <!--
+      Tab headers carry their own padding and gutter.
+
+      They used to be zeroed here (Padding 0, Margin 0) because the shell's
+      section nav draws its own chrome and wanted the theme out of the way.
+      But that rule is not scoped to the shell, so it also applied to every
+      ORDINARY TabControl in the app — the controller tuning dialog, the
+      Devices sub-tabs, the per-slot editor — and their headers ran into
+      each other with no space between the words. Two pages worked around
+      it with a local override; the rest just looked broken.
+
+      The default is now the ordinary one, and the shell's nav strip (which
+      is hidden anyway) re-zeroes it locally where it is actually wanted.
+  -->
   <Style Selector="TabItem">
     <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="14,9" />
+    <Setter Property="Margin" Value="0,0,6,0" />
     <Setter Property="MinWidth" Value="0" />
     <Setter Property="MinHeight" Value="0" />
     <Setter Property="FontSize" Value="13.5" />

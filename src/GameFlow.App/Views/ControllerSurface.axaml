@@ -84,16 +84,22 @@
         -->
         <Grid RowDefinitions="30,Auto,*,24" MinHeight="260">
 
-            <!-- Title row -->
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10" VerticalAlignment="Top">
+            <!--
+                Title row. The top-RIGHT corner is deliberately left
+                empty: the dashboard floats its own badges there
+                (VIRTUAL, NO OUTPUT) as an overlay on top of this
+                control, and it cannot see what this row contains. The
+                connection state used to sit in that corner, so the two
+                drew straight through each other and read as one
+                garbled label. It now lives in the footer row instead,
+                where nothing is layered over it.
+            -->
+            <Grid Grid.Row="0" VerticalAlignment="Top">
                 <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center"
+                           Margin="0,0,96,0"
                            TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource AppForeground}" />
-                <TextBlock Grid.Column="1" Text="{Binding ConnectionLabel}"
-                           FontSize="10" Foreground="{Binding ConnectionBrush}"
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold" LetterSpacing="1" />
             </Grid>
 
             <!--
@@ -145,13 +151,21 @@
                 </Viewbox>
             </Grid>
 
-            <!-- Live pressed-button readout. Single line by contract:
-                 see the note on the row definitions above. -->
-            <TextBlock Grid.Row="3" Text="{Binding PressedButtonsText}"
-                       FontSize="11"
-                       VerticalAlignment="Bottom"
-                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                       Foreground="{DynamicResource AppForegroundDim}" />
+            <!-- Footer: live pressed-button readout, plus the connection
+                 state moved down from the title row. Single line by
+                 contract: see the note on the row definitions above. -->
+            <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                  VerticalAlignment="Bottom">
+                <TextBlock Text="{Binding PressedButtonsText}"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource AppForegroundDim}" />
+                <TextBlock Grid.Column="1" Text="{Binding ConnectionLabel}"
+                           FontSize="10" Foreground="{Binding ConnectionBrush}"
+                           VerticalAlignment="Center"
+                           FontWeight="SemiBold" LetterSpacing="1" />
+            </Grid>
         </Grid>
     </Border>
     </Border>

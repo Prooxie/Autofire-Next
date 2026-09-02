@@ -155,12 +155,28 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
     /// Constructs the view-model. Pre-populates every observable
     /// property from <see cref="IUserSettingsService.Current"/>.
     /// </summary>
+    private readonly IServiceProvider services;
+
+    /// <summary>
+    /// Builds a fresh walkthrough for the "Run setup walkthrough" button.
+    /// </summary>
+    /// <remarks>
+    /// Resolved from the container rather than constructed here, so it
+    /// gets the live device catalog and slot registry the rest of the app
+    /// is using. A new instance per press: the walkthrough is a one-shot
+    /// state machine that starts at step one and disposes its catalog
+    /// subscription when its window closes.
+    /// </remarks>
+    public SetupWalkthroughViewModel CreateWalkthrough() =>
+        (SetupWalkthroughViewModel)services.GetService(typeof(SetupWalkthroughViewModel))!;
+
     public SettingsDialogViewModel(
         IUserSettingsService userSettings,
         ILocalizationService localization,
         MotionServerPanelViewModel motionServer,
         OverlayPanelViewModel overlay,
         AppProfilePanelViewModel appProfiles,
+        IServiceProvider services,
         ILogger<SettingsDialogViewModel> logger)
     {
         this.userSettings = userSettings ?? throw new ArgumentNullException(nameof(userSettings));
@@ -168,6 +184,7 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
         MotionServer = motionServer ?? throw new ArgumentNullException(nameof(motionServer));
         Overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
         AppProfiles = appProfiles ?? throw new ArgumentNullException(nameof(appProfiles));
+        this.services = services ?? throw new ArgumentNullException(nameof(services));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // Subscribe to culture changes so the dialog's labels follow

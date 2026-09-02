@@ -990,6 +990,18 @@ internal sealed class DynamicHidMaestroController : IDisposable
     // in the constructor for the discovery step and the SDK's own
     // HMGamepadStateHelpers.StandardAxes, which this mirrors.
     private readonly Setter setAxes, setButtons, setHat;
+
+    /// <summary>
+    /// Battery members, when the deployed SDK has them.
+    /// </summary>
+    /// <remarks>
+    /// Optional, unlike axes/buttons/hat: those three are bound
+    /// all-or-nothing so a controller never silently runs with dead
+    /// sticks, but an SDK build without battery fields should still
+    /// produce a working pad. Null here simply means this build cannot
+    /// report charge, which is the state every build was in before.
+    /// </remarks>
+    private readonly Setter? setBatteryLevel, setBatteryCharging, setBatteryFull;
     private readonly Type axesDictType;
     private readonly object? axisLeftX, axisLeftY, axisRightX, axisRightY, axisLeftTrigger, axisRightTrigger;
     private readonly bool hasAnyAxis;
@@ -1081,6 +1093,19 @@ internal sealed class DynamicHidMaestroController : IDisposable
         }
 
         setAxes = axes!.Value; setButtons = buttons!.Value; setHat = hat!.Value;
+
+        // Best-effort: present on HMGamepadState in current SDKs, absent
+        // in older ones. See the field declarations for why these are not
+        // part of the all-or-nothing bind above.
+        setBatteryLevel = Bind("BatteryLevel");
+        setBatteryCharging = Bind("BatteryCharging");
+        setBatteryFull = Bind("BatteryFull");
+        if (setBatteryLevel is null)
+        {
+            logger.LogDebug(
+                "HIDMaestro dynamic: HMGamepadState has no BatteryLevel member; " +
+                "the emitted pad will report whatever this SDK defaults to.");
+        }
         axesDictType = setAxes.TargetType;
 
         // Discover WHICH HID usage each logical slot (left stick X/Y,
@@ -1381,7 +1406,8 @@ internal sealed class DynamicHidMaestroController : IDisposable
     /// </summary>
     public bool Submit(
         float lx, float ly, float rx, float ry, float lt, float rt,
-        IReadOnlyList<(string ButtonName, bool Down)> buttons, string hatName)
+        IReadOnlyList<(string ButtonName, bool Down)> buttons, string hatName,
+        byte batteryLevel, bool batteryCharging, bool batteryFull)
     {
         if (disposed)
         {
@@ -1425,6 +1451,14 @@ internal sealed class DynamicHidMaestroController : IDisposable
             try { hat = Enum.Parse(hatEnumType, hatName, ignoreCase: true); }
             catch { hat = Enum.ToObject(hatEnumType, 0); }
             setHat.Apply(boxedState, hat);
+
+            // Charge, when this SDK exposes it. Leaving these at their
+            // default is not neutral: the DualSense and DS4 reports always
+            // carry a battery field, so an unwritten level goes out as
+            // zero and the pad announces itself as nearly flat.
+            setBatteryLevel?.Apply(boxedState, batteryLevel);
+            setBatteryCharging?.Apply(boxedState, batteryCharging);
+            setBatteryFull?.Apply(boxedState, batteryFull);
 
             _ = submitState.Invoke(controller, submitArgs);
 

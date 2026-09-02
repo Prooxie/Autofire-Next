@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GameFlow.App.ViewModels"
+        x:Class="GameFlow.App.Views.PhoneControllerWindow"
+        x:DataType="vm:OverlayPanelViewModel"
+        x:CompileBindings="True"
+        Title="Use a phone as a controller"
+        Width="560" Height="470"
+        MinWidth="480" MinHeight="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppSurface0}">
+
+  <!--
+      A focused sheet rather than a page in Options.
+
+      Everything here already existed, but only inside the settings
+      dialog, which is not where anyone looks when the thought is "can I
+      use my phone as a second pad". It carries the reachability banner
+      too, because that is the question this feature actually fails on.
+  -->
+  <Border Background="{DynamicResource AppSurface1}"
+          BorderBrush="{DynamicResource AppBorder0}" BorderThickness="1">
+    <DockPanel LastChildFill="True">
+
+      <Border DockPanel.Dock="Bottom" Padding="20,12"
+              BorderBrush="{DynamicResource AppBorder0}" BorderThickness="0,1,0,0">
+        <Button Classes="primary" HorizontalAlignment="Right" Padding="22,9"
+                Content="Done" IsCancel="True" IsDefault="True" Click="OnCloseClick" />
+      </Border>
+
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="14" Margin="24,20">
+
+          <TextBlock Text="Use a phone as a controller" FontSize="18" FontWeight="Bold"
+                     Foreground="{DynamicResource AppForeground}" />
+          <TextBlock Classes="hint"
+                     Text="Open this address in any browser on a phone connected to the same network. There is no app to install. The phone then appears under Physical devices and can be assigned to a virtual controller like any other pad." />
+
+          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBox Grid.Column="0" IsReadOnly="True" FontSize="14"
+                     Text="{Binding PhoneControllerUrl, Mode=OneWay}" />
+            <Button Grid.Column="1" Classes="ghost" Content="Open"
+                    ToolTip.Tip="Open it in this PC's browser, to confirm the server is serving before trying a phone."
+                    IsEnabled="{Binding CanCopyPhoneControllerUrl}"
+                    Click="OnOpenClick" />
+            <Button Grid.Column="2" Content="Copy"
+                    IsEnabled="{Binding CanCopyPhoneControllerUrl}"
+                    Click="OnCopyClick" />
+          </Grid>
+
+          <Border Classes="inset" Padding="10,8"
+                  IsVisible="{Binding HasReachabilityWarning}"
+                  Background="{DynamicResource AppWarningSoft}"
+                  BorderBrush="{DynamicResource AppWarning}">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="hint" Foreground="{DynamicResource AppForeground}"
+                         Text="{Binding ReachabilityMessage}" />
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Classes="ghost" Content="Allow through firewall"
+                        IsVisible="{Binding CanAllowThroughFirewall}"
+                        Command="{Binding AllowThroughFirewallCommand}" />
+                <Button Classes="ghost" Content="Open network settings"
+                        IsVisible="{Binding CanAllowOnPublicNetwork}"
+                        Command="{Binding OpenNetworkSettingsCommand}" />
+                <Button Classes="ghost" Content="Allow on public networks"
+                        IsVisible="{Binding CanAllowOnPublicNetwork}"
+                        Command="{Binding AllowOnPublicNetworkCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="divider" />
+
+          <StackPanel Spacing="5">
+            <TextBlock Text="What you get" Classes="sectionLabel" />
+            <TextBlock Classes="hint" Text="Touch buttons, two analog sticks and an 8-way D-pad." />
+            <TextBlock Classes="hint" Text="Rumble returns through the phone's Vibration API where the browser supports it." />
+            <TextBlock Classes="hint" Text="Up to 16 phones at once, each its own virtual pad. Reconnecting keeps the same pad number." />
+          </StackPanel>
+
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</Window>

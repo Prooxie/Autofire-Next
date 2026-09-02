@@ -282,6 +282,24 @@
                strip). -->
           <StackPanel Grid.Row="2" Margin="10,0,10,10" Spacing="6">
             <Border Classes="divider" Margin="0,0,0,4" />
+            <!--
+                Setup guide sits above Options, in the sidebar rather than
+                inside a settings dialog. It was reachable only from
+                Options > Setup, which is exactly where a first-time user
+                does not look — they are on the dashboard wondering why it
+                is empty. Pinned next to Options so it is permanent
+                furniture rather than something that appears once and is
+                then gone forever.
+            -->
+            <Button Classes="nav" Padding="8,8"
+                    ToolTip.Tip="Walks you through connecting a controller and creating a virtual one."
+                    Command="{Binding OpenWalkthroughCommand}">
+              <Grid ColumnDefinitions="24,*" ColumnSpacing="6">
+                <TextBlock Grid.Column="0" Text="🎓" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding SidebarWalkthroughLabel}"
+                           FontSize="12" FontWeight="Medium" VerticalAlignment="Center" />
+              </Grid>
+            </Button>
             <Button Classes="nav" Padding="8,8"
                     Command="{Binding OpenSettingsCommand}">
               <Grid ColumnDefinitions="24,*" ColumnSpacing="6">
@@ -369,10 +387,25 @@
                    full live controller surface. Clicking a card opens that
                    exact slot's focused configuration. -->
               <StackPanel Spacing="9" IsVisible="{Binding SlotsPanel.Slots.Count}">
-                <Grid ColumnDefinitions="*,Auto">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                   <TextBlock Grid.Column="0" Text="VIRTUAL CONTROLLERS" Classes="sectionLabel"
                              VerticalAlignment="Center" />
+                  <!--
+                      Phone and OBS live here, beside the controllers they
+                      concern, rather than only inside Options. Both are
+                      things you reach for while looking at the dashboard —
+                      "put this on stream", "use my phone as a second pad" —
+                      and neither is a setting.
+                  -->
                   <Button Grid.Column="1" Classes="ghost" Padding="8,4" FontSize="11"
+                          Content="📱 Use a phone"
+                          ToolTip.Tip="Turn a phone on your network into a controller. Opens the address to type into its browser."
+                          Command="{Binding OpenPhoneControllerCommand}" />
+                  <Button Grid.Column="2" Classes="ghost" Padding="8,4" FontSize="11"
+                          Content="📺 Copy OBS layout"
+                          ToolTip.Tip="Copies the browser-source URL for this controller's on-screen layout, ready to paste into OBS."
+                          Command="{Binding CopyOverlayUrlCommand}" />
+                  <Button Grid.Column="3" Classes="ghost" Padding="8,4" FontSize="11"
                           Content="+ Add controller" Command="{Binding AddVirtualControllerCommand}" />
                 </Grid>
                 <ItemsControl ItemsSource="{Binding SlotsPanel.Slots}">
@@ -524,43 +557,59 @@
                                 every OTHER application, just not to itself.
                             -->
                           </Border>
-                           <!-- Compact output warning. The concise explanation
-                                and full technical status live in the tooltip,
-                                keeping paths and diagnostics off the artwork. -->
-                           <Border Grid.Column="1"
-                                  HorizontalAlignment="Right" VerticalAlignment="Top"
-                                  Margin="0,10,82,0" Padding="7,3" CornerRadius="10"
-                                  Background="{DynamicResource AppWarningSoft}"
-                                  BorderBrush="{DynamicResource AppWarning}" BorderThickness="1"
-                                  IsVisible="{Binding HasOutputWarning}">
-                             <ToolTip.Tip>
-                              <StackPanel Spacing="5" MaxWidth="360">
-                                <TextBlock Text="{Binding OutputWarningText}"
-                                           FontWeight="SemiBold" TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding OutputStatus}"
-                                           Classes="hint" FontSize="10.5" />
+                          <!--
+                              Both badges in ONE right-aligned strip.
+
+                              They were two independently positioned
+                              overlays, and the warning dodged the VIRTUAL
+                              badge with a hand-measured 82px right margin —
+                              a number that only held while the word
+                              "VIRTUAL" stayed exactly that wide, so it
+                              broke as soon as the label was translated.
+                              A horizontal stack lays them out relative to
+                              each other, and the warning simply collapses
+                              out of the row when there is nothing to warn
+                              about.
+                          -->
+                          <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                                      Margin="0,10,10,0" Spacing="6">
+
+                            <!-- Compact output warning. The concise explanation
+                                 and full technical status live in the tooltip,
+                                 keeping paths and diagnostics off the artwork. -->
+                            <Border Padding="7,3" CornerRadius="10"
+                                    Background="{DynamicResource AppWarningSoft}"
+                                    BorderBrush="{DynamicResource AppWarning}" BorderThickness="1"
+                                    IsVisible="{Binding HasOutputWarning}">
+                              <ToolTip.Tip>
+                                <StackPanel Spacing="5" MaxWidth="360">
+                                  <TextBlock Text="{Binding OutputWarningText}"
+                                             FontWeight="SemiBold" TextWrapping="Wrap" />
+                                  <TextBlock Text="{Binding OutputStatus}"
+                                             Classes="hint" FontSize="10.5" />
+                                </StackPanel>
+                              </ToolTip.Tip>
+                              <StackPanel Orientation="Horizontal" Spacing="5">
+                                <TextBlock Text="⚠" FontSize="10"
+                                           Foreground="{DynamicResource AppWarning}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="NO OUTPUT" FontSize="9"
+                                           FontWeight="Bold" LetterSpacing="0.6"
+                                           Foreground="{DynamicResource AppWarning}"
+                                           VerticalAlignment="Center" />
                               </StackPanel>
-                             </ToolTip.Tip>
-                            <StackPanel Orientation="Horizontal" Spacing="5">
-                              <TextBlock Text="⚠" FontSize="10"
-                                         Foreground="{DynamicResource AppWarning}"
-                                         VerticalAlignment="Center" />
-                              <TextBlock Text="NO OUTPUT" FontSize="9"
-                                         FontWeight="Bold" LetterSpacing="0.6"
-                                         Foreground="{DynamicResource AppWarning}"
-                                         VerticalAlignment="Center" />
-                            </StackPanel>
-                          </Border>
-                          <Border Grid.Column="1"
-                                  HorizontalAlignment="Right" VerticalAlignment="Top"
-                                  Margin="0,10,10,0" Padding="7,3" CornerRadius="10"
-                                  Background="{DynamicResource AppAccent}"
-                                  IsVisible="{Binding ShowVirtual}"
-                                  IsHitTestVisible="False">
-                            <TextBlock Text="{Binding VirtualBadgeLabel}"
-                                       FontSize="9" FontWeight="Bold" LetterSpacing="0.6"
-                                       Foreground="{DynamicResource AppSurface0}" />
-                          </Border>
+                            </Border>
+
+                            <Border Padding="7,3" CornerRadius="10"
+                                    Background="{DynamicResource AppAccent}"
+                                    IsVisible="{Binding ShowVirtual}"
+                                    IsHitTestVisible="False">
+                              <TextBlock Text="{Binding VirtualBadgeLabel}"
+                                         FontSize="9" FontWeight="Bold" LetterSpacing="0.6"
+                                         Foreground="{DynamicResource AppSurface0}" />
+                            </Border>
+                          </StackPanel>
                         </Grid>
                       </StackPanel>
                     </DataTemplate>

@@ -56,6 +56,16 @@ public sealed class WebControllerServer(
     /// </summary>
     private static readonly TimeSpan OverlayFrameInterval = TimeSpan.FromMilliseconds(1000.0 / 60);
 
+    /// <summary>
+    /// Feedback is sent independently of incoming input. A phone at rest only
+    /// sends a heartbeat once per second, which is far too slow for responsive
+    /// rumble delivery.
+    /// </summary>
+    private static readonly TimeSpan PhoneFeedbackInterval = TimeSpan.FromMilliseconds(16);
+
+    /// <summary>Hard bound for one phone input frame, including fragments.</summary>
+    private const int MaxPhoneMessageBytes = 4096;
+
     /// <summary>Default matches the port shown on the Dashboard's Web Controller card.</summary>
     public int Port { get; set; } = 8080;
 
@@ -277,7 +287,8 @@ public sealed class WebControllerServer(
         }
 
         var socket = socketContext.WebSocket;
-        var padIndex = hub.ClaimPad();
+        var lease = hub.ClaimPad(context.Request.QueryString["client"]);
+        var padIndex = lease.PadIndex;
 
         try
         {
@@ -292,30 +303,21 @@ public sealed class WebControllerServer(
 
             logger.LogInformation("Web controller: phone connected as pad #{Pad}.", padIndex + 1);
 
-            var buffer = new byte[4096];
-            while (socket.State == WebSocketState.Open && !stoppingToken.IsCancellationRequested)
+            using var session = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            var receiveTask = ReceivePhoneInputAsync(socket, lease, session.Token);
+            var feedbackTask = SendPhoneFeedbackAsync(socket, lease, session.Token);
+
+            _ = await Task.WhenAny(receiveTask, feedbackTask);
+            await session.CancelAsync();
+
+            // Observe both tasks. Cancellation is the expected way the sibling
+            // loop leaves after the first one detects a close or replacement.
+            try
             {
-                var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), stoppingToken);
-                if (result.MessageType == WebSocketMessageType.Close)
-                {
-                    break;
-                }
-
-                if (result.MessageType == WebSocketMessageType.Text)
-                {
-                    var json = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    var snapshot = WebControllerProtocol.TryParseInput(json, padIndex);
-                    if (snapshot is not null)
-                    {
-                        hub.UpdatePad(padIndex, snapshot); // reference type — no .Value after the null check
-                    }
-                }
-
-                // Drain any rumble the pipeline queued for this phone.
-                while (hub.TryDequeueRumble(padIndex, out var rumble))
-                {
-                    await SendAsync(socket, WebControllerProtocol.BuildRumble(rumble), stoppingToken);
-                }
+                await Task.WhenAll(receiveTask, feedbackTask);
+            }
+            catch (OperationCanceledException) when (session.IsCancellationRequested)
+            {
             }
         }
         catch (OperationCanceledException)
@@ -332,12 +334,94 @@ public sealed class WebControllerServer(
         }
         finally
         {
-            if (padIndex >= 0)
+            if (lease.IsValid)
             {
-                hub.ReleasePad(padIndex);
+                hub.ReleasePad(lease);
                 logger.LogInformation("Web controller: pad #{Pad} disconnected.", padIndex + 1);
             }
             try { socket.Dispose(); } catch { /* already gone */ }
+        }
+    }
+
+    /// <summary>
+    /// Receives bounded, optionally-fragmented text frames. Ownership is
+    /// checked on every update so a replaced socket exits instead of writing
+    /// into its successor's pad.
+    /// </summary>
+    private async Task ReceivePhoneInputAsync(
+        WebSocket socket,
+        WebPadLease lease,
+        CancellationToken cancellationToken)
+    {
+        var buffer = new byte[MaxPhoneMessageBytes];
+
+        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        {
+            var bytesReceived = 0;
+            WebSocketReceiveResult result;
+            do
+            {
+                if (bytesReceived == buffer.Length)
+                {
+                    await socket.CloseAsync(
+                        WebSocketCloseStatus.MessageTooBig,
+                        $"input frames are limited to {MaxPhoneMessageBytes} bytes",
+                        cancellationToken);
+                    return;
+                }
+
+                result = await socket.ReceiveAsync(
+                    new ArraySegment<byte>(buffer, bytesReceived, buffer.Length - bytesReceived),
+                    cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    return;
+                }
+
+                bytesReceived += result.Count;
+            }
+            while (!result.EndOfMessage);
+
+            if (result.MessageType != WebSocketMessageType.Text)
+            {
+                continue;
+            }
+
+            var json = Encoding.UTF8.GetString(buffer, 0, bytesReceived);
+            var snapshot = WebControllerProtocol.TryParseInput(json, lease.PadIndex);
+            if (snapshot is not null && !hub.UpdatePad(lease, snapshot))
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drains feedback on its own cadence rather than waiting for another
+    /// input frame. This makes a game-requested rumble start promptly even
+    /// while the phone controls are untouched.
+    /// </summary>
+    private async Task SendPhoneFeedbackAsync(
+        WebSocket socket,
+        WebPadLease lease,
+        CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(PhoneFeedbackInterval);
+        while (socket.State == WebSocketState.Open
+               && await timer.WaitForNextTickAsync(cancellationToken))
+        {
+            if (!hub.IsLeaseCurrent(lease))
+            {
+                return;
+            }
+
+            while (hub.TryDequeueRumble(lease, out var rumble))
+            {
+                await SendAsync(
+                    socket,
+                    WebControllerProtocol.BuildRumble(rumble),
+                    cancellationToken);
+            }
         }
     }
 

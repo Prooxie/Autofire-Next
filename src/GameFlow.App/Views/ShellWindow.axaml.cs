@@ -1,3 +1,4 @@
+using Avalonia.Input.Platform;
 using GameFlow.App.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
@@ -24,12 +25,72 @@ public partial class ShellWindow : Window
     /// </summary>
     private static readonly TimeSpan RecoveryQuietPeriod = TimeSpan.FromSeconds(8);
 
+    /// <summary>
+    /// How long after the window opens the dashboard ticks gently and
+    /// ignores overruns.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Startup is the one moment the UI thread is guaranteed to be busy
+    /// with something other than the dashboard: theme artwork decoding,
+    /// the first device enumeration, and HIDMaestro walking its 231-entry
+    /// profile catalog. Ticking at the display's full rate straight into
+    /// that contention did not just drop frames, it made the panels look
+    /// like they had vanished — and then the adaptive backoff read the
+    /// contention as a slow machine and stepped 165 → 83 → 41 → 21 → 10
+    /// Hz, after which the 8-second quiet period had to elapse before any
+    /// of it came back. A one-off startup cost was being converted into
+    /// fifteen seconds of degraded dashboard.
+    /// </para>
+    /// <para>
+    /// So: a fixed, modest rate while the queue drains, and no backoff
+    /// decisions taken from measurements made during it.
+    /// </para>
+    /// </remarks>
+    private static readonly TimeSpan StartupWarmUp = TimeSpan.FromSeconds(4);
+
+    /// <summary>Tick rate held during <see cref="StartupWarmUp"/>.</summary>
+    private const int WarmUpRefreshHz = 30;
+
+    private DateTime warmUpUntilUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// Set once the configured rate has been applied at the end of
+    /// warm-up, so it is applied exactly once.
+    /// </summary>
+    /// <remarks>
+    /// Without this the tick handler re-asserts the configured rate every
+    /// frame, which immediately undoes whatever the adaptive backoff just
+    /// decided — the two then trade the interval back and forth forever
+    /// (165 Hz, throttle to 83, re-assert 165, …), restarting the
+    /// DispatcherTimer each time and filling the log at frame rate. The
+    /// handoff from warm-up to configured is a one-time event, so it is
+    /// modelled as one.
+    /// </remarks>
+    private bool warmUpHandedOff;
+
     private ShellViewModel? shellViewModel;
     private bool isRefreshing;
     private bool isClosing;
 
-    public ShellWindow()
+    /// <summary>
+    /// Container used to build the short-lived view-models behind the
+    /// sheets this window opens (setup walkthrough, phone controller).
+    /// </summary>
+    /// <remarks>
+    /// Null only under the XAML previewer, which uses the parameterless
+    /// constructor; at runtime the window is always resolved from DI, and
+    /// the greedier constructor wins.
+    /// </remarks>
+    private readonly IServiceProvider? services;
+
+    public ShellWindow() : this(null)
     {
+    }
+
+    public ShellWindow(IServiceProvider? services)
+    {
+        this.services = services;
         InitializeComponent();
 
         refreshTimer = new DispatcherTimer
@@ -85,6 +146,19 @@ public partial class ShellWindow : Window
     /// </summary>
     private void ApplyConfiguredRefreshRate()
     {
+        // Still warming up: hold the gentle rate and come back later. The
+        // caller is re-invoked from the tick, so no timer is needed.
+        if (DateTime.UtcNow < warmUpUntilUtc)
+        {
+            var warmUpInterval = TimeSpan.FromMilliseconds(1000d / WarmUpRefreshHz);
+            if (refreshTimer.Interval != warmUpInterval)
+            {
+                refreshTimer.Interval = warmUpInterval;
+            }
+
+            return;
+        }
+
         var hz = shellViewModel?.DashboardRefreshHz ?? 60;
 
         // Clamped to the same range the settings dialog validates, so a
@@ -146,6 +220,12 @@ public partial class ShellWindow : Window
         {
             shellViewModel.ControlMappingRequested -= OnControlMappingRequested;
             shellViewModel.DeviceSettingsRequested -= OnDeviceSettingsRequested;
+            shellViewModel.WalkthroughRequested -= OnWalkthroughRequested;
+            shellViewModel.PhoneControllerRequested -= OnPhoneControllerRequested;
+            shellViewModel.OverlayUrlCopyRequested -= OnOverlayUrlCopyRequested;
+            shellViewModel.WalkthroughRequested -= OnWalkthroughRequested;
+            shellViewModel.PhoneControllerRequested -= OnPhoneControllerRequested;
+            shellViewModel.OverlayUrlCopyRequested -= OnOverlayUrlCopyRequested;
         }
 
         base.OnDataContextChanged(e);
@@ -155,6 +235,87 @@ public partial class ShellWindow : Window
         {
             shellViewModel.ControlMappingRequested += OnControlMappingRequested;
             shellViewModel.DeviceSettingsRequested += OnDeviceSettingsRequested;
+            shellViewModel.WalkthroughRequested += OnWalkthroughRequested;
+            shellViewModel.PhoneControllerRequested += OnPhoneControllerRequested;
+            shellViewModel.OverlayUrlCopyRequested += OnOverlayUrlCopyRequested;
+        }
+    }
+
+    /// <summary>Sidebar "Setup guide" — opens the walkthrough on demand.</summary>
+    private async void OnWalkthroughRequested(object? sender, EventArgs e)
+    {
+        if (isClosing || services is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var window = new SetupWalkthroughWindow
+            {
+                DataContext = services.GetService(typeof(SetupWalkthroughViewModel)),
+            };
+            await window.ShowDialog(this);
+        }
+        catch (Exception exception)
+        {
+            Log.Error(exception, "Setup walkthrough failed to open from the sidebar.");
+        }
+    }
+
+    /// <summary>Dashboard "Use a phone" — opens the phone-controller sheet.</summary>
+    private async void OnPhoneControllerRequested(object? sender, EventArgs e)
+    {
+        if (isClosing || services is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var window = new PhoneControllerWindow
+            {
+                DataContext = services.GetService(typeof(OverlayPanelViewModel)),
+            };
+            await window.ShowDialog(this);
+        }
+        catch (Exception exception)
+        {
+            Log.Error(exception, "Phone controller sheet failed to open.");
+        }
+    }
+
+    /// <summary>
+    /// Dashboard "Copy OBS layout" — puts the stream-overlay URL on the
+    /// clipboard without a trip through Options.
+    /// </summary>
+    /// <remarks>
+    /// The overlay view-model is built fresh per press rather than held:
+    /// it reads the live slot and theme lists on construction, and the
+    /// URL names a slot that may have been created since the last press.
+    /// </remarks>
+    private async void OnOverlayUrlCopyRequested(object? sender, EventArgs e)
+    {
+        if (services?.GetService(typeof(OverlayPanelViewModel)) is not OverlayPanelViewModel overlay ||
+            GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        if (!overlay.CanCopy)
+        {
+            shellViewModel?.ReportStatus("The web server is not running, so there is no overlay URL yet.");
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(overlay.Url);
+            shellViewModel?.ReportStatus("Overlay URL copied — paste it into an OBS Browser source.");
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "Copying the overlay URL from the dashboard failed.");
         }
     }
 
@@ -227,6 +388,11 @@ public partial class ShellWindow : Window
     {
         if (!isClosing)
         {
+            // Warm-up starts when the window does, not when the app does:
+            // this is the point from which the dashboard is competing for
+            // the UI thread. See StartupWarmUp.
+            warmUpUntilUtc = DateTime.UtcNow + StartupWarmUp;
+            warmUpHandedOff = false;
             ApplyConfiguredRefreshRate();
             refreshTimer.Start();
         }
@@ -268,6 +434,9 @@ public partial class ShellWindow : Window
             // it has to be released here too — otherwise the shell view
             // model keeps this window alive after it closes.
             shellViewModel.DeviceSettingsRequested -= OnDeviceSettingsRequested;
+            shellViewModel.WalkthroughRequested -= OnWalkthroughRequested;
+            shellViewModel.PhoneControllerRequested -= OnPhoneControllerRequested;
+            shellViewModel.OverlayUrlCopyRequested -= OnOverlayUrlCopyRequested;
         }
         shellViewModel = null;
 
@@ -306,6 +475,14 @@ public partial class ShellWindow : Window
     {
         var current = refreshTimer.Interval;
         var nowUtc = DateTime.UtcNow;
+
+        // Overruns during warm-up describe startup, not this machine.
+        // Acting on them is what used to leave the dashboard at 10 Hz
+        // long after the work that caused it had finished.
+        if (nowUtc < warmUpUntilUtc)
+        {
+            return;
+        }
 
         // Only react to a real overrun — more than double the budget —
         // so ordinary jitter does not trigger a downgrade.
@@ -371,6 +548,14 @@ public partial class ShellWindow : Window
         }
 
         AdaptTickRate(gap);
+
+        // Hand off from the warm-up rate to the user's configured one,
+        // exactly once, on the first tick after warm-up ends.
+        if (!warmUpHandedOff && nowUtc >= warmUpUntilUtc)
+        {
+            warmUpHandedOff = true;
+            ApplyConfiguredRefreshRate();
+        }
 
         if (isClosing || isRefreshing || DataContext is not ShellViewModel viewModel)
         {

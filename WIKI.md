@@ -13,9 +13,10 @@ Deep reference for every system in GameFlow. For install/quick-start, see [READM
 7. [Per-Device Tuning](#per-device-tuning)
 8. [Cross-Platform Input & Output](#cross-platform-input--output)
 9. [Phone as a Controller](#phone-as-a-controller)
-10. [Theme System](#theme-system)
-11. [Troubleshooting](#troubleshooting)
-12. [For Contributors](#for-contributors)
+10. [OBS Browser Overlay](#obs-browser-overlay)
+11. [Theme System](#theme-system)
+12. [Troubleshooting](#troubleshooting)
+13. [For Contributors](#for-contributors)
 
 ---
 
@@ -217,9 +218,29 @@ A tiny embedded HTTP + WebSocket server (`.NET`'s built-in `HttpListener` — no
 
 **Motion:** the phone's gyroscope/accelerometer, converted from the browser's degrees/second to SDL's radians/second before sending, so a phone arrives in the exact same units a DualSense does and drives `GyroMapRule` with no phone-specific code downstream. iOS requires an explicit permission tap (`DeviceMotionEvent.requestPermission()`); Android doesn't gate it.
 
-**Capacity:** up to 16 phones, each an independent virtual pad, each claiming the lowest free slot index. A disconnected or stale (no traffic for 5 seconds) pad reads as fully neutral rather than its last input — so a phone that dies mid-press can't leave a button stuck down in a live game.
+**Connection identity:** up to 16 phones can connect at once. Each browser tab stores an opaque id in `sessionStorage`, so an automatic reconnect reclaims the same `web-pad-N` identity and keeps its slot assignment. Tabs use separate ids and can act as separate controllers. Every socket also receives a generation-style lease: when a newer connection replaces it, delayed input, rumble reads, and disconnect cleanup from the old socket are ignored. This prevents two sockets from fighting over one pad after a Wi-Fi interruption.
 
-**Rumble:** queued back to the phone and played via the browser's Vibration API.
+**Disconnect safety:** the page sends a one-second heartbeat. A pad with no traffic for five seconds reads as fully neutral rather than its last input, so a phone that dies mid-press cannot leave a button stuck down. Input messages are limited to 4096 bytes and may arrive as WebSocket fragments; malformed or out-of-range values are rejected or clamped before reaching the mapping pipeline.
+
+**Rumble:** device-neutral effect writes targeting `web-pad-*` are diverted before SDL handle lookup and queued to the owning WebSocket. Sending feedback runs independently of receiving input, so a stationary phone does not delay rumble. Because the portable Vibration API is binary rather than variable-amplitude, the page represents motor strength as a short duty cycle repeated until GameFlow sends an explicit zero state. Disconnecting cancels vibration immediately. Browsers without the API continue working as input devices with no rumble.
+
+---
+
+## OBS Browser Overlay
+
+GameFlow serves a transparent controller layout from the same HTTP listener as the phone controller. Open **Settings → Stream overlay**, choose a slot and skin, then copy the generated URL into an OBS **Browser** source. No screen capture, QR scan, or always-on-top native window is involved.
+
+The route is `/overlay` with optional query parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `slot=<id>` | Pin the overlay to one controller slot. Omit it to use the first configured slot. |
+| `theme=<id>` | Pin a specific installed skin. Omit it to follow the slot's output controller style. |
+| `side=physical` | Show the raw assigned input. Omit it to show the mapped virtual output the game receives. |
+
+For example, `http://10.0.0.5:8080/overlay?slot=player-one&side=physical` follows the physical side of `player-one`. The URL is the complete configuration and remains reusable across OBS launches. If the PC's LAN address changes, copy the regenerated address from Settings.
+
+The Browser source receives a compiled theme once, then controller frames at 60 Hz over an output-only WebSocket. Theme images are served by numeric indexes from the already-resolved theme program, so the route cannot browse arbitrary filesystem paths. The page automatically reconnects if GameFlow restarts and keeps a transparent canvas at any OBS source size.
 
 ---
 
@@ -242,6 +263,10 @@ Controller visuals use the [VSCView THEMEENGINE](https://github.com/Nielk1/VSCVi
 netsh http add urlacl url=http://+:8080/ user=Everyone
 ```
 
+**The phone controls work but it does not vibrate.** Browser support is optional, and some mobile browsers require a user gesture before allowing vibration. Touch a controller control once, keep the page in the foreground, and confirm that the browser exposes the Vibration API. Input continues normally when vibration is unavailable.
+
+**The OBS Browser source is blank.** Keep GameFlow running, confirm the URL still uses this PC's current LAN address, and open **Settings → Stream overlay** to verify the selected slot and skin still exist. A bare `/overlay` needs at least one configured slot and an installed skin it can resolve.
+
 **Clicking a virtual panel does nothing.** That slot has no device assigned — there's nothing to tune. The status bar says so; assign a device first.
 
 **HIDMaestro output isn't appearing.** Confirm `HIDMaestro.Core.dll` is next to `GameFlow.App.exe`. If it's genuinely missing, GameFlow says so explicitly in the log and the slot's display name — it will not silently fall back to a different backend without telling you.
@@ -252,5 +277,5 @@ netsh http add urlacl url=http://+:8080/ user=Everyone
 
 - **Adding a rule type:** follow the existing pattern in `src/GameFlow.Core/Models/Rules/` — a record deriving `MappingRule`, registered in `MappingRule`'s `[JsonDerivedType]` list, with its pass added to `ControllerMappingPipeline.Process()`. Keep state that needs to persist across ticks (schedulers, latches) as a small dictionary field on the pipeline, matching every other stateful rule.
 - **Platform interop:** if you're touching `EvdevInterop.cs`/`UinputInterop.cs`, verify struct layouts and ioctl numbers by compiling a small C program against real headers rather than trusting memory — that's how the existing Linux interop was grounded, and it caught a real ABI mismatch during development (`ioctl`'s request parameter needing 8 bytes, not 4, on x86_64).
-- **Tests:** `tests/GameFlow.Core.Tests` covers the pipeline and pure logic (no OS dependency); `tests/GameFlow.Infrastructure.Tests` covers platform interop and protocol correctness. 122 tests as of this writing.
+- **Tests:** `tests/GameFlow.Core.Tests` covers the pipeline and pure logic (no OS dependency); `tests/GameFlow.Infrastructure.Tests` covers platform interop, controller effects, device ownership, web protocols, and overlay compilation. Run `dotnet test GameFlow.sln` before handing off a change.
 - **Versioning:** the single source of truth is `Directory.Build.props`'s `<Version>`, used as the fallback for local builds. Tagged releases (`v*`) override it via `-p:Version=${GITHUB_REF_NAME#v}` in `.github/workflows/ci.yml` — tag `v1.0.1` and CI picks it up with no workflow changes needed.

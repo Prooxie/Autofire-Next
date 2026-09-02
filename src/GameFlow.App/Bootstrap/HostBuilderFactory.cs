@@ -127,6 +127,12 @@ public static class HostBuilderFactory
                 // one per dialog is always current.
                 _ = services.AddTransient<AppProfilePanelViewModel>();
 
+                // First-run walkthrough. Transient and IDisposable: it
+                // subscribes to the device catalog for hot-plug detection,
+                // and each showing must start from step one with a fresh
+                // subscription that the window disposes on close.
+                _ = services.AddTransient<SetupWalkthroughViewModel>();
+
                 _ = services.AddSingleton<ShellViewModel>();
                 _ = services.AddSingleton<ShellWindow>();
             });

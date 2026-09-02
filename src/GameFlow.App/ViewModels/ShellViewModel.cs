@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -141,7 +141,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     public static string AppVersion { get; } =
         Assembly.GetEntryAssembly()?.GetName().Version is { } v
             ? $"v{v.Major}.{v.Minor}.{v.Build} Beta"
-            : "v1.0.1 Beta";
+            : "v1.0.3 Beta";
 
     public static string AppFooterText { get; } =
         $"Made by Proxy Darkness  ·  {AppVersion}  ·  © 2026";
@@ -196,8 +196,11 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         OpenDeviceSettingsCommand        = new RelayCommand<string>(OpenDeviceSettings);
         OpenSettingsCommand              = new AsyncRelayCommand(OpenSettingsAsync);
         AddVirtualControllerCommand      = new RelayCommand(AddVirtualControllerFromSidebar);
+        OpenWalkthroughCommand           = new RelayCommand(() => WalkthroughRequested?.Invoke(this, EventArgs.Empty));
+        OpenPhoneControllerCommand       = new RelayCommand(() => PhoneControllerRequested?.Invoke(this, EventArgs.Empty));
+        CopyOverlayUrlCommand            = new RelayCommand(() => OverlayUrlCopyRequested?.Invoke(this, EventArgs.Empty));
         OpenVirtualControllerCommand     = new RelayCommand<string>(SelectVirtualMenuItem);
-        OpenMappingsCommand              = new RelayCommand(() => OuterNavSelectedIndex = 1);
+        OpenMappingsCommand              = new RelayCommand(() => OuterNavSelectedIndex = OuterNavProfiles);
 
         SupportedLanguages     = localizationService.SupportedLanguages;
         ThemeOptions           = CreateThemeOptions();
@@ -301,6 +304,44 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
 
     /// <summary>Sidebar "+ Add controller": creates a slot and jumps to its editor.</summary>
     public IRelayCommand AddVirtualControllerCommand { get; }
+
+    /// <summary>Sidebar "Setup guide": opens the walkthrough on demand.</summary>
+    public IRelayCommand OpenWalkthroughCommand { get; }
+
+    /// <summary>Dashboard "Use a phone": opens the phone-controller sheet.</summary>
+    public IRelayCommand OpenPhoneControllerCommand { get; }
+
+    /// <summary>Raised when the sidebar asks for the setup walkthrough.</summary>
+    public event EventHandler? WalkthroughRequested;
+
+    /// <summary>Raised when the user asks to add a phone as a controller.</summary>
+    public event EventHandler? PhoneControllerRequested;
+
+    /// <summary>
+    /// Raised when the dashboard's OBS button is pressed.
+    /// </summary>
+    /// <remarks>
+    /// An event rather than the view-model doing the copy itself: the
+    /// clipboard hangs off a TopLevel, which only the window has.
+    /// </remarks>
+    public event EventHandler? OverlayUrlCopyRequested;
+
+    /// <summary>Copies this session's stream-overlay URL to the clipboard.</summary>
+    public IRelayCommand CopyOverlayUrlCommand { get; }
+
+    /// <summary>
+    /// Puts a message on the shell's status line.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="StatusText"/> itself is set only from inside this
+    /// view-model; this is the seam for the window, which owns the
+    /// clipboard and so is the one place that knows whether a copy
+    /// actually succeeded.
+    /// </remarks>
+    public void ReportStatus(string message) => StatusText = message;
+
+    public string SidebarWalkthroughLabel => Localized("SidebarWalkthrough", "Setup guide");
+    public string SidebarPhoneControllerLabel => Localized("SidebarPhoneController", "Use a phone");
     public IRelayCommand<string> OpenVirtualControllerCommand { get; }
     public IRelayCommand OpenMappingsCommand { get; }
 
@@ -309,8 +350,8 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     private void AddVirtualControllerFromSidebar()
     {
         SlotsPanel.CreateSlotFromSidebar();
-        OuterNavSelectedIndex = 2; // Devices tab
-        DevicesSubTabIndex = 1;    // Virtual sub-tab (slot editor)
+        OuterNavSelectedIndex = OuterNavDevices;
+        DevicesSubTabIndex = DevicesSubTabVirtual;
     }
     public IRelayCommand<string> OpenControlEditorCommand      { get; }
 
@@ -393,6 +434,29 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     // ─── Compact menu column ─────────────────────────────────────────
 
     /// <summary>Index of the active outer tab (0=Dashboard, 1=Profiles, 2=Devices).</summary>
+    public const int OuterNavDashboard = 0;
+    /// <inheritdoc cref="OuterNavDashboard"/>
+    public const int OuterNavProfiles = 1;
+    /// <inheritdoc cref="OuterNavDashboard"/>
+    public const int OuterNavDevices = 2;
+
+    /// <summary>
+    /// Positions of the Devices page's inner tabs, in declaration order.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than written inline at each call site. When the
+    /// Tuning tab was inserted between Physical and Virtual, every
+    /// "jump to the slot editor" path kept its literal 1 and silently
+    /// started landing on Tuning instead. These indices count declared
+    /// tabs, not visible ones, so <see cref="DevicesSubTabVirtual"/>
+    /// stays correct even while Tuning is hidden.
+    /// </remarks>
+    public const int DevicesSubTabPhysical = 0;
+    /// <inheritdoc cref="DevicesSubTabPhysical"/>
+    public const int DevicesSubTabTuning = 1;
+    /// <inheritdoc cref="DevicesSubTabPhysical"/>
+    public const int DevicesSubTabVirtual = 2;
+
     private int outerNavSelectedIndex;
     public int OuterNavSelectedIndex
     {
@@ -400,7 +464,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref outerNavSelectedIndex, value);
     }
 
-    /// <summary>Index of the Devices inner sub-tab (0=Physical, 1=Virtual).</summary>
+    /// <summary>Index of the Devices inner sub-tab; see the DevicesSubTab* constants.</summary>
     private int devicesSubTabIndex;
     public int DevicesSubTabIndex
     {
@@ -515,8 +579,8 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
 
     private void SelectPhysicalMenuItem(string deviceId)
     {
-        OuterNavSelectedIndex = 2; // Devices tab
-        DevicesSubTabIndex = 0;    // Physical sub-tab
+        OuterNavSelectedIndex = OuterNavDevices;
+        DevicesSubTabIndex = DevicesSubTabPhysical;
         var row = DevicesPanel.Devices.FirstOrDefault(d => string.Equals(d.Id, deviceId, StringComparison.Ordinal));
         if (row is not null)
         {
@@ -531,8 +595,8 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        OuterNavSelectedIndex = 2; // Devices tab
-        DevicesSubTabIndex = 1;    // Virtual sub-tab
+        OuterNavSelectedIndex = OuterNavDevices;
+        DevicesSubTabIndex = DevicesSubTabVirtual;
         var row = SlotsPanel.Slots.FirstOrDefault(s => string.Equals(s.Id, slotId, StringComparison.Ordinal));
         if (row is not null)
         {

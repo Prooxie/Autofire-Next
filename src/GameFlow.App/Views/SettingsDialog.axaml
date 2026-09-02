@@ -71,12 +71,23 @@
           The same AllowAutoHide reasoning is on the dashboard's scroller;
           this is the second place it mattered.
       -->
+      <!--
+          Padding lives on the CONTENT, not on the ScrollViewer.
+
+          A ScrollViewer's own Padding insets the viewport, but the bottom
+          inset is not added to the scrollable extent — so the last 20px of
+          the form could never be scrolled into view and the final control
+          sat permanently behind the footer button bar. Moving the same
+          inset onto the StackPanel makes it part of the measured content,
+          which the extent does account for, so the scroller now reaches
+          the true bottom. The 8px spacer Border that used to sit at the
+          end as a partial workaround is gone with it.
+      -->
       <ScrollViewer
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Visible"
-                    AllowAutoHide="False"
-                    Padding="24,20">
-        <StackPanel Spacing="20">
+                    AllowAutoHide="False">
+        <StackPanel Spacing="20" Margin="24,20">
 
           <!-- Localization & Appearance section -->
           <StackPanel Spacing="10">
@@ -265,6 +276,87 @@
 
           <Border Classes="divider" />
 
+          <!-- Setup walkthrough. Offered here because the first-run
+               showing is once-only, and "how do I set this up again"
+               has no other answer in the app. -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="Setup" Classes="sectionHeading" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <TextBlock Grid.Column="0" Classes="hint" VerticalAlignment="Center"
+                         Text="Walks through connecting a controller and creating a virtual one, and sets it up for you." />
+              <Button Grid.Column="1" Classes="ghost" VerticalAlignment="Center"
+                      Content="Run setup walkthrough"
+                      Click="OnRunWalkthrough" />
+            </Grid>
+          </StackPanel>
+
+          <Border Classes="divider" />
+
+          <!-- Phone controller. The server starts with GameFlow; this section
+               exposes the actual LAN address instead of making users find it
+               in the log or infer it from the OBS URL. -->
+          <StackPanel Spacing="6">
+            <TextBlock Text="Phone controller" Classes="sectionHeading" />
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="Open this address on a phone connected to the same network. It will appear under Physical devices and can be assigned to a controller slot." />
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+              <TextBox Grid.Column="0" IsReadOnly="True"
+                       Text="{Binding Overlay.PhoneControllerUrl, Mode=OneWay}" />
+              <Button Grid.Column="1" Classes="ghost" Content="Open"
+                      ToolTip.Tip="Open the phone controller in this PC's browser, to check the server is reachable before trying a phone."
+                      IsEnabled="{Binding Overlay.CanCopyPhoneControllerUrl}"
+                      Click="OnOpenPhoneControllerUrl" />
+              <Button Grid.Column="2" Content="Copy"
+                      IsEnabled="{Binding Overlay.CanCopyPhoneControllerUrl}"
+                      Click="OnCopyPhoneControllerUrl" />
+            </Grid>
+            <!--
+                Reachability line. The address above can be perfectly
+                correct and still time out on a phone, because Windows
+                Firewall drops the inbound connection silently. Saying so
+                here, next to the address, is the difference between a
+                one-click fix and an unexplained failure.
+
+                Three buttons rather than one, because there are three
+                different situations and only one fix each: no rule at
+                all, a rule that does not cover this network's category,
+                and the safer way out of the second (re-categorise the
+                network in Windows instead of opening the port on Public).
+            -->
+            <Border Classes="inset" Padding="10,8"
+                    IsVisible="{Binding Overlay.HasReachabilityWarning}"
+                    Background="{DynamicResource AppWarningSoft}"
+                    BorderBrush="{DynamicResource AppWarning}">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="hint"
+                           Foreground="{DynamicResource AppForeground}"
+                           Text="{Binding Overlay.ReachabilityMessage}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Button Classes="ghost"
+                          Content="Allow through firewall"
+                          ToolTip.Tip="Adds an inbound rule for GameFlow on this port, for private and domain networks only. Windows will ask for administrator permission."
+                          IsVisible="{Binding Overlay.CanAllowThroughFirewall}"
+                          Command="{Binding Overlay.AllowThroughFirewallCommand}" />
+                  <Button Classes="ghost"
+                          Content="Open network settings"
+                          ToolTip.Tip="Opens Windows' network settings, where a home network can be switched from Public to Private. This is the safer of the two fixes."
+                          IsVisible="{Binding Overlay.CanAllowOnPublicNetwork}"
+                          Command="{Binding Overlay.OpenNetworkSettingsCommand}" />
+                  <Button Classes="ghost"
+                          Content="Allow on public networks"
+                          ToolTip.Tip="Widens the rule to cover Public networks. This accepts incoming connections on untrusted networks too, such as café or hotel Wi-Fi. Windows will ask for administrator permission."
+                          IsVisible="{Binding Overlay.CanAllowOnPublicNetwork}"
+                          Command="{Binding Overlay.AllowOnPublicNetworkCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="The browser reconnects automatically and keeps the same pad number. Rumble returns through the phone's Vibration API when the browser supports it." />
+          </StackPanel>
+
+          <Border Classes="divider" />
+
           <!-- Stream overlay. Builds a URL rather than showing a preview:
                the browser source is what renders it, and the app has no
                way to know how OBS will size or crop the result. Nothing
@@ -296,16 +388,18 @@
                       Content="Show the physical pad instead of the virtual output"
                       Foreground="{DynamicResource AppForeground}" />
 
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
               <TextBox Grid.Column="0" IsReadOnly="True"
                        Text="{Binding Overlay.Url, Mode=OneWay}" />
-              <Button Grid.Column="1" Content="Copy"
+              <Button Grid.Column="1" Classes="ghost" Content="Preview"
+                      ToolTip.Tip="Open the overlay in a browser so you can see what OBS will render before adding the source."
+                      IsEnabled="{Binding Overlay.CanCopy}"
+                      Click="OnOpenOverlayUrl" />
+              <Button Grid.Column="2" Content="Copy"
                       IsEnabled="{Binding Overlay.CanCopy}"
                       Click="OnCopyOverlayUrl" />
             </Grid>
           </StackPanel>
-
-          <Border Height="8" />
 
         </StackPanel>
       </ScrollViewer>

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
 using GameFlow.Infrastructure.Runtime.Web;
 using GameFlow.Infrastructure.Runtime.Web.Overlay;
 
@@ -25,13 +27,153 @@ public sealed class OverlayPanelViewModel : ViewModelBase
 {
     private readonly WebControllerServer server;
     private readonly OverlayFeed feed;
+    private readonly WindowsFirewallAccess firewallAccess;
 
-    public OverlayPanelViewModel(WebControllerServer server, OverlayFeed feed)
+    public OverlayPanelViewModel(WebControllerServer server, OverlayFeed feed, WindowsFirewallAccess firewall)
     {
         this.server = server ?? throw new ArgumentNullException(nameof(server));
         this.feed = feed ?? throw new ArgumentNullException(nameof(feed));
+        this.firewallAccess = firewall ?? throw new ArgumentNullException(nameof(firewall));
+
+        AllowThroughFirewallCommand = new AsyncRelayCommand(AllowThroughFirewallAsync);
+        AllowOnPublicNetworkCommand = new AsyncRelayCommand(AllowOnPublicNetworkAsync);
+        OpenNetworkSettingsCommand = new RelayCommand(firewall.OpenNetworkSettings);
 
         Refresh();
+    }
+
+    // ─── Reachability ─────────────────────────────────────────────────
+    //
+    // Binding the port and being reachable are different things, and the
+    // gap between them is the single most confusing failure this feature
+    // has: the address in the box is correct, the log says the server is
+    // running, and the phone still times out — because Windows Firewall
+    // drops the inbound connection and says so to nobody.
+    //
+    // The subtler half is that a rule can exist and still not apply. A
+    // firewall rule names the network categories it covers, and home
+    // Ethernet is very often left categorised Public because Windows only
+    // asked once. So the rule sits there, enabled, covering Private, on a
+    // machine whose network is Public — and the phone still cannot
+    // connect. These members distinguish the two cases, because the fix
+    // is different for each.
+
+    private FirewallStatus firewall = new(FirewallRuleState.Unknown, false, null);
+    private bool firewallBusy;
+
+    /// <summary>Requests the inbound firewall rule; raises a UAC prompt.</summary>
+    public ICommand AllowThroughFirewallCommand { get; }
+
+    /// <summary>Widens the rule to Public networks; raises a UAC prompt.</summary>
+    public ICommand AllowOnPublicNetworkCommand { get; }
+
+    /// <summary>Opens Windows' own network-category settings.</summary>
+    public ICommand OpenNetworkSettingsCommand { get; }
+
+    /// <summary>
+    /// Plain-language state of "can a phone actually reach this?".
+    /// </summary>
+    public string ReachabilityMessage
+    {
+        get
+        {
+            if (!server.IsRunning)
+            {
+                return "The web server is not running.";
+            }
+
+            if (server.ListenUrl?.Contains("localhost", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return "Serving this PC only — Windows would not let GameFlow listen on the network. " +
+                       "Running GameFlow as administrator once is usually enough to fix this.";
+            }
+
+            return firewall.State switch
+            {
+                FirewallRuleState.Active =>
+                    "Windows Firewall is allowing incoming connections on this port.",
+
+                FirewallRuleState.WrongProfile =>
+                    $"GameFlow is allowed through Windows Firewall, but not on this PC's " +
+                    $"{firewall.NetworkNames} network — and that is the one a phone would connect over, " +
+                    "so it still times out. Setting that network to Private in Windows is the safer fix; " +
+                    "allowing Public networks works too.",
+
+                FirewallRuleState.Missing =>
+                    "Windows Firewall has no rule for GameFlow, so phones will time out trying to " +
+                    "reach this address. Allow it through to fix that.",
+
+                _ => "If a phone cannot load this address, Windows Firewall is the usual cause.",
+            };
+        }
+    }
+
+    /// <summary>True while the reachability state is a known problem, so the view can call it out.</summary>
+    public bool HasReachabilityWarning =>
+        server.IsRunning &&
+        (firewall.State is FirewallRuleState.Missing or FirewallRuleState.WrongProfile ||
+         server.ListenUrl?.Contains("localhost", StringComparison.OrdinalIgnoreCase) == true);
+
+    /// <summary>
+    /// Gates the "Allow through Windows Firewall" button: only offered
+    /// where it can help, and never while a prompt is already open.
+    /// </summary>
+    public bool CanAllowThroughFirewall =>
+        WindowsFirewallAccess.IsSupported && server.IsRunning && !firewallBusy &&
+        firewall.State is FirewallRuleState.Missing or FirewallRuleState.Unknown;
+
+    /// <summary>
+    /// Shown only when a rule is already in place but the current network
+    /// is outside it — the one case where widening to Public is the
+    /// answer rather than a needless exposure.
+    /// </summary>
+    public bool CanAllowOnPublicNetwork =>
+        WindowsFirewallAccess.IsSupported && server.IsRunning && !firewallBusy &&
+        firewall.State == FirewallRuleState.WrongProfile;
+
+    /// <summary>
+    /// Re-reads the firewall state.
+    /// </summary>
+    /// <remarks>
+    /// Runs off the constructor path deliberately — it walks the firewall
+    /// rule collection over COM, and blocking the Settings dialog opening
+    /// on that would be a poor trade for a line of status text.
+    /// </remarks>
+    public async Task RefreshReachabilityAsync()
+    {
+        firewall = await firewallAccess.GetStatusAsync().ConfigureAwait(true);
+        RaiseReachabilityChanged();
+    }
+
+    private Task AllowThroughFirewallAsync() => AddRuleAsync(includePublic: false);
+
+    private Task AllowOnPublicNetworkAsync() => AddRuleAsync(includePublic: true);
+
+    private async Task AddRuleAsync(bool includePublic)
+    {
+        firewallBusy = true;
+        RaiseReachabilityChanged();
+        try
+        {
+            await firewallAccess.TryAddInboundRuleAsync(server.Port, includePublic).ConfigureAwait(true);
+
+            // Re-read rather than assume: the user may have declined the
+            // UAC prompt, and the rule's real profiles are what matters.
+            firewall = await firewallAccess.GetStatusAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            firewallBusy = false;
+            RaiseReachabilityChanged();
+        }
+    }
+
+    private void RaiseReachabilityChanged()
+    {
+        OnPropertyChanged(nameof(ReachabilityMessage));
+        OnPropertyChanged(nameof(HasReachabilityWarning));
+        OnPropertyChanged(nameof(CanAllowThroughFirewall));
+        OnPropertyChanged(nameof(CanAllowOnPublicNetwork));
     }
 
     /// <summary>Installed skins, plus a leading "match the controller" entry.</summary>
@@ -70,6 +212,18 @@ public sealed class OverlayPanelViewModel : ViewModelBase
             if (SetProperty(ref field, value)) { OnPropertyChanged(nameof(Url)); }
         }
     }
+
+    /// <summary>
+    /// Address a phone opens to become a controller. The web server is shared
+    /// with the OBS overlay, so this lives beside the overlay URL rather than
+    /// duplicating server state in another view-model.
+    /// </summary>
+    public string PhoneControllerUrl => server.IsRunning && !string.IsNullOrEmpty(server.ListenUrl)
+        ? server.ListenUrl
+        : "The web server is not running, so phones cannot connect yet.";
+
+    /// <summary>True when <see cref="PhoneControllerUrl"/> is copyable.</summary>
+    public bool CanCopyPhoneControllerUrl => server.IsRunning && !string.IsNullOrEmpty(server.ListenUrl);
 
     /// <summary>
     /// The URL to paste into OBS, or an explanation of why there isn't
@@ -134,6 +288,9 @@ public sealed class OverlayPanelViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(Url));
         OnPropertyChanged(nameof(CanCopy));
+        OnPropertyChanged(nameof(PhoneControllerUrl));
+        OnPropertyChanged(nameof(CanCopyPhoneControllerUrl));
+        RaiseReachabilityChanged();
     }
 
     private static OverlayChoice Find(ObservableCollection<OverlayChoice> choices, string? id) =>

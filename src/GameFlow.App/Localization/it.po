@@ -1248,3 +1248,39 @@ msgstr "Segno di spunta"
 
 msgid "TouchButtonNone"
 msgstr "— nessuno —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Dispositivi e profili"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Anteprima"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Uscita"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Mappature"
+
+msgid "SidebarWalkthrough"
+msgstr "Guida alla configurazione"
+
+msgid "SidebarPhoneController"
+msgstr "Usa un telefono"
+
+msgid "SidebarAddController"
+msgstr "Aggiungi controller"
+
+msgid "TemplateDemoPreviewLabel"
+msgstr "Anteprima demo"
+
+msgid "TemplateOutputProfileLabel"
+msgstr "Profilo HIDMaestro"
+
+msgid "TemplateOutputProfileDefaultOption"
+msgstr "Predefinito per il dispositivo di uscita selezionato"
+
+msgid "TemplateDemoPreviewTooltip"
+msgstr "Anima questo controller virtuale con la sequenza demo integrata invece dei dispositivi assegnati. I profili di mappatura e l’uscita reale restano attivi, così puoi provarlo nella dashboard o in un gioco senza un controller fisico. Disattivalo per restituire il controllo ai dispositivi assegnati."
+
+msgid "TemplateOutputProfileTooltip"
+msgstr "Definisce esattamente quale controller questo slot presenta ai giochi. Predefinito usa il profilo standard del dispositivo di uscita qui sopra; l’elenco copre l’ampio catalogo di gamepad e controller arcade di HIDMaestro. I profili per volanti e simulazione di volo sono nascosti per ora."

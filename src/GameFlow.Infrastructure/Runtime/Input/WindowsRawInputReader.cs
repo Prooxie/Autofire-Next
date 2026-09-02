@@ -213,11 +213,7 @@ public sealed class WindowsRawInputReader : IKeyboardStateSource, IMouseStateSou
     {
         var id = keyboardIdByHandle.GetOrAdd(hDevice, static h => ResolveCatalogId(h, "keyboard"));
         var state = keyboardStateById.GetOrAdd(id, static _ => new DeviceState());
-        lock (state.Lock)
-        {
-            if (keyUp) state.Pressed.Remove(virtualKey);
-            else       state.Pressed.Add(virtualKey);
-        }
+        state.Apply(virtualKey, keyUp);
     }
 
     private void UpdateMouse(IntPtr hDevice, RAWMOUSE m)
@@ -288,14 +284,17 @@ public sealed class WindowsRawInputReader : IKeyboardStateSource, IMouseStateSou
         finally { Marshal.FreeHGlobal(ptr); }
     }
 
+    /// <summary>
+    /// Pressed-key set for one keyboard, with AltGr's phantom Control
+    /// press filtered out. See <see cref="AltGrGhostFilter"/>.
+    /// </summary>
     private sealed class DeviceState
     {
-        public readonly object Lock = new();
-        public readonly HashSet<int> Pressed = new();
-        public IReadOnlySet<int> Snapshot()
-        {
-            lock (Lock) { return new HashSet<int>(Pressed); }
-        }
+        private readonly AltGrGhostFilter filter = new();
+
+        public void Apply(int virtualKey, bool keyUp) => filter.Apply(virtualKey, keyUp);
+
+        public IReadOnlySet<int> Snapshot() => filter.Snapshot();
     }
 
     private sealed class MouseStateData

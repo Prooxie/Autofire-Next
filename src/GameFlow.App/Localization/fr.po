@@ -1248,3 +1248,39 @@ msgstr "Coche"
 
 msgid "TouchButtonNone"
 msgstr "— aucun —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Périphériques et profils"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Aperçu"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Sortie"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Mappages"
+
+msgid "SidebarWalkthrough"
+msgstr "Guide de configuration"
+
+msgid "SidebarPhoneController"
+msgstr "Utiliser un téléphone"
+
+msgid "SidebarAddController"
+msgstr "Ajouter une manette"
+
+msgid "TemplateDemoPreviewLabel"
+msgstr "Aperçu de démonstration"
+
+msgid "TemplateOutputProfileLabel"
+msgstr "Profil HIDMaestro"
+
+msgid "TemplateOutputProfileDefaultOption"
+msgstr "Par défaut pour le périphérique de sortie sélectionné"
+
+msgid "TemplateDemoPreviewTooltip"
+msgstr "Anime cette manette virtuelle avec la séquence de démonstration intégrée au lieu des périphériques assignés. Les profils de mappage et la sortie réelle continuent de fonctionner, ce qui permet de tester dans le tableau de bord ou dans un jeu sans manette physique. Désactivez pour rendre le contrôle aux périphériques assignés."
+
+msgid "TemplateOutputProfileTooltip"
+msgstr "Définit exactement quelle manette cet emplacement présente aux jeux. Par défaut utilise le profil standard du périphérique de sortie ci-dessus ; la liste couvre le large catalogue de manettes et de contrôleurs d’arcade de HIDMaestro. Les profils de volant et de simulation de vol sont masqués pour l’instant."

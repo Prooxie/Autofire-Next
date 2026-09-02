@@ -1248,3 +1248,39 @@ msgstr "Marca de verificación"
 
 msgid "TouchButtonNone"
 msgstr "— ninguno —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Dispositivos y perfiles"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Vista previa"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Salida"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Asignaciones"
+
+msgid "SidebarWalkthrough"
+msgstr "Guía de configuración"
+
+msgid "SidebarPhoneController"
+msgstr "Usar un teléfono"
+
+msgid "SidebarAddController"
+msgstr "Añadir mando"
+
+msgid "TemplateDemoPreviewLabel"
+msgstr "Vista previa de demostración"
+
+msgid "TemplateOutputProfileLabel"
+msgstr "Perfil de HIDMaestro"
+
+msgid "TemplateOutputProfileDefaultOption"
+msgstr "Predeterminado para el dispositivo de salida seleccionado"
+
+msgid "TemplateDemoPreviewTooltip"
+msgstr "Anima este mando virtual con la secuencia de demostración integrada en lugar de sus dispositivos asignados. Los perfiles de asignación y la salida real siguen funcionando, así que puedes probarlo en el panel o dentro de un juego sin un mando físico. Desactívalo para devolver el control a los dispositivos asignados."
+
+msgid "TemplateOutputProfileTooltip"
+msgstr "Define exactamente qué mando presenta esta ranura a los juegos. Predeterminado usa el perfil estándar del dispositivo de salida de arriba; la lista abarca el amplio catálogo de mandos y controles arcade de HIDMaestro. Los perfiles de volante y simulación de vuelo están ocultos por ahora."

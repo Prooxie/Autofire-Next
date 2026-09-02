@@ -1,3 +1,4 @@
+using GameFlow.App.ViewModels;
 using GameFlow.App.Views;
 using GameFlow.Infrastructure.Configuration;
 using GameFlow.Infrastructure.Profiles;
@@ -5,6 +6,7 @@ using GameFlow.Infrastructure.Requirements;
 using GameFlow.Infrastructure.Updates;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace GameFlow.App.Startup;
@@ -31,6 +33,7 @@ public sealed class StartupChecksCoordinator
     private readonly IUpdateChecker updateChecker;
     private readonly IUpdateInstaller updateInstaller;
     private readonly IUserSettingsService userSettings;
+    private readonly IServiceProvider services;
     private readonly ILogger<StartupChecksCoordinator> logger;
 
     /// <summary>
@@ -41,12 +44,14 @@ public sealed class StartupChecksCoordinator
         IUpdateChecker updateChecker,
         IUpdateInstaller updateInstaller,
         IUserSettingsService userSettings,
+        IServiceProvider services,
         ILogger<StartupChecksCoordinator> logger)
     {
         this.requirementChecker = requirementChecker ?? throw new ArgumentNullException(nameof(requirementChecker));
         this.updateChecker = updateChecker ?? throw new ArgumentNullException(nameof(updateChecker));
         this.updateInstaller = updateInstaller ?? throw new ArgumentNullException(nameof(updateInstaller));
         this.userSettings = userSettings ?? throw new ArgumentNullException(nameof(userSettings));
+        this.services = services ?? throw new ArgumentNullException(nameof(services));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -74,6 +79,21 @@ public sealed class StartupChecksCoordinator
             logger.LogWarning(exception, "Requirement startup check threw — continuing.");
         }
 
+        // After requirements, before updates. Requirements first because
+        // a missing SDL3 or output backend would make the walkthrough
+        // create a controller that cannot work, and the user should hear
+        // that from the dialog that explains it. Updates last because
+        // "there is a new version" is the least urgent thing a first-time
+        // user can be told.
+        try
+        {
+            await RunSetupWalkthroughAsync(ownerWindow, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Setup walkthrough threw — continuing.");
+        }
+
         try
         {
             await RunUpdateCheckAsync(ownerWindow, cancellationToken).ConfigureAwait(false);
@@ -82,6 +102,65 @@ public sealed class StartupChecksCoordinator
         {
             logger.LogWarning(exception, "Update startup check threw — continuing.");
         }
+    }
+
+    /// <summary>
+    /// Shows the first-run walkthrough, once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The completion flag is written whether the user finishes or closes
+    /// the window. Re-offering onboarding to someone who has already
+    /// dismissed it is nagging, and the walkthrough stays available on
+    /// demand from Options — so declining it costs nothing that cannot be
+    /// recovered deliberately.
+    /// </para>
+    /// <para>
+    /// Skipped when slots already exist. That is the real signal that
+    /// someone is set up: the flag is new, so every existing installation
+    /// starts with it false, and without this check an established user
+    /// would be walked through creating a controller they already have.
+    /// </para>
+    /// </remarks>
+    private async Task RunSetupWalkthroughAsync(Window? ownerWindow, CancellationToken cancellationToken)
+    {
+        if (userSettings.Current.SetupWalkthroughCompleted)
+        {
+            return;
+        }
+
+        if (ownerWindow is null)
+        {
+            logger.LogDebug("Setup walkthrough skipped: no owner window.");
+            return;
+        }
+
+        var registry = services.GetRequiredService<GameFlow.Infrastructure.Runtime.Slots.SlotRegistry>();
+        if (registry.GetSlots().Count > 0)
+        {
+            logger.LogInformation(
+                "Setup walkthrough skipped: {Count} controller slot(s) already exist.",
+                registry.GetSlots().Count);
+            await MarkWalkthroughSeenAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            var window = new SetupWalkthroughWindow
+            {
+                DataContext = services.GetRequiredService<SetupWalkthroughViewModel>(),
+            };
+            await window.ShowDialog(ownerWindow);
+        }).ConfigureAwait(false);
+
+        await MarkWalkthroughSeenAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task MarkWalkthroughSeenAsync(CancellationToken cancellationToken)
+    {
+        var updated = userSettings.Current with { SetupWalkthroughCompleted = true };
+        await userSettings.ApplyAsync(updated, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

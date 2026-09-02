@@ -221,12 +221,13 @@ public sealed class WebControllerHubTests
     {
         var hub = new WebControllerHub();
 
-        Assert.Equal(0, hub.ClaimPad());
-        Assert.Equal(1, hub.ClaimPad());
-        Assert.Equal(2, hub.ClaimPad());
+        Assert.Equal(0, hub.ClaimPad().PadIndex);
+        var second = hub.ClaimPad();
+        Assert.Equal(1, second.PadIndex);
+        Assert.Equal(2, hub.ClaimPad().PadIndex);
 
-        hub.ReleasePad(1);
-        Assert.Equal(1, hub.ClaimPad()); // the freed slot is reused, not appended after 2
+        hub.ReleasePad(second);
+        Assert.Equal(1, hub.ClaimPad().PadIndex); // anonymous freed slots remain immediately reusable
     }
 
     [Fact]
@@ -235,10 +236,10 @@ public sealed class WebControllerHubTests
         var hub = new WebControllerHub();
         for (var i = 0; i < WebControllerHub.MaxPads; i++)
         {
-            Assert.True(hub.ClaimPad() >= 0);
+            Assert.True(hub.ClaimPad().IsValid);
         }
 
-        Assert.Equal(-1, hub.ClaimPad()); // 17th phone is turned away rather than overwriting someone
+        Assert.False(hub.ClaimPad().IsValid); // 17th phone is turned away rather than overwriting someone
     }
 
     [Fact]
@@ -247,15 +248,15 @@ public sealed class WebControllerHubTests
         // A phone that dies mid-press must not leave that button held
         // down in the game forever.
         var hub = new WebControllerHub();
-        var pad = hub.ClaimPad();
+        var lease = hub.ClaimPad();
 
         var buttons = ButtonState.Clone(ButtonState.CreateEmptyMap());
         buttons[ButtonId.South] = true;
-        hub.UpdatePad(pad, new ControllerSnapshot { Buttons = buttons });
-        Assert.True(hub.GetSnapshot(pad).IsPressed(ButtonId.South));
+        Assert.True(hub.UpdatePad(lease, new ControllerSnapshot { Buttons = buttons }));
+        Assert.True(hub.GetSnapshot(lease.PadIndex).IsPressed(ButtonId.South));
 
-        hub.ReleasePad(pad);
-        Assert.False(hub.GetSnapshot(pad).IsPressed(ButtonId.South));
+        hub.ReleasePad(lease);
+        Assert.False(hub.GetSnapshot(lease.PadIndex).IsPressed(ButtonId.South));
     }
 
     [Fact]
@@ -270,22 +271,22 @@ public sealed class WebControllerHubTests
 
         hub.ReleasePad(first);
         Assert.Single(hub.GetConnectedPads());
-        Assert.Contains(second, hub.GetConnectedPads());
+        Assert.Contains(second.PadIndex, hub.GetConnectedPads());
     }
 
     [Fact]
     public void RumbleQueueIsBoundedAndDropsOldestFirst()
     {
         var hub = new WebControllerHub();
-        var pad = hub.ClaimPad();
+        var lease = hub.ClaimPad();
 
         for (var i = 1; i <= 12; i++)
         {
-            hub.QueueRumble(pad, new WebRumbleCommand(i / 12f, 0f, i));
+            hub.QueueRumble(lease.PadIndex, new WebRumbleCommand(i / 12f, 0f, i));
         }
 
         var drained = new List<int>();
-        while (hub.TryDequeueRumble(pad, out var command))
+        while (hub.TryDequeueRumble(lease, out var command))
         {
             drained.Add(command.DurationMs);
         }
@@ -300,13 +301,166 @@ public sealed class WebControllerHubTests
     {
         var hub = new WebControllerHub();
 
-        hub.UpdatePad(-1, new ControllerSnapshot());
-        hub.UpdatePad(999, new ControllerSnapshot());
-        hub.ReleasePad(-5);
+        Assert.False(hub.UpdatePad(WebPadLease.Unavailable, new ControllerSnapshot()));
+        hub.ReleasePad(WebPadLease.Unavailable);
 
         Assert.False(hub.IsPadConnected(-1));
         Assert.False(hub.IsPadConnected(999));
-        Assert.False(hub.TryDequeueRumble(-1, out _));
+        Assert.False(hub.TryDequeueRumble(WebPadLease.Unavailable, out _));
+    }
+
+    [Fact]
+    public void ReconnectingClientKeepsItsPadNumber()
+    {
+        var hub = new WebControllerHub();
+        var phone = hub.ClaimPad("phone-a1b2c3");
+        var otherPhone = hub.ClaimPad("phone-d4e5f6");
+
+        hub.ReleasePad(phone);
+        var reconnected = hub.ClaimPad("phone-a1b2c3");
+
+        Assert.Equal(phone.PadIndex, reconnected.PadIndex);
+        Assert.Equal(otherPhone.PadIndex, hub.ClaimPad("phone-d4e5f6").PadIndex);
+    }
+
+    [Fact]
+    public void ReplacedSocketCannotOverwriteOrReleaseTheNewLease()
+    {
+        var hub = new WebControllerHub();
+        var oldLease = hub.ClaimPad("phone-a1b2c3");
+        var newLease = hub.ClaimPad("phone-a1b2c3");
+
+        var pressed = ButtonState.Clone(ButtonState.CreateEmptyMap());
+        pressed[ButtonId.South] = true;
+
+        Assert.False(hub.UpdatePad(oldLease, new ControllerSnapshot { Buttons = pressed }));
+        Assert.True(hub.UpdatePad(newLease, new ControllerSnapshot { Buttons = pressed }));
+
+        hub.ReleasePad(oldLease);
+
+        Assert.True(hub.IsPadConnected(newLease.PadIndex));
+        Assert.True(hub.GetSnapshot(newLease.PadIndex).IsPressed(ButtonId.South));
+        Assert.False(hub.IsLeaseCurrent(oldLease));
+        Assert.True(hub.IsLeaseCurrent(newLease));
+    }
+
+    [Fact]
+    public void ReleasedLeaseCannotReactivateItsPad()
+    {
+        var hub = new WebControllerHub();
+        var lease = hub.ClaimPad("phone-a1b2c3");
+
+        hub.ReleasePad(lease);
+
+        Assert.False(hub.IsLeaseCurrent(lease));
+        Assert.False(hub.UpdatePad(lease, new ControllerSnapshot()));
+        Assert.False(hub.IsPadConnected(lease.PadIndex));
+    }
+
+    [Fact]
+    public void OldSocketCannotDrainNewSocketsRumble()
+    {
+        var hub = new WebControllerHub();
+        var oldLease = hub.ClaimPad("phone-a1b2c3");
+        var newLease = hub.ClaimPad("phone-a1b2c3");
+        hub.QueueRumble(newLease.PadIndex, new WebRumbleCommand(1f, 0.5f, 250));
+
+        Assert.False(hub.TryDequeueRumble(oldLease, out _));
+        Assert.True(hub.TryDequeueRumble(newLease, out var command));
+        Assert.Equal(250, command.DurationMs);
+    }
+
+    [Fact]
+    public void StaleConnectionCanBeReclaimedWithoutGivingItsOldLeaseAuthority()
+    {
+        var clock = new ManualTimeProvider();
+        var hub = new WebControllerHub(clock);
+        var first = hub.ClaimPad("phone-00-id");
+        for (var i = 1; i < WebControllerHub.MaxPads; i++)
+        {
+            Assert.True(hub.ClaimPad($"phone-{i:D2}-id").IsValid);
+        }
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        var replacement = hub.ClaimPad("replacement-id");
+
+        Assert.Equal(first.PadIndex, replacement.PadIndex);
+        Assert.False(hub.UpdatePad(first, new ControllerSnapshot()));
+        Assert.True(hub.UpdatePad(replacement, new ControllerSnapshot()));
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset utcNow = new(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => utcNow;
+
+        public void Advance(TimeSpan duration) => utcNow += duration;
+    }
+}
+
+public sealed class WebControllerEffectBridgeTests
+{
+    [Fact]
+    public void WebPadEffectIsClampedAndQueuedForTheOwningPhone()
+    {
+        var hub = new WebControllerHub();
+        var lease = hub.ClaimPad("phone-a1b2c3");
+        var state = new GameFlow.Infrastructure.Runtime.Effects.ControllerEffectState
+        {
+            LowFrequencyRumble = 1.5,
+            HighFrequencyRumble = -0.25,
+        };
+
+        Assert.True(WebControllerEffectBridge.TryRoute(
+            hub, WebControllerDeviceScanner.BuildDeviceId(lease.PadIndex), state));
+        Assert.True(hub.TryDequeueRumble(lease, out var command));
+        Assert.Equal(1f, command.LowFrequency);
+        Assert.Equal(0f, command.HighFrequency);
+        Assert.Equal(WebControllerEffectBridge.VibrationDurationMs, command.DurationMs);
+    }
+
+    [Fact]
+    public void SilentEffectQueuesAnImmediateVibrationStop()
+    {
+        var hub = new WebControllerHub();
+        var lease = hub.ClaimPad("phone-a1b2c3");
+
+        Assert.True(WebControllerEffectBridge.TryRoute(
+            hub,
+            WebControllerDeviceScanner.BuildDeviceId(lease.PadIndex),
+            GameFlow.Infrastructure.Runtime.Effects.ControllerEffectState.Silent));
+        Assert.True(hub.TryDequeueRumble(lease, out var command));
+        Assert.Equal(0, command.DurationMs);
+    }
+
+    [Fact]
+    public void NonWebDeviceIsLeftForTheHardwareCollector()
+    {
+        var hub = new WebControllerHub();
+
+        Assert.False(WebControllerEffectBridge.TryRoute(
+            hub,
+            "sdl-gamepad-1",
+            GameFlow.Infrastructure.Runtime.Effects.ControllerEffectState.Silent));
+    }
+}
+
+public sealed class WebControllerPageTests
+{
+    [Fact]
+    public void PageKeepsAStablePerTabIdentityForReconnects()
+    {
+        Assert.Contains("sessionStorage.getItem(\"gameflow-client-id\")", WebControllerAssets.ControllerPage);
+        Assert.Contains("/ws?client=", WebControllerAssets.ControllerPage);
+    }
+
+    [Fact]
+    public void PageSustainsAndExplicitlyStopsVibration()
+    {
+        Assert.Contains("rumbleTimer = setInterval", WebControllerAssets.ControllerPage);
+        Assert.Contains("navigator.vibrate(0)", WebControllerAssets.ControllerPage);
+        Assert.Contains("stopRumble();", WebControllerAssets.ControllerPage);
     }
 }
 
@@ -339,7 +493,7 @@ public sealed class WebControllerDeviceScannerTests
         var hub = new WebControllerHub();
         Assert.Empty(WebControllerDeviceScanner.Scan(hub));
 
-        var pad = hub.ClaimPad();
+        var pad = hub.ClaimPad().PadIndex;
         var devices = WebControllerDeviceScanner.Scan(hub);
 
         Assert.Single(devices);

@@ -1260,3 +1260,27 @@ msgstr "Fajfka"
 
 msgid "TouchButtonNone"
 msgstr "— žádné —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Zařízení a profily"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Náhled"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Výstup"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Mapování"
+
+msgid "RuleKindButtonRemapLabel"
+msgstr "Přemapování tlačítka"
+
+msgid "RuleKindButtonRemapDescription"
+msgstr "Nasměruje jedno fyzické tlačítko na vybraný virtuální výstup."
+
+msgid "SidebarWalkthrough"
+msgstr "Průvodce nastavením"
+
+msgid "SidebarPhoneController"
+msgstr "Použít telefon"

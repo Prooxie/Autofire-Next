@@ -152,15 +152,27 @@ On the Adaptive tab, **React to rumble** ties a trigger to what the game is actu
 
 ### Phone as a controller
 
-1. Dashboard → **Web Controller** → enable it.
-2. Open the shown URL (e.g. `http://10.0.0.5:8080`) on a phone on the same Wi-Fi.
+1. Open **Settings → Phone controller** and copy the shown address. The local server starts automatically with GameFlow.
+2. Open that address (for example, `http://10.0.0.5:8080`) on a phone on the same Wi-Fi.
 3. Pick a layout, tap **Enable motion** for gyro aiming.
-4. The phone appears in the device list as an ordinary gamepad — assign it to a slot like any other device.
+4. The phone appears under **Physical devices** as an ordinary gamepad — assign it to a slot like any other device.
+
+Up to 16 phones can connect at once. Each browser tab keeps a stable pad number across automatic WebSocket reconnects, and stale sockets cannot overwrite a replacement connection. Game rumble returns through the browser Vibration API when the phone supports it; GameFlow sends an explicit stop when rumble ends or the connection closes.
 
 > \*\*Windows firewall note:\*\* binding to all interfaces needs an admin URL ACL, or the server falls back to localhost-only and phones can't reach it (the log says which mode it's in):
 > ```
 > netsh http add urlacl url=http://+:8080/ user=Everyone
 > ```
+
+### Add a controller overlay to OBS
+
+1. Open **Settings → Stream overlay**.
+2. Choose the controller slot and skin. Leave **Match the controller** selected to follow that slot's output type automatically.
+3. Enable **Show the physical pad** only when the stream should display raw hardware input rather than the mapped virtual output the game receives.
+4. Copy the generated URL.
+5. In OBS, add a **Browser** source, paste the URL, and set its width/height for the scene.
+
+The page has a transparent background, reconnects automatically, and renders directly from the same slot snapshots as the dashboard. The controller, side, and optional skin are encoded in the URL, so OBS can reuse it without QR scanning or an always-on-top GameFlow window. GameFlow must be running while the Browser source is active.
 
 ### Add mapping rules
 
@@ -269,7 +281,7 @@ Documented here rather than discovered by surprise:
 * **No virtual *gamepad* output on Linux or macOS.** Mouse output is real on both; a real virtual controller (via `uinput`'s gamepad mode, or DriverKit on macOS) is future work.
 * **Bundled controller theme placement is known-imperfect** on some skins — several were generated from asset-pack sprites without authoritative layout data. Fixing this properly needs template-matching each sprite against its base image; tracked, not yet done.
 * **The macOS input path has never run on a Mac.** It is written against IOKit's documented HID API, but there is no macOS toolchain in the build environment, so nothing about it has been exercised on hardware — unlike the Linux interop, which was checked against real kernel headers. Absolute-mode pointers (some tablets) are also unsupported by it, and the volume/mute keys are not mappable there because they are Consumer-page usages the reader does not claim.
-* **Remote Link, per-app profile switching** — on the roadmap, not started.
+* **Remote Link** — on the roadmap, not started.
 * **The DSU/Cemuhook motion server addresses 4 pads, not 16.** That is the protocol's own limit, not an implementation shortcut — DSU has no way to describe a fifth pad. The first four *enabled* slots are the ones emulators see.
 
 ---

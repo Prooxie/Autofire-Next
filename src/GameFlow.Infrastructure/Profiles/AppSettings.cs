@@ -145,6 +145,19 @@ public sealed record AppSettings
     /// </summary>
     public bool CheckRequirementsOnStartup { get; init; } = true;
 
+    /// <summary>
+    /// Whether the first-run setup walkthrough has already been shown.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="false"/> so an existing installation
+    /// that predates this field also gets the walkthrough once. That is
+    /// deliberate: the walkthrough creates nothing until the user reaches
+    /// its last step, so the cost of showing it to someone who did not
+    /// need it is one dismissed window, while the cost of skipping it for
+    /// someone who did is the empty dashboard this exists to prevent.
+    /// </remarks>
+    public bool SetupWalkthroughCompleted { get; init; }
+
     // ---------------------------------------------------------------------
     // DSU / Cemuhook motion server.
     // ---------------------------------------------------------------------

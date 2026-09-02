@@ -1248,3 +1248,39 @@ msgstr "Ptaszek"
 
 msgid "TouchButtonNone"
 msgstr "— brak —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Urządzenia i profile"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Podgląd"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Wyjście"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Mapowania"
+
+msgid "SidebarWalkthrough"
+msgstr "Przewodnik konfiguracji"
+
+msgid "SidebarPhoneController"
+msgstr "Użyj telefonu"
+
+msgid "SidebarAddController"
+msgstr "Dodaj kontroler"
+
+msgid "TemplateDemoPreviewLabel"
+msgstr "Podgląd demonstracyjny"
+
+msgid "TemplateOutputProfileLabel"
+msgstr "Profil HIDMaestro"
+
+msgid "TemplateOutputProfileDefaultOption"
+msgstr "Domyślny dla wybranego urządzenia wyjściowego"
+
+msgid "TemplateDemoPreviewTooltip"
+msgstr "Animuje ten wirtualny kontroler wbudowaną sekwencją demonstracyjną zamiast przypisanych urządzeń. Profile mapowania i rzeczywiste wyjście nadal działają, więc możesz to sprawdzić na pulpicie lub w grze bez fizycznego kontrolera. Wyłącz, aby oddać sterowanie przypisanym urządzeniom."
+
+msgid "TemplateOutputProfileTooltip"
+msgstr "Określa, jaki kontroler ten slot pokazuje grom. Domyślny używa standardowego profilu wybranego wyżej urządzenia wyjściowego; lista obejmuje szeroki katalog gamepadów i kontrolerów arcade HIDMaestro. Profile kierownic i symulatorów lotu są na razie ukryte."

@@ -321,8 +321,36 @@ public sealed class HidMaestroOutputSink : IOutputSink, GameFlow.Infrastructure.
                 rightTrigger: Math.Clamp(s.RightTrigger, 0f, 1f)),
             Buttons = MapButtons(s),
             Hat = MapHat(s),
+            BatteryLevel = MapBatteryLevel(s),
+            BatteryCharging = s.BatteryCharging,
+            BatteryFull = s.BatteryPercent is null or >= 100,
         };
     }
+
+    /// <summary>
+    /// Charge to report on the emitted pad, 0‥100.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These three fields were simply never set, and that is not the same
+    /// as declining to report a battery. A DualSense or DualShock 4 output
+    /// report always carries a battery field, so an unset
+    /// <c>BatteryLevel</c> goes out as zero — which Windows and games read
+    /// as nearly flat. Every virtual pad announced itself at roughly 10%
+    /// charge forever, whatever was actually driving it: a wired pad, a
+    /// keyboard, or no device at all.
+    /// </para>
+    /// <para>
+    /// A source with no battery to report maps to 100 and
+    /// <c>BatteryFull</c>, which is exactly what a wired controller says
+    /// about itself. That is the honest answer as well as the quiet one —
+    /// there is no battery here to be low.
+    /// </para>
+    /// </remarks>
+    private static byte MapBatteryLevel(ControllerSnapshot s) =>
+        s.BatteryPercent is { } percent
+            ? (byte)Math.Clamp(percent, 0, 100)
+            : (byte)100;
 
     private static HMButton MapButtons(ControllerSnapshot s)
     {
@@ -781,8 +809,34 @@ public sealed class HidMaestroOutputSink : IOutputSink,
             Math.Clamp(s.LeftTrigger,  0f, 1f),
             Math.Clamp(s.RightTrigger, 0f, 1f),
             buttons,
-            ResolveHatName(s));
+            ResolveHatName(s),
+            BatteryLevelFor(s),
+            s.BatteryCharging,
+            s.BatteryPercent is null or >= 100);
     }
+
+    /// <summary>
+    /// Charge to report on the emitted pad, 0‥100.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The battery fields were simply never written, and that is not the
+    /// same as declining to report a battery. A DualSense or DualShock 4
+    /// output report always carries one, so an unset level goes out as
+    /// zero — which Windows and games read as nearly flat. Every virtual
+    /// pad therefore announced itself at roughly 10% charge forever,
+    /// whatever was driving it: a wired pad, a keyboard, or nothing.
+    /// </para>
+    /// <para>
+    /// A source with no battery maps to 100 and "full", which is exactly
+    /// what a wired controller says about itself — the honest answer as
+    /// well as the quiet one, since there is no battery here to be low.
+    /// </para>
+    /// </remarks>
+    private static byte BatteryLevelFor(ControllerSnapshot s) =>
+        s.BatteryPercent is { } percent
+            ? (byte)Math.Clamp(percent, 0, 100)
+            : (byte)100;
 
     private static string ResolveHatName(ControllerSnapshot s)
     {

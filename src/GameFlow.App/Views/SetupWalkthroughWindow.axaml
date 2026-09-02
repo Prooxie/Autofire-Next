@@ -1,0 +1,213 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GameFlow.App.ViewModels"
+        x:Class="GameFlow.App.Views.SetupWalkthroughWindow"
+        x:DataType="vm:SetupWalkthroughViewModel"
+        x:CompileBindings="True"
+        Title="Set up your first controller"
+        Width="620" Height="580"
+        MinWidth="520" MinHeight="480"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppSurface0}">
+
+  <!--
+      Fixed size and CenterOwner on purpose: this is a linear, four-step
+      task with one decision in it, and every step is authored to fit.
+      A resizable wizard invites the user to hunt for content that is not
+      off-screen.
+  -->
+
+  <Border Background="{DynamicResource AppSurface1}"
+          BorderBrush="{DynamicResource AppBorder0}"
+          BorderThickness="1">
+    <DockPanel LastChildFill="True">
+
+      <!-- Footer: step counter on the left, navigation on the right. -->
+      <Border DockPanel.Dock="Bottom" Padding="24,14"
+              Background="{DynamicResource AppSurface1}"
+              BorderBrush="{DynamicResource AppBorder0}"
+              BorderThickness="0,1,0,0">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+          <TextBlock Grid.Column="0" Text="{Binding StepNumberLabel}"
+                     Classes="sectionLabel" VerticalAlignment="Center" />
+          <Button Grid.Column="2" Classes="ghost" Content="Back"
+                  Command="{Binding BackCommand}" />
+          <Button Grid.Column="3" Classes="primary" Padding="22,9"
+                  Content="{Binding NextButtonLabel}"
+                  Command="{Binding NextCommand}" />
+        </Grid>
+      </Border>
+
+      <ScrollViewer VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+        <Panel Margin="28,26">
+
+          <!-- ═══ 1. What this app actually does ═══════════════════════
+               The mental model is the thing to teach first. Everything
+               else in the app assumes it, and nothing else explains it. -->
+          <StackPanel Spacing="16" IsVisible="{Binding IsWelcomeStep}">
+            <TextBlock Text="Welcome to GameFlow" FontSize="22" FontWeight="Bold"
+                       Foreground="{DynamicResource AppForeground}" />
+            <TextBlock TextWrapping="Wrap" FontSize="13" LineHeight="20"
+                       Foreground="{DynamicResource AppForeground}"
+                       Text="GameFlow sits between your controller and your game. It reads the pad in your hands, applies whatever you have set up, and creates a second, virtual controller that the game actually reads." />
+
+            <Border Classes="inset" Padding="16,14">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                  <TextBlock Grid.Column="0" Text="🎮" FontSize="18" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Spacing="1">
+                    <TextBlock Text="Your controller" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AppForeground}" />
+                    <TextBlock Classes="hint" Text="The physical pad, keyboard or mouse you hold." />
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="↓" HorizontalAlignment="Center" FontSize="15"
+                           Foreground="{DynamicResource AppAccent}" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                  <TextBlock Grid.Column="0" Text="⚙" FontSize="18" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Spacing="1">
+                    <TextBlock Text="GameFlow" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AppForeground}" />
+                    <TextBlock Classes="hint" Text="Remapping, autofire, stick shaping, macros." />
+                  </StackPanel>
+                </Grid>
+                <TextBlock Text="↓" HorizontalAlignment="Center" FontSize="15"
+                           Foreground="{DynamicResource AppAccent}" />
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                  <TextBlock Grid.Column="0" Text="🕹" FontSize="18" VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Spacing="1">
+                    <TextBlock Text="A virtual controller" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AppAccent}" />
+                    <TextBlock Classes="hint" Text="What the game sees. It looks like real hardware to everything except GameFlow." />
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="hint"
+                       Text="This takes about a minute and leaves you with a working setup. You can run it again any time from Options." />
+          </StackPanel>
+
+          <!-- ═══ 2. Find the pad ══════════════════════════════════════
+               Live, so plugging in while this is open just works — and
+               so it answers "does GameFlow see my controller at all?" -->
+          <StackPanel Spacing="14" IsVisible="{Binding IsConnectStep}">
+            <TextBlock Text="Connect your controller" FontSize="20" FontWeight="Bold"
+                       Foreground="{DynamicResource AppForeground}" />
+            <TextBlock Classes="hint"
+                       Text="Plug it in over USB, or pair it over Bluetooth. This list updates by itself — there is nothing to press." />
+
+            <!--
+                Bounded height, with the list scrolling inside it. The
+                controls that matter on this step — the status line and
+                the "I have no controller" escape hatch — sit BELOW this
+                box, so an unbounded list pushes them off the bottom of a
+                fixed-size window and there is no way to reach them.
+            -->
+            <Border Classes="inset" Padding="12" Height="200">
+              <Panel>
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8"
+                            IsVisible="{Binding !DetectedDevices.Count}">
+                  <TextBlock Text="🔌" FontSize="30" HorizontalAlignment="Center" Opacity="0.4" />
+                  <TextBlock Classes="hint" TextAlignment="Center" MaxWidth="280"
+                             Text="Waiting for a controller…" />
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding DetectedDevices}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:WalkthroughDevice">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="2,5">
+                        <Ellipse Grid.Column="0" Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="{DynamicResource Semantic.Success}" />
+                        <StackPanel Grid.Column="1" Spacing="1">
+                          <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis"
+                                     Foreground="{DynamicResource AppForeground}" />
+                          <TextBlock Classes="hint" Text="{Binding CategoryLabel}" />
+                        </StackPanel>
+                        <Border Grid.Column="2" Classes="chip" Padding="8,3"
+                                IsVisible="{Binding IsGamepadLike}">
+                          <TextBlock Text="READY" FontSize="9" FontWeight="Bold"
+                                     LetterSpacing="0.6"
+                                     Foreground="{DynamicResource AppAccent}" />
+                        </Border>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
+              </Panel>
+            </Border>
+
+            <TextBlock Classes="hint" Text="{Binding DetectionMessage}" />
+
+            <CheckBox IsChecked="{Binding SkipDeviceStep, Mode=TwoWay}"
+                      Content="I have no controller — set this up for keyboard and mouse"
+                      Foreground="{DynamicResource AppForeground}" />
+          </StackPanel>
+
+          <!-- ═══ 3. The one decision ══════════════════════════════════ -->
+          <StackPanel Spacing="14" IsVisible="{Binding IsOutputStep}">
+            <TextBlock Text="What should games see?" FontSize="20" FontWeight="Bold"
+                       Foreground="{DynamicResource AppForeground}" />
+            <TextBlock Classes="hint"
+                       Text="GameFlow will create this controller for you. It is what every game reads, whatever you are actually holding — so a PlayStation pad can appear as an Xbox one, and vice versa." />
+
+            <ListBox ItemsSource="{Binding OutputKinds}"
+                     SelectedItem="{Binding SelectedOutputKind, Mode=TwoWay}"
+                     Background="Transparent" BorderThickness="0" Padding="0">
+              <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                  <Setter Property="Padding" Value="12,10" />
+                  <Setter Property="Margin" Value="0,2" />
+                </Style>
+              </ListBox.Styles>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:WalkthroughOutputKind">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                    <TextBlock Classes="hint" Text="{Binding Description}" MaxWidth="450" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock Classes="hint"
+                       Text="Not permanent — you can change it later, or add more virtual controllers, on the Devices page." />
+          </StackPanel>
+
+          <!-- ═══ 4. What just happened, and where to look ═════════════ -->
+          <StackPanel Spacing="16" IsVisible="{Binding IsDoneStep}">
+            <TextBlock Text="You are set up" FontSize="20" FontWeight="Bold"
+                       Foreground="{DynamicResource AppForeground}" />
+
+            <Border Classes="inset" Padding="16,14">
+              <StackPanel Spacing="8">
+                <TextBlock Text="✓" FontSize="20"
+                           Foreground="{DynamicResource Semantic.Success}" />
+                <TextBlock Text="{Binding SummaryMessage}" TextWrapping="Wrap"
+                           FontSize="13" LineHeight="19"
+                           Foreground="{DynamicResource AppForeground}" />
+              </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="8">
+              <TextBlock Text="Where to go next" Classes="sectionLabel" />
+              <TextBlock Classes="hint"
+                         Text="Dashboard — your pad and the virtual one side by side, live. Press a button and watch both." />
+              <TextBlock Classes="hint"
+                         Text="Profiles — remapping, autofire, stick shaping and macros." />
+              <TextBlock Classes="hint"
+                         Text="Devices — assign more controllers, and tune sticks, triggers, rumble and lighting." />
+            </StackPanel>
+          </StackPanel>
+
+        </Panel>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</Window>

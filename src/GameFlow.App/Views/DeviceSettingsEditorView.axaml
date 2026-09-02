@@ -30,6 +30,34 @@
          used to carry a negative horizontal margin that ate the column
          spacing on every row like the ones below. -->
 
+    <!--
+        Every label in this dialog is a term of art — deadzone,
+        anti-deadzone, full at, curve, motor gain. They are the right
+        names, and they are also meaningless to most of the people
+        adjusting them, who arrived here because a stick drifts or a
+        trigger feels late. Each one therefore carries a tooltip written
+        in terms of what you would OBSERVE, not what the number does to
+        the signal, and each tab opens with a line saying what the tab is
+        for. The dotted underline marks which labels have one, so the
+        explanation is discoverable rather than a hidden reward for
+        hovering at random.
+    -->
+    <Style Selector="TextBlock.explained">
+      <Setter Property="TextDecorations">
+        <TextDecorationCollection>
+          <TextDecoration Location="Underline" StrokeDashArray="1,2" StrokeThickness="1" />
+        </TextDecorationCollection>
+      </Setter>
+    </Style>
+
+    <!-- The line that opens a tab, saying in one sentence what it is for. -->
+    <Style Selector="TextBlock.tabIntro">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,0,0,2" />
+      <Setter Property="Foreground" Value="{DynamicResource AppForegroundDim}" />
+    </Style>
+
     <!-- Explanatory line under a control, for settings whose name does not carry their meaning. -->
     <Style Selector="TextBlock.hint">
       <Setter Property="FontSize" Value="11" />
@@ -64,6 +92,9 @@
         <ScrollViewer>
           <StackPanel Margin="4,2" Spacing="14">
 
+            <TextBlock Classes="tabIntro"
+                       Text="Fixes drift and worn sticks, and changes how movement feels. Move the stick while this is open — the dot on the graph is your live input, so you can see the effect immediately. Start with a preset; the numbers are there when you want to go further." />
+
             <!--
                 One block per stick: the curve is the primary control and
                 the numbers sit beside it, because a deadzone figure means
@@ -75,14 +106,20 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Classes="sectionHead" Margin="0" Text="Left stick"
                            VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <TextBlock Text="Presets" Classes="sectionLabel" VerticalAlignment="Center"
+                             Margin="0,0,4,0" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Default"
+                          ToolTip.Tip="Factory behaviour — a small deadzone and linear response. Start here."
                           Command="{Binding ApplyLeftDefaultCommand}" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Precision"
+                          ToolTip.Tip="Smaller deadzone and a gentler centre, for slow, accurate aiming."
                           Command="{Binding ApplyLeftPrecisionCommand}" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Aggressive"
+                          ToolTip.Tip="Reacts sooner and reaches full travel faster, for driving and fast movement."
                           Command="{Binding ApplyLeftAggressiveCommand}" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Worn pad"
+                          ToolTip.Tip="Larger deadzone to absorb drift, and full travel reached early so a tired stick can still reach the edge."
                           Command="{Binding ApplyLeftWornCommand}" />
                 </StackPanel>
               </Grid>
@@ -99,24 +136,32 @@
                 </Border>
 
                 <StackPanel Grid.Column="1" Spacing="6">
+                  <!-- Capped and left-aligned: see the note on tab widths
+                       below. A four-character number in a 900px-wide box
+                       reads as a broken layout, not a generous one. -->
                   <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto"
-                        ColumnSpacing="8" RowSpacing="6">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+                        ColumnSpacing="8" RowSpacing="6"
+                        Width="430" HorizontalAlignment="Left">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Deadzone"
+                               ToolTip.Tip="How far the stick must move before the game sees anything.&#10;&#10;Raise it if your character drifts when you are not touching the stick. Lower it if small movements feel ignored. Too high and aiming gets coarse." />
                     <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.9"
                                    Increment="0.01" FormatString="0.00"
                                    Value="{Binding LeftDeadzone, Mode=TwoWay}" />
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel explained" Text="Anti-deadzone"
+                               ToolTip.Tip="Compensates for a deadzone the GAME applies on top of yours.&#10;&#10;Some games ignore the first slice of stick travel themselves, which makes the pad feel unresponsive no matter what you set here. Raising this jumps straight past that dead area so the stick bites immediately." />
                     <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.95"
                                    Increment="0.01" FormatString="0.00"
                                    Value="{Binding LeftAntiDeadzone, Mode=TwoWay}" />
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel explained" Text="Full at"
+                               ToolTip.Tip="How far you have to push for the game to read maximum.&#10;&#10;Lower it if your stick no longer reaches the edge — worn pads often stop at 90% and never sprint. At 1.00 you must reach the very edge." />
                     <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0.05" Maximum="1"
                                    Increment="0.01" FormatString="0.00"
                                    Value="{Binding LeftFullAt, Mode=TwoWay}" />
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Curve" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel explained" Text="Curve"
+                               ToolTip.Tip="How stick movement maps to in-game movement.&#10;&#10;Linear is one-to-one. Curves that start slow give finer control near the centre for aiming; curves that start fast react quicker for driving and platforming." />
                     <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch"
                               ItemsSource="{Binding CurveOptions}"
                               SelectedItem="{Binding LeftCurve, Mode=TwoWay}" />
@@ -124,8 +169,10 @@
 
                   <Expander Header="Advanced" FontSize="12">
                     <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto"
-                          ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0">
-                      <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
+                          ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0"
+                          Width="430" HorizontalAlignment="Left">
+                      <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Sensitivity"
+                                 ToolTip.Tip="Multiplies the whole output.&#10;&#10;Above 1.00 the stick reaches full travel sooner; below 1.00 it takes more movement. Unlike Full at, this scales everything, including the middle of the range." />
                       <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="5"
                                      Increment="0.05" FormatString="0.00"
                                      Value="{Binding LeftSensitivity, Mode=TwoWay}" />
@@ -148,14 +195,20 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Classes="sectionHead" Margin="0" Text="Right stick"
                            VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <TextBlock Text="Presets" Classes="sectionLabel" VerticalAlignment="Center"
+                             Margin="0,0,4,0" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Default"
+                          ToolTip.Tip="Factory behaviour — a small deadzone and linear response. Start here."
                           Command="{Binding ApplyRightDefaultCommand}" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Precision"
+                          ToolTip.Tip="Smaller deadzone and a gentler centre, for slow, accurate aiming."
                           Command="{Binding ApplyRightPrecisionCommand}" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Aggressive"
+                          ToolTip.Tip="Reacts sooner and reaches full travel faster, for driving and fast movement."
                           Command="{Binding ApplyRightAggressiveCommand}" />
                   <Button Classes="ghost" FontSize="11" Padding="8,3" Content="Worn pad"
+                          ToolTip.Tip="Larger deadzone to absorb drift, and full travel reached early so a tired stick can still reach the edge."
                           Command="{Binding ApplyRightWornCommand}" />
                 </StackPanel>
               </Grid>
@@ -172,24 +225,32 @@
                 </Border>
 
                 <StackPanel Grid.Column="1" Spacing="6">
+                  <!-- Capped and left-aligned: see the note on tab widths
+                       below. A four-character number in a 900px-wide box
+                       reads as a broken layout, not a generous one. -->
                   <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto"
-                        ColumnSpacing="8" RowSpacing="6">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+                        ColumnSpacing="8" RowSpacing="6"
+                        Width="430" HorizontalAlignment="Left">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Deadzone"
+                               ToolTip.Tip="How far the stick must move before the game sees anything.&#10;&#10;Raise it if your character drifts when you are not touching the stick. Lower it if small movements feel ignored. Too high and aiming gets coarse." />
                     <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.9"
                                    Increment="0.01" FormatString="0.00"
                                    Value="{Binding RightDeadzone, Mode=TwoWay}" />
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Anti-deadzone" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel explained" Text="Anti-deadzone"
+                               ToolTip.Tip="Compensates for a deadzone the GAME applies on top of yours.&#10;&#10;Some games ignore the first slice of stick travel themselves, which makes the pad feel unresponsive no matter what you set here. Raising this jumps straight past that dead area so the stick bites immediately." />
                     <NumericUpDown Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="0.95"
                                    Increment="0.01" FormatString="0.00"
                                    Value="{Binding RightAntiDeadzone, Mode=TwoWay}" />
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel explained" Text="Full at"
+                               ToolTip.Tip="How far you have to push for the game to read maximum.&#10;&#10;Lower it if your stick no longer reaches the edge — worn pads often stop at 90% and never sprint. At 1.00 you must reach the very edge." />
                     <NumericUpDown Grid.Row="2" Grid.Column="1" Minimum="0.05" Maximum="1"
                                    Increment="0.01" FormatString="0.00"
                                    Value="{Binding RightFullAt, Mode=TwoWay}" />
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel" Text="Curve" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="rowLabel explained" Text="Curve"
+                               ToolTip.Tip="How stick movement maps to in-game movement.&#10;&#10;Linear is one-to-one. Curves that start slow give finer control near the centre for aiming; curves that start fast react quicker for driving and platforming." />
                     <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch"
                               ItemsSource="{Binding CurveOptions}"
                               SelectedItem="{Binding RightCurve, Mode=TwoWay}" />
@@ -197,8 +258,10 @@
 
                   <Expander Header="Advanced" FontSize="12">
                     <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto"
-                          ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0">
-                      <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Sensitivity" />
+                          ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0"
+                          Width="430" HorizontalAlignment="Left">
+                      <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Sensitivity"
+                                 ToolTip.Tip="Multiplies the whole output.&#10;&#10;Above 1.00 the stick reaches full travel sooner; below 1.00 it takes more movement. Unlike Full at, this scales everything, including the middle of the range." />
                       <NumericUpDown Grid.Row="0" Grid.Column="1" Minimum="0.1" Maximum="5"
                                      Increment="0.05" FormatString="0.00"
                                      Value="{Binding RightSensitivity, Mode=TwoWay}" />
@@ -223,16 +286,22 @@
       <TabItem Header="Triggers">
         <ScrollViewer>
           <StackPanel Margin="4,6" Spacing="14">
+
+            <TextBlock Classes="tabIntro"
+                       Text="Sets where a trigger pull starts to register and where it counts as fully pressed. Raise Deadzone if a trigger fires on its own; lower Full at if you have to squeeze uncomfortably hard to sprint or accelerate." />
             <StackPanel Spacing="6">
               <TextBlock Classes="sectionHead" Margin="0,0,0,2" Text="Left trigger" />
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto"
-                    ColumnSpacing="12" RowSpacing="8">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+                    ColumnSpacing="12" RowSpacing="8"
+                    Width="560" HorizontalAlignment="Left">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Deadzone"
+                           ToolTip.Tip="How far the stick must move before the game sees anything.&#10;&#10;Raise it if your character drifts when you are not touching the stick. Lower it if small movements feel ignored. Too high and aiming gets coarse." />
                 <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
                         Value="{Binding LeftTriggerDeadzone}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding LeftTriggerDeadzone, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel explained" Text="Full at"
+                           ToolTip.Tip="How far you have to push for the game to read maximum.&#10;&#10;Lower it if your stick no longer reaches the edge — worn pads often stop at 90% and never sprint. At 1.00 you must reach the very edge." />
                 <Slider Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
                         Value="{Binding LeftTriggerFullAt}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
@@ -245,13 +314,16 @@
             <StackPanel Spacing="6">
               <TextBlock Classes="sectionHead" Margin="0,0,0,2" Text="Right trigger" />
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto"
-                    ColumnSpacing="12" RowSpacing="8">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Deadzone" />
+                    ColumnSpacing="12" RowSpacing="8"
+                    Width="560" HorizontalAlignment="Left">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Deadzone"
+                           ToolTip.Tip="How far the stick must move before the game sees anything.&#10;&#10;Raise it if your character drifts when you are not touching the stick. Lower it if small movements feel ignored. Too high and aiming gets coarse." />
                 <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="0.5" SmallChange="0.01"
                         Value="{Binding RightTriggerDeadzone}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding RightTriggerDeadzone, StringFormat='{}{0:P0}'}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Full at" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel explained" Text="Full at"
+                           ToolTip.Tip="How far you have to push for the game to read maximum.&#10;&#10;Lower it if your stick no longer reaches the edge — worn pads often stop at 90% and never sprint. At 1.00 you must reach the very edge." />
                 <Slider Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1.0" SmallChange="0.01"
                         Value="{Binding RightTriggerFullAt}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
@@ -266,26 +338,33 @@
       <TabItem Header="Rumble">
         <ScrollViewer>
           <StackPanel Margin="4,6" Spacing="14">
+
+            <TextBlock Classes="tabIntro"
+                       Text="Controls vibration strength for this pad. Turn it down to keep aim steady, or up to bring back an older pad whose motors have weakened." />
             <CheckBox Content="Rumble enabled" IsChecked="{Binding RumbleEnabled}"
                       Foreground="{DynamicResource AppForeground}" />
 
             <StackPanel Spacing="6">
               <TextBlock Classes="sectionHead" Margin="0,0,0,2" Text="Motor gain" />
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto,Auto"
-                    ColumnSpacing="12" RowSpacing="8">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Overall" />
+                    ColumnSpacing="12" RowSpacing="8"
+                    Width="560" HorizontalAlignment="Left">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel explained" Text="Overall"
+                           ToolTip.Tip="Master volume for vibration on this pad.&#10;&#10;0.00 silences it. Above 1.00 amplifies a pad whose motors have weakened." />
                 <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
                         Value="{Binding RumbleGain}" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Classes="readout"
                            Text="{Binding RumbleGain, StringFormat='{}{0:F2}x'}" />
 
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel" Text="Low motor" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="rowLabel explained" Text="Low motor"
+                           ToolTip.Tip="The heavy, low-frequency motor — the deep rumble of explosions and engines." />
                 <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
                         Value="{Binding RumbleLowGain}" />
                 <TextBlock Grid.Row="1" Grid.Column="2" Classes="readout"
                            Text="{Binding RumbleLowGain, StringFormat='{}{0:F2}x'}" />
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel" Text="High motor" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="rowLabel explained" Text="High motor"
+                           ToolTip.Tip="The light, high-frequency motor — the fine buzz of surfaces and impacts." />
                 <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="2.0" SmallChange="0.05"
                         Value="{Binding RumbleHighGain}" />
                 <TextBlock Grid.Row="2" Grid.Column="2" Classes="readout"
@@ -356,7 +435,8 @@
             <Border Classes="divider" />
 
             <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto"
-                  ColumnSpacing="12" RowSpacing="8">
+                  ColumnSpacing="12" RowSpacing="8"
+                    Width="560" HorizontalAlignment="Left">
               <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Brightness" />
               <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.05"
                       Value="{Binding LightbarBrightness}" />
@@ -395,7 +475,8 @@
                   "Strength" does not say strength of what.
               -->
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto,Auto,Auto"
-                    ColumnSpacing="12" RowSpacing="8">
+                    ColumnSpacing="12" RowSpacing="8"
+                    Width="560" HorizontalAlignment="Left">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Begins at pull"
                            ToolTip.Tip="How far the trigger is pulled before the effect starts." />
                 <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"
@@ -457,7 +538,8 @@
               <TextBlock Classes="hint" Text="{Binding RightAdaptiveModeDescription}" />
 
               <Grid ColumnDefinitions="140,*,60" RowDefinitions="Auto,Auto,Auto,Auto"
-                    ColumnSpacing="12" RowSpacing="8">
+                    ColumnSpacing="12" RowSpacing="8"
+                    Width="560" HorizontalAlignment="Left">
                 <TextBlock Grid.Row="0" Grid.Column="0" Classes="rowLabel" Text="Begins at pull"
                            ToolTip.Tip="How far the trigger is pulled before the effect starts." />
                 <Slider Grid.Row="0" Grid.Column="1" Minimum="0" Maximum="1.0" SmallChange="0.02"

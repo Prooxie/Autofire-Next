@@ -92,17 +92,61 @@ var BIT = {
 
 var state = { buttons:0, lx:0, ly:0, rx:0, ry:0, lt:0, rt:0, touch:{},
               gp:0, gy:0, gr:0, ax:0, ay:0, az:0, gyro:0 };
-var ws = null, connected = false, padIndex = -1, dirty = true;
+var ws = null, connected = false, padIndex = -1, dirty = true, rumbleTimer = null;
 var surface = document.getElementById("surface");
 var msgEl = document.getElementById("msg");
 var dotEl = document.getElementById("dot");
 var statusEl = document.getElementById("status");
 var padLabelEl = document.getElementById("pad-label");
 
+// Stable for this browser tab across WebSocket reconnects. sessionStorage
+// keeps two tabs independent (localStorage would make them steal one pad
+// from each other) while still letting a dropped Wi-Fi connection reclaim
+// the same GameFlow device id and slot assignment.
+function newClientId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+}
+var clientId;
+try {
+  clientId = sessionStorage.getItem("gameflow-client-id");
+  if (!clientId) {
+    clientId = newClientId();
+    sessionStorage.setItem("gameflow-client-id", clientId);
+  }
+} catch (e) {
+  clientId = newClientId();
+}
+
 function setBit(bit, on) {
   var mask = 1 << bit;
   var next = on ? (state.buttons | mask) : (state.buttons & ~mask);
   if (next !== state.buttons) { state.buttons = next; dirty = true; }
+}
+
+// The portable Vibration API is on/off, not variable-amplitude. Model motor
+// strength as the duty cycle inside a short period and keep repeating until
+// the server sends its explicit zero state. This preserves sustained game
+// rumble without leaving the phone buzzing after a disconnect.
+function stopRumble() {
+  if (rumbleTimer !== null) {
+    clearInterval(rumbleTimer);
+    rumbleTimer = null;
+  }
+  if (navigator.vibrate) { navigator.vibrate(0); }
+}
+
+function applyRumble(strength, periodMs) {
+  stopRumble();
+  if (!navigator.vibrate || strength <= 0.02) { return; }
+
+  var period = Math.max(100, Math.min(1000, periodMs || 250));
+  var pulse = Math.max(10, Math.round(period * Math.min(1, strength)));
+  var vibrate = function () { navigator.vibrate(pulse); };
+  vibrate();
+  rumbleTimer = setInterval(vibrate, period);
 }
 
 // ---- Layout definitions. Percentages of the play surface, so one
@@ -404,7 +448,7 @@ motionBtn.addEventListener("click", startMotion);
 // ---- Transport ----
 function connect() {
   var proto = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(proto + "//" + location.host + "/ws");
+  ws = new WebSocket(proto + "//" + location.host + "/ws?client=" + encodeURIComponent(clientId));
 
   ws.onopen = function () {
     connected = true;
@@ -426,13 +470,13 @@ function connect() {
     }
     if (m.rumble && navigator.vibrate) {
       var strength = Math.max(m.rumble.low || 0, m.rumble.high || 0);
-      var ms = m.rumble.ms || 100;
-      if (strength > 0.02) { navigator.vibrate(Math.round(ms * Math.min(1, strength))); }
+      applyRumble(strength, m.rumble.ms);
     }
   };
 
   ws.onclose = function () {
     connected = false;
+    stopRumble();
     dotEl.classList.remove("on");
     statusEl.textContent = "reconnecting…";
     padLabelEl.textContent = "";

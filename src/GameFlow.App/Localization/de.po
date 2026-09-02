@@ -1248,3 +1248,39 @@ msgstr "Häkchen"
 
 msgid "TouchButtonNone"
 msgstr "— keine —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Geräte und Profile"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Vorschau"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Ausgabe"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Zuordnungen"
+
+msgid "SidebarWalkthrough"
+msgstr "Einrichtungsassistent"
+
+msgid "SidebarPhoneController"
+msgstr "Handy verwenden"
+
+msgid "SidebarAddController"
+msgstr "Controller hinzufügen"
+
+msgid "TemplateDemoPreviewLabel"
+msgstr "Demo-Vorschau"
+
+msgid "TemplateOutputProfileLabel"
+msgstr "HIDMaestro-Profil"
+
+msgid "TemplateOutputProfileDefaultOption"
+msgstr "Standard für das gewählte Ausgabegerät"
+
+msgid "TemplateDemoPreviewTooltip"
+msgstr "Animiert diesen virtuellen Controller mit der integrierten Demo-Sequenz statt mit den zugewiesenen Geräten. Die Mapping-Profile und die echte Ausgabe laufen dabei mit, sodass sich alles ohne physischen Controller im Dashboard oder direkt im Spiel testen lässt. Ausschalten gibt die Steuerung an die zugewiesenen Geräte zurück."
+
+msgid "TemplateOutputProfileTooltip"
+msgstr "Legt fest, als welcher Controller sich dieser Slot gegenüber Spielen ausgibt. Standard verwendet das übliche Profil für das oben gewählte Ausgabegerät; die Liste umfasst den breiten Gamepad- und Arcade-Katalog von HIDMaestro. Lenkrad- und Flugsimulationsprofile sind vorerst ausgeblendet."

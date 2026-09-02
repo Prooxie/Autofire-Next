@@ -1248,3 +1248,39 @@ msgstr "Галочка"
 
 msgid "TouchButtonNone"
 msgstr "— нет —"
+
+msgid "DevicesSlotSetupTab"
+msgstr "Устройства и профили"
+
+msgid "DevicesSlotPreviewTab"
+msgstr "Предпросмотр"
+
+msgid "DevicesSlotOutputTab"
+msgstr "Вывод"
+
+msgid "DevicesSlotMappingsTab"
+msgstr "Сопоставления"
+
+msgid "SidebarWalkthrough"
+msgstr "Мастер настройки"
+
+msgid "SidebarPhoneController"
+msgstr "Использовать телефон"
+
+msgid "SidebarAddController"
+msgstr "Добавить контроллер"
+
+msgid "TemplateDemoPreviewLabel"
+msgstr "Демонстрационный режим"
+
+msgid "TemplateOutputProfileLabel"
+msgstr "Профиль HIDMaestro"
+
+msgid "TemplateOutputProfileDefaultOption"
+msgstr "По умолчанию для выбранного устройства вывода"
+
+msgid "TemplateDemoPreviewTooltip"
+msgstr "Управляет этим виртуальным контроллером встроенной демонстрационной последовательностью вместо назначенных устройств. Профили сопоставления и реальный вывод продолжают работать, поэтому это можно проверить на панели или прямо в игре без физического контроллера. Выключите, чтобы вернуть управление назначенным устройствам."
+
+msgid "TemplateOutputProfileTooltip"
+msgstr "Определяет, каким контроллером этот слот представляется играм. По умолчанию использует стандартный профиль выбранного выше устройства вывода; список охватывает широкий каталог геймпадов и аркадных контроллеров HIDMaestro. Профили рулей и авиасимуляторов пока скрыты."
