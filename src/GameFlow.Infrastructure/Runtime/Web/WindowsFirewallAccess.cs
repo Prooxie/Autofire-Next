@@ -107,7 +107,10 @@ public sealed class WindowsFirewallAccess(ILogger<WindowsFirewallAccess> logger)
     /// </summary>
     public Task<FirewallStatus> GetStatusAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsSupported)
+        // OperatingSystem.IsWindows() rather than the IsSupported property:
+        // both say the same thing, but only the direct call is a guard the
+        // platform-compatibility analyzer can follow into the COM code below.
+        if (!OperatingSystem.IsWindows())
         {
             return Task.FromResult(new FirewallStatus(FirewallRuleState.Unknown, false, null));
         }
@@ -117,6 +120,7 @@ public sealed class WindowsFirewallAccess(ILogger<WindowsFirewallAccess> logger)
         return Task.Run(ReadStatus, cancellationToken);
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private FirewallStatus ReadStatus()
     {
         try

@@ -96,16 +96,33 @@ public static class AppProfileMatcher
 
         var trimmed = value.Trim().Trim('"');
 
-        // GetFileNameWithoutExtension throws on characters the platform
-        // rejects in a path, and a rule is free text the user typed.
-        try
+        // Split on BOTH separators, by hand, rather than calling
+        // Path.GetFileNameWithoutExtension.
+        //
+        // That method is platform-dependent: on Linux and macOS a
+        // backslash is an ordinary filename character, so a pasted
+        // Windows path comes back very nearly whole — "eldenring" turns
+        // into "C:\Games\x\eldenring" — and the rule then matches
+        // nothing at all. Rules are free text a user pasted from
+        // whichever machine they were on, and they travel between
+        // machines inside exported profile JSON, so what a backslash
+        // means here cannot depend on where the app happens to run.
+        //
+        // Doing it by hand also removes the need to catch
+        // ArgumentException: there is no longer a call that rejects
+        // characters the platform dislikes, and a rule containing them is
+        // simply text that will not match anything.
+        var lastSeparator = trimmed.LastIndexOfAny(['/', '\\']);
+        var name = lastSeparator >= 0 ? trimmed[(lastSeparator + 1)..] : trimmed;
+
+        // Strip one trailing extension. Guarded at index 0 so a name that
+        // is nothing but an extension keeps it rather than becoming empty.
+        var extension = name.LastIndexOf('.');
+        if (extension > 0)
         {
-            var name = Path.GetFileNameWithoutExtension(trimmed);
-            return string.IsNullOrEmpty(name) ? trimmed : name;
+            name = name[..extension];
         }
-        catch (ArgumentException)
-        {
-            return trimmed;
-        }
+
+        return name.Length == 0 ? trimmed : name;
     }
 }
