@@ -63,8 +63,12 @@ public sealed class DualSenseEffectEncoderTests
 
         Assert.Equal(0x04, report[0] & 0x04);
         Assert.Equal(0x21, report[10]);            // effect kind
-        Assert.InRange(report[11], 126, 130);      // start position
-        Assert.Equal(255, report[12]);             // strength
+
+        // Zones from the halfway point to the end are engaged. The mask is
+        // ten bits over two bytes, so the upper zones land in the second.
+        var activeZones = report[11] | (report[12] << 8);
+        Assert.Equal(0, activeZones & 0b0000_0111);   // below the start: idle
+        Assert.Equal(0b11_1111_0000, activeZones & 0b11_1111_0000);
     }
 
     [Fact]
@@ -74,8 +78,9 @@ public sealed class DualSenseEffectEncoderTests
 
         Assert.Equal(0x08, report[0] & 0x08);
         Assert.Equal(0x21, report[21]);
-        Assert.InRange(report[22], 126, 130);
-        Assert.Equal(255, report[23]);
+
+        var activeZones = report[22] | (report[23] << 8);
+        Assert.Equal(0b11_1111_0000, activeZones & 0b11_1111_0000);
     }
 
     [Fact]
@@ -92,24 +97,69 @@ public sealed class DualSenseEffectEncoderTests
         Assert.Equal(0x0C, report[0] & 0x0C);
     }
 
+    /// <summary>
+    /// Weapon addresses its band as a mask with exactly two bits set — the
+    /// zone the resistance starts in and the one it gives way at — not as
+    /// two position bytes.
+    /// </summary>
     [Fact]
     public void WeaponModeCarriesBothEdgesOfItsBand()
     {
         var report = Encode(right: Trigger(AdaptiveTriggerMode.Weapon, start: 0.25f, end: 0.75f, strength: 1f));
 
         Assert.Equal(0x25, report[10]);
-        Assert.InRange(report[11], 62, 66);
-        Assert.InRange(report[12], 189, 193);
-        Assert.Equal(255, report[13]);
+
+        var band = report[11] | (report[12] << 8);
+        Assert.Equal(2, System.Numerics.BitOperations.PopCount((uint)band));
+        Assert.Equal(1 << 2, band & (1 << 2));   // start zone
+        Assert.Equal(1 << 7, band & (1 << 7));   // stop zone
+        Assert.Equal(7, report[13]);             // strength, zero-based
     }
 
+    /// <summary>
+    /// The regression this file exists for.
+    /// </summary>
+    /// <remarks>
+    /// Frequency is the NINTH parameter of effect 0x26, not the third.
+    /// Written at the third it landed inside the per-zone amplitude mask
+    /// and left the frequency byte at zero — a buzz with no rate to buzz
+    /// at, which the pad performs as complete silence. The effect id, the
+    /// enable bit and the write all looked correct, so nothing anywhere
+    /// reported a problem.
+    /// </remarks>
     [Fact]
     public void VibrationModeCarriesItsFrequency()
     {
         var report = Encode(right: Trigger(AdaptiveTriggerMode.Vibration, hz: 40));
 
         Assert.Equal(0x26, report[10]);
-        Assert.Equal(40, report[13]);
+        Assert.Equal(40, report[19]);            // block[9]
+        Assert.NotEqual(0, report[11] | report[12]);   // some zone is engaged
+    }
+
+    /// <summary>
+    /// A buzz at no frequency is silence, so it is reported as "off"
+    /// rather than arming a trigger that cannot do anything.
+    /// </summary>
+    [Fact]
+    public void VibrationWithNoFrequencyIsNotArmed()
+    {
+        var report = Encode(right: Trigger(AdaptiveTriggerMode.Vibration, hz: 0));
+
+        Assert.Equal(0x05, report[10]);
+    }
+
+    /// <summary>
+    /// Zero strength likewise. Every extended effect encodes amplitude as
+    /// level-minus-one, so a zero would wrap to seven — full strength —
+    /// which is the opposite of what was asked for.
+    /// </summary>
+    [Fact]
+    public void ZeroStrengthIsNotArmed()
+    {
+        var report = Encode(right: Trigger(AdaptiveTriggerMode.Feedback, strength: 0f));
+
+        Assert.Equal(0x05, report[10]);
     }
 
     [Fact]
@@ -205,8 +255,21 @@ public sealed class DualSenseEffectEncoderTests
     {
         var report = Encode(right: Trigger(AdaptiveTriggerMode.Feedback, start: 5f, strength: 9f));
 
-        Assert.True(report[11] <= 254, "start must leave room for the effect");
-        Assert.Equal(255, report[12]);
+        // These come from user-editable sliders, so out-of-range has to
+        // land somewhere valid rather than wrapping. A start past the end
+        // of travel keeps only the last zone, and an over-strength value
+        // saturates at the firmware's top level rather than overflowing
+        // the three bits each zone gets.
+        Assert.Equal(0x21, report[10]);
+
+        var activeZones = report[11] | (report[12] << 8);
+        Assert.Equal(1 << 9, activeZones);
+
+        var amplitudeZones = report[13]
+            | (report[14] << 8)
+            | (report[15] << 16)
+            | (report[16] << 24);
+        Assert.Equal(7, (amplitudeZones >> 27) & 0x07);
     }
 
     [Fact]

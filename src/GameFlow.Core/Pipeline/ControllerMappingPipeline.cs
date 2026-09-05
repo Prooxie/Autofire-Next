@@ -160,7 +160,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
     /// </summary>
     private void ProcessGestures(
         TouchpadMapRule rule, ControllerSnapshot physical,
-        Dictionary<ButtonId, bool> buttons, DateTimeOffset now)
+        ref ButtonMask buttons, DateTimeOffset now)
     {
         if (!rule.GesturesEnabled || rule.Gestures.Count == 0 || rule.Mode == RuleMode.DoNothing)
         {
@@ -206,7 +206,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
     /// than set to false: the button may be genuinely held by the
     /// player's own thumb, and forcing it false would fight them.
     /// </summary>
-    private void ApplyGestureHolds(Dictionary<ButtonId, bool> buttons, DateTimeOffset now)
+    private void ApplyGestureHolds(ref ButtonMask buttons, DateTimeOffset now)
     {
         if (gestureHoldsUntil.Count == 0)
         {
@@ -245,7 +245,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
     /// stay false. 8-way diagonals hold two adjacent buttons at once
     /// (the standard way to represent 8 directions on 4 buttons).
     /// </summary>
-    private static void ApplyWedgeDpad(float dx, float dy, float deadzone, bool eightWay, Dictionary<ButtonId, bool> buttons)
+    private static void ApplyWedgeDpad(float dx, float dy, float deadzone, bool eightWay, ref ButtonMask buttons)
     {
         buttons[ButtonId.DpadUp] = false;
         buttons[ButtonId.DpadDown] = false;
@@ -341,8 +341,27 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
     private readonly ControlScriptRule[] controlScriptRules = profile.Rules.OfType<ControlScriptRule>().ToArray();
     private readonly StickThresholdRule[] stickThresholdRules = profile.Rules.OfType<StickThresholdRule>().ToArray();
 
+    /// <summary>
+    /// Note text for each entry of <see cref="buttonRemapRules"/>, formatted
+    /// once at construction and indexed in lockstep with it.
+    ///
+    /// <para>
+    /// A held remap re-emits its note on every single frame, and a blocking
+    /// remap emits one unconditionally — so interpolating inline formatted
+    /// the same handful of strings up to a thousand times a second per slot,
+    /// to feed a diagnostic strip that only ever displays the latest frame.
+    /// The text depends solely on the rule's buttons, which cannot change
+    /// without a new pipeline being built.
+    /// </para>
+    /// </summary>
+    private readonly string[] buttonRemapNotes = profile.Rules.OfType<ButtonRemapRule>()
+        .Select(r => $"Remapped {r.SourceButton} -> {r.TargetButton}.").ToArray();
+
+    private readonly string[] buttonBlockedNotes = profile.Rules.OfType<ButtonRemapRule>()
+        .Select(r => $"Blocked {r.SourceButton}.").ToArray();
+
     // Issue #12: Track previous button states for rising-edge detection on freeze rules.
-    private readonly Dictionary<ButtonId, bool> previousButtonStates = [];
+    private ButtonMask previousButtonStates = ButtonMask.Empty;
 
     /// <summary>Dense array size for the ControlScriptRule bool[] round-trip -- see the Script pass in <see cref="Process"/>.</summary>
     private static readonly int buttonIdCount = Enum.GetValues<ButtonId>().Length;
@@ -376,7 +395,11 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
     public ControllerFrameResult Process(ControllerSnapshot physical, DateTimeOffset now)
     {
-        var notes = new List<string>();
+        // Allocated on first use, not up front. Notes are a diagnostic strip
+        // in the shell that only ever shows the LATEST frame, refreshed at
+        // the UI rate; the overwhelming majority of ticks produce none at
+        // all, and this method runs up to 1000 times a second per slot.
+        List<string>? notes = null;
         var buttons = ButtonState.Clone(physical.Buttons);
 
         // Shift layers resolve FIRST — every subsequent pass gates
@@ -385,7 +408,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
         var layerNote = shiftLayerResolver.Resolve(profile.ShiftLayers, physical, now);
         if (layerNote is not null)
         {
-            notes.Add(layerNote);
+            (notes ??= []).Add(layerNote);
         }
 
         // RuleToggleRule pass — must run before any rule whose Enabled
@@ -415,7 +438,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
                         runtimeDisabledIds.Add(targetId);
                     }
                 }
-                notes.Add($"Toggled {rule.TargetRuleIds.Count} rule(s) via {rule.SourceButton}.");
+                (notes ??= []).Add($"Toggled {rule.TargetRuleIds.Count} rule(s) via {rule.SourceButton}.");
             }
             toggleSourceWasPressed[rule.Id] = pressed;
 
@@ -509,8 +532,9 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             state.PositiveWasPressed = posNow;
         }
 
-        foreach (var rule in buttonRemapRules)
+        for (int i = 0; i < buttonRemapRules.Length; i++)
         {
+            var rule = buttonRemapRules[i];
             if (!IsActive(rule))
             {
                 continue;
@@ -524,7 +548,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             if (rule.Mode == RuleMode.DoNothing)
             {
                 buttons[rule.SourceButton] = false;
-                notes.Add($"Blocked {rule.SourceButton}.");
+                (notes ??= []).Add(buttonBlockedNotes[i]);
                 continue;
             }
 
@@ -539,7 +563,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
                 buttons[rule.SourceButton] = false;
             }
 
-            notes.Add($"Remapped {rule.SourceButton} -> {rule.TargetButton}.");
+            (notes ??= []).Add(buttonRemapNotes[i]);
         }
 
         foreach (var rule in buttonAutofireRules)
@@ -600,7 +624,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
                 executor = new MultiButtonAutofireExecutor(rule);
                 multiButtonExecutors[rule.Id] = executor;
             }
-            executor.Apply(physical, buttons, now);
+            executor.Apply(physical, ref buttons, now);
         }
 
         // ButtonComboRule: fully built (ButtonComboExecutor.cs) since
@@ -638,9 +662,9 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             // by (int)ButtonId directly) — same round-trip as the Script
             // pass below, scoped to just this rule's execution.
             var comboArray = new bool[buttonIdCount];
-            foreach (var (id, pressed) in buttons)
+            foreach (var id in buttons)
             {
-                comboArray[(int)id] = pressed;
+                comboArray[(int)id] = true;
             }
 
             comboExecutor.Apply(physical, comboArray, now);
@@ -710,7 +734,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
             var latch = GetOrCreateFreezeLatch(rule);
             var buttonNowPressed = physical.IsPressed(rule.ActivationButton);
-            var buttonWasPressed = previousButtonStates.GetValueOrDefault(rule.ActivationButton);
+            var buttonWasPressed = previousButtonStates[rule.ActivationButton];
             previousButtonStates[rule.ActivationButton] = buttonNowPressed;
 
             // Issue #12: Capture the stick vector only at the RISING EDGE of the
@@ -898,7 +922,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
                 continue;
             }
 
-            ProcessGestures(rule, physical, buttons, now);
+            ProcessGestures(rule, physical, ref buttons, now);
 
             var state = GetOrCreateTouchAnchor(rule.Id);
             var down = rule.Mode != RuleMode.DoNothing && physical.TouchDown;
@@ -928,7 +952,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
                 if (rule.DpadEnabled)
                 {
-                    ApplyWedgeDpad(dx, dy, rule.DpadDeadzoneRadius, rule.DpadEightWay, buttons);
+                    ApplyWedgeDpad(dx, dy, rule.DpadDeadzoneRadius, rule.DpadEightWay, ref buttons);
                 }
 
                 if (rule.MouseEnabled && state.WasDown)
@@ -980,7 +1004,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
         // of its pulse — the gesture is the more deliberate act — and
         // BEFORE multi-source rows and scripts, so both can read
         // gesture-driven buttons as ordinary sources.
-        ApplyGestureHolds(buttons, now);
+        ApplyGestureHolds(ref buttons, now);
 
         // Multi-source mapping rows: many inputs, one output, a combine
         // mode (or formula) deciding how they fold together. Sources
@@ -1004,7 +1028,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             }
             if (rule.Mode == RuleMode.DoNothing)
             {
-                WriteMapTarget(rule, 0f, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger, buttons);
+                WriteMapTarget(rule, 0f, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger, ref buttons);
                 continue;
             }
 
@@ -1023,7 +1047,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
                     compiledFormulas[rule.Id] = evaluator;
                     if (evaluator is null)
                     {
-                        notes.Add($"Formula in '{rule.Name}' failed to compile: {formulaError}");
+                        (notes ??= []).Add($"Formula in '{rule.Name}' failed to compile: {formulaError}");
                     }
                 }
                 if (evaluator is null)
@@ -1041,11 +1065,11 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             {
                 foreach (var source in rule.Sources)
                 {
-                    SuppressMapSource(source, buttons, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger);
+                    SuppressMapSource(source, ref buttons, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger);
                 }
             }
 
-            WriteMapTarget(rule, combined, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger, buttons);
+            WriteMapTarget(rule, combined, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger, ref buttons);
         }
 
         foreach (var rule in controlScriptRules)
@@ -1067,12 +1091,12 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
             // LuaScriptEngine wants a dense bool[] indexed by (int)ButtonId
             // (its press()/release() callbacks index it directly); the
             // rest of this method carries button state as a
-            // Dictionary<ButtonId,bool>. Round-trip through the array
+            // ButtonMask. Round-trip through the array
             // only for the duration of this one rule's execution.
             var buttonArray = new bool[buttonIdCount];
-            foreach (var (id, pressed) in buttons)
+            foreach (var id in buttons)
             {
-                buttonArray[(int)id] = pressed;
+                buttonArray[(int)id] = true;
             }
 
             // virtualBefore isn't read by Execute today (checked against
@@ -1115,7 +1139,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
                 DeviceName = $"{physical.DeviceName} / virtual"
             };
 
-        return new ControllerFrameResult(physical with { Timestamp = now }, virtualSnapshot, notes)
+        return new ControllerFrameResult(physical with { Timestamp = now }, virtualSnapshot, (IReadOnlyList<string>?)notes ?? [])
         {
             ActiveLayerId = shiftLayerResolver.ActiveLayerId,
             MouseDeltaX = mouseDeltaX,
@@ -1124,17 +1148,40 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
     }
 
     /// <summary>
+    /// The two sticks after <see cref="StickThresholdRule"/> conditioning,
+    /// indexable by <see cref="StickId"/>.
+    ///
+    /// <para>
+    /// A struct rather than a <see cref="Dictionary{TKey,TValue}"/> because
+    /// <see cref="StickId"/> has exactly two members and this is rebuilt on
+    /// every tick of every slot: a two-entry dictionary meant a heap
+    /// allocation plus hashing on the hottest path in the app, to hold
+    /// what fits in two fields.
+    /// </para>
+    /// </summary>
+    private struct SourceStickMap(StickVector left, StickVector right)
+    {
+        private StickVector left = left;
+        private StickVector right = right;
+
+        public StickVector this[StickId stickId]
+        {
+            readonly get => stickId == StickId.Left ? left : right;
+            set
+            {
+                if (stickId == StickId.Left) { left = value; } else { right = value; }
+            }
+        }
+    }
+
+    /// <summary>
     /// Builds a threshold-adjusted stick map. This map now also seeds the baseline
     /// output stick values (leftStick, rightStick) so that StickThresholdRule
     /// deadzones and amplification are reflected in the final virtual output.
     /// </summary>
-    private Dictionary<StickId, StickVector> BuildSourceStickMap(ControllerSnapshot snapshot)
+    private SourceStickMap BuildSourceStickMap(ControllerSnapshot snapshot)
     {
-        var map = new Dictionary<StickId, StickVector>
-        {
-            [StickId.Left] = snapshot.LeftStick,
-            [StickId.Right] = snapshot.RightStick
-        };
+        var map = new SourceStickMap(snapshot.LeftStick, snapshot.RightStick);
 
         foreach (var rule in stickThresholdRules)
         {
@@ -1174,13 +1221,13 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
     /// <summary>Reads one <see cref="MapSource"/> as a float from the accumulated working state. Button 0/1, trigger 0..1, axis -1..1, magnitude 0..1; Invert flips (1-v unsigned, -v signed).</summary>
     private static float ReadMapSource(
-        MapSource source, Dictionary<ButtonId, bool> buttons,
+        MapSource source, in ButtonMask buttons,
         StickVector leftStick, StickVector rightStick, float leftTrigger, float rightTrigger,
         ControllerSnapshot physical)
     {
         var value = source.Kind switch
         {
-            MapSourceKind.Button => buttons.GetValueOrDefault(source.Button) ? 1f : 0f,
+            MapSourceKind.Button => buttons[source.Button] ? 1f : 0f,
             MapSourceKind.StickAxisX => GetStick(leftStick, rightStick, source.Stick).X,
             MapSourceKind.StickAxisY => GetStick(leftStick, rightStick, source.Stick).Y,
             MapSourceKind.StickMagnitude => GetStick(leftStick, rightStick, source.Stick).Magnitude,
@@ -1259,7 +1306,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
 
     /// <summary>Zeroes one source's own contribution in the virtual output.</summary>
     private static void SuppressMapSource(
-        MapSource source, Dictionary<ButtonId, bool> buttons,
+        MapSource source, ref ButtonMask buttons,
         ref StickVector leftStick, ref StickVector rightStick, ref float leftTrigger, ref float rightTrigger)
     {
         switch (source.Kind)
@@ -1298,7 +1345,7 @@ public sealed class ControllerMappingPipeline(ProfileDocument profile) : IDispos
     private static void WriteMapTarget(
         MultiSourceMapRule rule, float combined,
         ref StickVector leftStick, ref StickVector rightStick, ref float leftTrigger, ref float rightTrigger,
-        Dictionary<ButtonId, bool> buttons)
+        ref ButtonMask buttons)
     {
         switch (rule.TargetKind)
         {

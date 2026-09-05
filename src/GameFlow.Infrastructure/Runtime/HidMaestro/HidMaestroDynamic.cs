@@ -18,12 +18,10 @@ internal sealed record DynamicControllerHandle(
     (ushort Vid, ushort Pid)? HardwareSignature);
 
 /// <summary>
-/// Runtime (reflection-based) bridge to HIDMaestro.Core. The compile-time
-/// path (<c>HIDMAESTRO_SDK</c>) is still preferred when the project is
-/// built against the SDK, but this loader means a user can simply drop
-/// <c>HIDMaestro.Core.dll</c> next to the executable (or into a
-/// <c>HIDMaestro</c> subfolder) and the real sink activates — no rebuild,
-/// no compile symbol.
+/// Runtime (reflection-based) bridge to HIDMaestro.Core, and the only way
+/// the SDK is bound. A user drops <c>HIDMaestro.Core.dll</c> next to the
+/// executable (or into a <c>HIDMaestro</c> subfolder) and the real sink
+/// activates — no rebuild, no compile symbol, no project reference.
 ///
 /// <para>
 /// Everything here is defensive and LOUD. Binding is all-or-nothing —
@@ -67,6 +65,7 @@ internal static class HidMaestroDynamic
     private static readonly TimeSpan NotFoundReprobeInterval = TimeSpan.FromSeconds(10);
 
     private static object? context;
+    private static HidMaestroDriverInitialization? driverInitialization;
     private static Type? profileType;         // HMProfile
     private static Type? controllerType;      // HMController
     private static Type? stateType;           // HMGamepadState
@@ -205,7 +204,9 @@ internal static class HidMaestroDynamic
             long l and >= 0 and <= int.MaxValue => (int)l,
             _ => null,
         };
-        _ = InvokeBestEffort(contextType, "InstallDriver", logger, out var installDriverFailure);
+        // Catalog discovery is read-only. InstallDriver performs a system-wide
+        // sweep, so invoke it only when the first output is actually created.
+        driverInitialization = new HidMaestroDriverInitialization(context);
 
         getProfile = contextType.GetMethod("GetProfile", [typeof(string)]);
 
@@ -252,15 +253,6 @@ internal static class HidMaestroDynamic
                 "device creation need administrator rights (SeLoadDriverPrivilege) — restart as Administrator " +
                 "if no virtual controller appears.");
         }
-        else if (installDriverFailure is not null)
-        {
-            status += $" WARNING: InstallDriver() failed ({installDriverFailure}); device creation may fail — see log.";
-            logger.LogWarning(
-                "HIDMaestro dynamic bridge resolved, but InstallDriver() failed ({Failure}). Device creation " +
-                "will likely fail until this is resolved.",
-                installDriverFailure);
-        }
-
         if (loadFailure is not null)
         {
             logger.LogWarning("HIDMaestro dynamic: LoadDefaultProfiles() failed ({Failure}); catalog lookups may miss.", loadFailure);
@@ -323,6 +315,43 @@ internal static class HidMaestroDynamic
             "picking '{Picked}'. If input doesn't arrive, this is the first thing to check.",
             candidates.Count, string.Join(", ", candidates.Select(c => c.Name)), candidates[0].Name);
         return candidates[0];
+    }
+
+    /// <summary>
+    /// Re-applies friendly names to every live virtual controller. Call once
+    /// after ALL of a rebuild's controllers exist, never per controller.
+    ///
+    /// <para>
+    /// The SDK documents a Windows PnP race this exists to close: creating a
+    /// second controller re-triggers driver-bind activity that overwrites the
+    /// FIRST one's friendly name. Any session with more than one slot
+    /// therefore ends up with a mis-named device unless the names are
+    /// re-applied after PnP settles, which is what this does — it polls for
+    /// every controller's HID child to reach DN_STARTED rather than sleeping
+    /// a fixed interval, so it costs well under a tenth of a second on a
+    /// machine that is keeping up.
+    /// </para>
+    ///
+    /// <para>
+    /// Best-effort by design: an SDK build without the method, or a failure
+    /// inside it, leaves the names as Windows left them and is not worth
+    /// failing a rebuild over.
+    /// </para>
+    /// </summary>
+    public static void FinalizeControllerNames(ILogger logger)
+    {
+        if (context is null)
+        {
+            return;
+        }
+
+        _ = InvokeBestEffort(context.GetType(), "FinalizeNames", logger, out var failure);
+        if (failure is not null)
+        {
+            logger.LogDebug(
+                "HIDMaestro dynamic: FinalizeNames() failed ({Failure}); virtual controller names may " +
+                "show the driver default.", failure);
+        }
     }
 
     /// <summary>
@@ -822,8 +851,12 @@ internal static class HidMaestroDynamic
             failure = status;
             return false;
         }
-        failure = null;
-        return true;
+        if (!IsProcessElevated)
+        {
+            failure = "Restart GameFlow as Administrator to create HIDMaestro controllers.";
+            return false;
+        }
+        return driverInitialization!.EnsureInstalled(out failure);
     }
 
     /// <summary>
@@ -981,7 +1014,7 @@ internal sealed class DynamicHidMaestroController : IDisposable
     private readonly MethodInfo submitState;
     private readonly ILogger logger;
     private readonly object boxedState;
-    private readonly object?[] submitArgs;
+    private readonly Action submitFrame;
 
     // v1.3.9+: HMGamepadState has no LeftStickX/RightStickX/LeftTrigger/etc
     // properties -- analog input goes through a single Axes dictionary,
@@ -1001,10 +1034,65 @@ internal sealed class DynamicHidMaestroController : IDisposable
     /// produce a working pad. Null here simply means this build cannot
     /// report charge, which is the state every build was in before.
     /// </remarks>
-    private readonly Setter? setBatteryLevel, setBatteryCharging, setBatteryFull;
+    private readonly Action<byte>? setBatteryLevel;
+    private readonly Action<bool>? setBatteryCharging, setBatteryFull;
+
+    /// <summary>
+    /// Calibrated motion members (g / deg/s), when the deployed SDK has
+    /// them. Optional for the same reason battery is: an older build
+    /// without them should still produce a working pad, just one that
+    /// reports no motion.
+    /// </summary>
+    private readonly Action<float>? setAccelGX, setAccelGY, setAccelGZ, setGyroDpsX, setGyroDpsY, setGyroDpsZ;
+
+    /// <summary>Two-finger touch surface members, when present.</summary>
+    private readonly Action<bool>? setTouch0Active;
+    private readonly Action<ushort>? setTouch0X, setTouch0Y;
+    private readonly Action<byte>? setTouch0Id;
+    private readonly Action<bool>? setTouch1Active;
+    private readonly Action<ushort>? setTouch1X, setTouch1Y;
+    private readonly Action<byte>? setTouch1Id;
+
+    /// <summary>
+    /// The OS device-instance id of the pad this bridge created, when the
+    /// SDK reports one.
+    /// </summary>
+    /// <remarks>
+    /// Read after construction as PnP settles and handed to
+    /// <see cref="VirtualDeviceIdentity"/>, which is what stops the pad
+    /// this process just created from coming back through SDL's
+    /// enumeration and being offered as an input source. Without it the
+    /// only remaining signal is a path substring, and the interface path
+    /// SDL reports for a HIDMaestro pad does not contain one — the
+    /// "hidmaestro" name lives on a sibling software node, not on the HID
+    /// interface.
+    /// </remarks>
+    public string? InstanceId { get; private set; }
+
+    /// <summary>
+    /// How long after creation to keep asking the SDK for the new pad's
+    /// instance id.
+    /// </summary>
+    /// <remarks>
+    /// The property is empty at the moment <c>CreateController</c>
+    /// returns: the device still has to be enumerated by PnP, which the
+    /// SDK documents as taking roughly 200 ms for a warm create. Reading
+    /// it once in the constructor therefore always came back null, and
+    /// the claim never happened.
+    /// </remarks>
+    private static readonly TimeSpan IdentitySettleWindow = TimeSpan.FromSeconds(10);
+
+    private DateTime identityDeadlineUtc;
+    private bool identityGaveUp;
+
+    public bool HasMotionFields { get; }
+
+    /// <summary>True when this SDK exposes the touch-surface members.</summary>
+    public bool HasTouchpadFields { get; }
     private readonly Type axesDictType;
     private readonly object? axisLeftX, axisLeftY, axisRightX, axisRightY, axisLeftTrigger, axisRightTrigger;
     private readonly bool hasAnyAxis;
+    private readonly Action<float>? writeLeftX, writeLeftY, writeRightX, writeRightY, writeLeftTrigger, writeRightTrigger;
     // Allocated once, reused every frame (SDK's own guidance: "Allocate
     // once and reuse" -- the boxed struct's Axes field holds a
     // REFERENCE to this, so mutating its values in Submit() never needs
@@ -1024,6 +1112,13 @@ internal sealed class DynamicHidMaestroController : IDisposable
     private bool disposed;
     private int consecutiveSubmitFailures;
     private const int FailureGiveUpThreshold = 300; // ~1-3s at typical tick rates
+
+    /// <summary>Last button mask and its box; see <see cref="BoxButtonMask"/>.</summary>
+    private ulong lastButtonMask;
+    private object? lastButtonBox;
+
+    /// <summary>Boxed hat values by direction name; see <see cref="BoxHat"/>.</summary>
+    private readonly Dictionary<string, object> hatBoxes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// False once submits have failed enough consecutive times in a row
@@ -1053,7 +1148,15 @@ internal sealed class DynamicHidMaestroController : IDisposable
 
         boxedState = Activator.CreateInstance(stateType)
             ?? throw new InvalidOperationException("HMGamepadState could not be instantiated.");
-        submitArgs = [boxedState];
+        // Reflection Invoke copies an in/ref struct back into its argument array,
+        // replacing the box. That leaves later field writes targeting an old box.
+        // A compiled call reads the same state box on every frame and avoids the
+        // per-frame reflection/copy-back allocation.
+        var state = stateType.IsValueType
+            ? Expression.Unbox(Expression.Constant(boxedState, typeof(object)), stateType)
+            : Expression.Convert(Expression.Constant(boxedState, typeof(object)), stateType);
+        var call = Expression.Call(Expression.Constant(controller), submitState, state);
+        submitFrame = Expression.Lambda<Action>(Expression.Block(call, Expression.Empty())).Compile();
 
         Setter? Bind(string name)
         {
@@ -1068,6 +1171,19 @@ internal sealed class DynamicHidMaestroController : IDisposable
                 return new Setter(property, property.PropertyType, property.SetValue);
             }
             return null;
+        }
+
+        Action<T>? BindValue<T>(string name)
+        {
+            var member = Bind(name);
+            if (member is null) return null;
+            var value = Expression.Parameter(typeof(T), "value");
+            var target = stateType.IsValueType
+                ? Expression.Unbox(Expression.Constant(boxedState, typeof(object)), stateType)
+                : Expression.Convert(Expression.Constant(boxedState, typeof(object)), stateType);
+            var assignment = Expression.Assign(Expression.MakeMemberAccess(target, member.Value.Member),
+                Expression.Convert(value, member.Value.TargetType));
+            return Expression.Lambda<Action<T>>(Expression.Block(assignment, Expression.Empty()), value).Compile();
         }
 
         var axes    = Bind("Axes");
@@ -1097,15 +1213,56 @@ internal sealed class DynamicHidMaestroController : IDisposable
         // Best-effort: present on HMGamepadState in current SDKs, absent
         // in older ones. See the field declarations for why these are not
         // part of the all-or-nothing bind above.
-        setBatteryLevel = Bind("BatteryLevel");
-        setBatteryCharging = Bind("BatteryCharging");
-        setBatteryFull = Bind("BatteryFull");
+        setBatteryLevel = BindValue<byte>("BatteryLevel");
+        setBatteryCharging = BindValue<bool>("BatteryCharging");
+        setBatteryFull = BindValue<bool>("BatteryFull");
         if (setBatteryLevel is null)
         {
             logger.LogDebug(
                 "HIDMaestro dynamic: HMGamepadState has no BatteryLevel member; " +
                 "the emitted pad will report whatever this SDK defaults to.");
         }
+
+        // Motion, in the SDK's CALIBRATED units (g and deg/s) rather than
+        // the raw Sony-firmware shorts beside them. GameFlow's snapshot
+        // carries SDL's values, and the SDK documents these fields as
+        // being in SDL's own sensor frame — "consumers that read motion
+        // FROM SDL submit those values verbatim" — so this path needs a
+        // unit conversion and no axis gymnastics.
+        setAccelGX = BindValue<float>("AccelGX");
+        setAccelGY = BindValue<float>("AccelGY");
+        setAccelGZ = BindValue<float>("AccelGZ");
+        setGyroDpsX = BindValue<float>("GyroDpsX");
+        setGyroDpsY = BindValue<float>("GyroDpsY");
+        setGyroDpsZ = BindValue<float>("GyroDpsZ");
+        HasMotionFields = setAccelGX is not null && setGyroDpsX is not null;
+
+        // Touch surface, two fingers, in the Sony native ranges the SDK
+        // documents (X 0..1919, Y 0..1079).
+        setTouch0Active = BindValue<bool>("TouchpadFinger0Active");
+        setTouch0X = BindValue<ushort>("TouchpadFinger0X");
+        setTouch0Y = BindValue<ushort>("TouchpadFinger0Y");
+        setTouch0Id = BindValue<byte>("TouchpadFinger0Id");
+        setTouch1Active = BindValue<bool>("TouchpadFinger1Active");
+        setTouch1X = BindValue<ushort>("TouchpadFinger1X");
+        setTouch1Y = BindValue<ushort>("TouchpadFinger1Y");
+        setTouch1Id = BindValue<byte>("TouchpadFinger1Id");
+        HasTouchpadFields = setTouch0Active is not null && setTouch0X is not null && setTouch0Y is not null;
+
+        // Identity is claimed lazily, not here — see EnsureIdentityClaimed.
+        identityDeadlineUtc = DateTime.UtcNow + IdentitySettleWindow;
+        EnsureIdentityClaimed();
+
+        // Information, not Debug: whether these optional fields bound at all
+        // is the first question asked when a virtual pad reports the wrong
+        // battery or no motion, and needing to raise the log level to find
+        // out means the answer is missing from every report that arrives.
+        {
+            logger.LogInformation(
+                "HIDMaestro dynamic: optional state fields — battery={Battery}, motion={Motion}, touchpad={Touchpad}.",
+                setBatteryLevel is not null, HasMotionFields, HasTouchpadFields);
+        }
+
         axesDictType = setAxes.TargetType;
 
         // Discover WHICH HID usage each logical slot (left stick X/Y,
@@ -1143,6 +1300,12 @@ internal sealed class DynamicHidMaestroController : IDisposable
             return value is not null && Convert.ToInt64(value) != 0 ? value : null;
         }
 
+        object AxisByName(string name)
+        {
+            var axisType = axesDictType.GetGenericArguments()[0];
+            return Enum.Parse(axisType, name);
+        }
+
         var stick0 = sticks.Count > 0 ? sticks[0] : null;
         var stick1 = sticks.Count > 1 ? sticks[1] : null;
         var trigger0 = triggers.Count > 0 ? triggers[0] : null;
@@ -1154,6 +1317,23 @@ internal sealed class DynamicHidMaestroController : IDisposable
         axisRightY = AxisOrNull(stick1, "YAxis");
         axisLeftTrigger  = AxisOrNull(trigger0, "Axis");
         axisRightTrigger = AxisOrNull(trigger1, "Axis");
+
+        // Profiles backed by opaque vendor reports (including Valve pads)
+        // intentionally expose no simple layout. HIDMaestro's own
+        // StandardAxes helper falls back to these canonical usages, and
+        // SubmitState resolves them through the profile's report codec.
+        if (sticks.Count == 0)
+        {
+            axisLeftX = AxisByName("X");
+            axisLeftY = AxisByName("Y");
+            axisRightX = AxisByName("Rx");
+            axisRightY = AxisByName("Ry");
+        }
+        if (triggers.Count == 0)
+        {
+            axisLeftTrigger = AxisByName("Z");
+            axisRightTrigger = AxisByName("Rz");
+        }
         hasAnyAxis = axisLeftX is not null || axisLeftY is not null || axisRightX is not null
             || axisRightY is not null || axisLeftTrigger is not null || axisRightTrigger is not null;
 
@@ -1205,10 +1385,33 @@ internal sealed class DynamicHidMaestroController : IDisposable
         Alias("LeftThumb", "LeftStick", "LeftStickClick", "L3", "LS", "ThumbLeft", "LeftThumbstick");
         Alias("RightThumb", "RightStick", "RightStickClick", "R3", "RS", "ThumbRight", "RightThumbstick");
         Alias("Guide", "Home", "Xbox", "PS", "System");
+        Alias("Touchpad", "TouchpadClick", "TouchPad", "Pad");
+        Alias("LeftPaddle", "LeftPaddle1", "Paddle3", "P3", "LeftBackButton");
+        Alias("RightPaddle", "RightPaddle1", "Paddle1", "P1", "RightBackButton");
+        Alias("LeftPaddle2", "LeftFn", "Paddle4", "P4");
+        Alias("RightPaddle2", "RightFn", "Paddle2", "P2");
+        Alias("Misc1", "Mute", "MicMute", "Capture", "Share");
 
         axesInstance = (System.Collections.IDictionary)(Activator.CreateInstance(axesDictType)
             ?? throw new InvalidOperationException($"Could not instantiate {axesDictType.Name} for HMGamepadState.Axes."));
         setAxes.Apply(boxedState, axesInstance);
+
+        // Typed dictionary writes avoid boxing each float through IDictionary.
+        Action<float>? BindAxis(object? axis)
+        {
+            if (axis is null) return null;
+            var value = Expression.Parameter(typeof(float), "value");
+            var item = Expression.Property(Expression.Constant(axesInstance, axesDictType), "Item",
+                Expression.Constant(axis, axis.GetType()));
+            return Expression.Lambda<Action<float>>(
+                Expression.Block(Expression.Assign(item, value), Expression.Empty()), value).Compile();
+        }
+        writeLeftX = BindAxis(axisLeftX);
+        writeLeftY = BindAxis(axisLeftY);
+        writeRightX = BindAxis(axisRightX);
+        writeRightY = BindAxis(axisRightY);
+        writeLeftTrigger = BindAxis(axisLeftTrigger);
+        writeRightTrigger = BindAxis(axisRightTrigger);
 
         SubscribeOutputEvents();
     }
@@ -1291,15 +1494,77 @@ internal sealed class DynamicHidMaestroController : IDisposable
         try
         {
             var source = ReadMember(packet, "Source");
-            if (source is null || Convert.ToInt32(source) != 2) // HMOutputSource.XInput
+            var sourceValue = source is null ? -1 : Convert.ToInt32(source);
+
+            // One line the first time a host writes anything to this pad.
+            // "Rumble does not work" has half a dozen possible stopping
+            // points between the game and the motor, and this is the
+            // first: it says whether output is reaching GameFlow at all,
+            // and in which form.
+            var readBytes = TryReadBytes(ReadMember(packet, "Data"), out var bytes);
+
+            // One line per source, with the payload. A packet whose length
+            // the decoder does not recognise is otherwise indistinguishable
+            // from no packet arriving at all, and the two have completely
+            // different causes.
+            if (firstOutputLogged.Add(sourceValue))
+            {
+                logger.LogInformation(
+                    "HIDMaestro dynamic: first output packet from the host — source={Source} ({SourceName}), " +
+                    "reportId={ReportId}, {Length} byte(s): {Payload}",
+                    sourceValue,
+                    sourceValue switch
+                    {
+                        0 => "HidOutput", 1 => "HidFeature", 2 => "XInput", 3 => "HidFeatureRead",
+                        _ => "unknown",
+                    },
+                    ReadMember(packet, "ReportId"),
+                    readBytes ? bytes.Length : -1,
+                    readBytes ? Convert.ToHexString(bytes.Span) : "<unreadable>");
+            }
+
+            if (sourceValue != 2) // HMOutputSource.XInput
             {
                 return;
             }
 
-            if (TryReadBytes(ReadMember(packet, "Data"), out var bytes)
-                && HidMaestroRumbleDecoder.TryDecodeXInput(bytes.Span, out var low, out var high))
+            if (!readBytes)
             {
+                return;
+            }
+
+            if (HidMaestroRumbleDecoder.TryDecodeXInput(bytes.Span, out var low, out var high))
+            {
+                if (!xinputRumbleLogged)
+                {
+                    xinputRumbleLogged = true;
+                    logger.LogInformation(
+                        "HIDMaestro dynamic: first XInput rumble decoded — low={Low:F2} high={High:F2}.",
+                        low, high);
+                }
+
                 RumbleReceived?.Invoke(low, high);
+            }
+            else if (unrecognisedXInputShapes.Add(bytes.Length))
+            {
+                // Not necessarily a dropped rumble, and saying so was
+                // actively misleading. XUSB carries more than vibration on
+                // this channel — an LED/index assignment arrives the moment
+                // Windows binds the pad, before any game is running — and
+                // the shapes the decoder knows are the two HIDMaestro
+                // documents. An unknown shape here is an unknown shape,
+                // nothing more; recognised packets on the same pad continue
+                // to be decoded and delivered.
+                //
+                // Logged once per distinct length rather than once per pad,
+                // so a shape that only ever appears while a game is actually
+                // vibrating is still visible against the startup chatter.
+                logger.LogInformation(
+                    "HIDMaestro dynamic: ignored an XInput output packet in a shape the vibration " +
+                    "decoder does not know — {Length} byte(s): {Payload}. This is expected for the " +
+                    "LED/index packets Windows sends when a pad is bound; it only indicates a problem " +
+                    "if it coincides with rumble being requested and not felt.",
+                    bytes.Length, Convert.ToHexString(bytes.Span));
             }
         }
         catch (Exception exception)
@@ -1307,6 +1572,31 @@ internal sealed class DynamicHidMaestroController : IDisposable
             LogOutputWarningOnce(exception);
         }
     }
+
+    /// <summary>Output sources already reported once; see OnOutputReceived.</summary>
+    private readonly HashSet<int> firstOutputLogged = [];
+
+    private bool decodedRumbleLogged;
+
+    private bool xinputRumbleLogged;
+
+    /// <summary>XInput payload lengths already reported as unrecognised.</summary>
+    private readonly HashSet<int> unrecognisedXInputShapes = [];
+
+    /// <summary>Declined reports described so far; see OnOutputDecoded.</summary>
+    private int declinedReportsLogged;
+
+    private const int MaxDeclinedReportsLogged = 6;
+
+    /// <summary>Renders a decoded field value compactly for the log.</summary>
+    private static string Describe(object? value) => value switch
+    {
+        null => "null",
+        byte b => "0x" + b.ToString("X2"),
+        ReadOnlyMemory<byte> m => "0x" + Convert.ToHexString(m.Span),
+        byte[] a => "0x" + Convert.ToHexString(a),
+        _ => value.ToString() ?? "?",
+    };
 
     private void OnOutputDecoded(object? _, object? eventArgs)
     {
@@ -1325,10 +1615,43 @@ internal sealed class DynamicHidMaestroController : IDisposable
                 return;
             }
 
-            if (ReadMember(eventArgs, "Fields") is IReadOnlyDictionary<string, object> fields
-                && HidMaestroRumbleDecoder.TryDecodeSemanticFields(fields, out var low, out var high))
+            if (ReadMember(eventArgs, "Fields") is not IReadOnlyDictionary<string, object> fields)
             {
+                return;
+            }
+
+            if (HidMaestroRumbleDecoder.TryDecodeSemanticFields(fields, out var low, out var high))
+            {
+                if (!decodedRumbleLogged)
+                {
+                    decodedRumbleLogged = true;
+                    logger.LogInformation(
+                        "HIDMaestro dynamic: first decoded rumble from the host — low={Low:F2} high={High:F2}.",
+                        low, high);
+                }
+
                 RumbleReceived?.Invoke(low, high);
+            }
+            else if (declinedReportsLogged < MaxDeclinedReportsLogged)
+            {
+                // Reached the decoder and it declined. Logs the VALUES, not
+                // just the field names: the decision turns on the Sony
+                // validity flags, so the flags and the motor bytes together
+                // are the only way to tell a correct rejection (an LED-only
+                // packet, whose zero motors are padding) from a wrong one
+                // (a genuine rumble request whose flags we misread).
+                //
+                // Several reports rather than one, because the first report
+                // a host sends is almost always LED or configuration — it
+                // would otherwise consume the single log slot and the actual
+                // rumble packet would never be described.
+                declinedReportsLogged++;
+                logger.LogInformation(
+                    "HIDMaestro dynamic: decoded output report {Index}/{Max} carried no rumble the validity " +
+                    "flags authorise. Fields: {Fields}",
+                    declinedReportsLogged,
+                    MaxDeclinedReportsLogged,
+                    string.Join(", ", fields.Select(f => $"{f.Key}={Describe(f.Value)}")));
             }
         }
         catch (Exception exception)
@@ -1399,6 +1722,125 @@ internal sealed class DynamicHidMaestroController : IDisposable
     }
 
     /// <summary>
+    /// One frame of motion, already converted to the SDK's units.
+    /// <see cref="Present"/> is false on a pad with no sensor, which is
+    /// what keeps "held perfectly still" distinguishable from "no gyro
+    /// here" — writing zeroes for the latter would claim a reading the
+    /// hardware never produced.
+    /// </summary>
+    /// <param name="Present">False on a pad with no motion sensor; nothing is written.</param>
+    /// <param name="AccelG">Acceleration in g, SDL sensor frame.</param>
+    /// <param name="GyroDps">Angular velocity in degrees per second, same frame.</param>
+    public readonly record struct MotionSubmission(
+        bool Present,
+        (float X, float Y, float Z) AccelG,
+        (float X, float Y, float Z) GyroDps)
+    {
+        public static readonly MotionSubmission None = new(false, default, default);
+    }
+
+    /// <summary>
+    /// One frame of the touch surface, in the Sony native ranges
+    /// (X 0..1919, Y 0..1079) the SDK documents.
+    /// </summary>
+    public readonly record struct TouchSubmission(
+        bool Finger0Down, ushort Finger0X, ushort Finger0Y, byte Finger0Id,
+        bool Finger1Down, ushort Finger1X, ushort Finger1Y, byte Finger1Id)
+    {
+        public static readonly TouchSubmission None = default;
+    }
+
+    private void WriteMotion(in MotionSubmission motion)
+    {
+        if (!HasMotionFields)
+        {
+            return;
+        }
+
+        // The SDK state is reused. Clear the previous sensor values when the
+        // source disconnects or is replaced by a source without motion.
+        var current = motion.Present ? motion : MotionSubmission.None;
+        setAccelGX?.Invoke(current.AccelG.X);
+        setAccelGY?.Invoke(current.AccelG.Y);
+        setAccelGZ?.Invoke(current.AccelG.Z);
+        setGyroDpsX?.Invoke(current.GyroDps.X);
+        setGyroDpsY?.Invoke(current.GyroDps.Y);
+        setGyroDpsZ?.Invoke(current.GyroDps.Z);
+    }
+
+    private void WriteTouch(in TouchSubmission touch)
+    {
+        if (!HasTouchpadFields)
+        {
+            return;
+        }
+
+        // Written every frame including the all-released one: a finger
+        // that lifts has to be reported as lifted, or the emitted pad
+        // holds the last contact forever.
+        setTouch0Active?.Invoke(touch.Finger0Down);
+        setTouch0X?.Invoke(touch.Finger0X);
+        setTouch0Y?.Invoke(touch.Finger0Y);
+        setTouch0Id?.Invoke(touch.Finger0Id);
+
+        setTouch1Active?.Invoke(touch.Finger1Down);
+        setTouch1X?.Invoke(touch.Finger1X);
+        setTouch1Y?.Invoke(touch.Finger1Y);
+        setTouch1Id?.Invoke(touch.Finger1Id);
+    }
+
+    /// <summary>
+    /// Boxed <c>HMButton</c> value for a button mask, memoised on the last
+    /// one used.
+    ///
+    /// <para>
+    /// <see cref="Enum.ToObject(Type, ulong)"/> allocates a box every call,
+    /// and this runs once per frame per slot — up to 1000 times a second —
+    /// even though the mask is unchanged on the overwhelming majority of
+    /// frames (a human cannot change a button state every millisecond).
+    /// Reusing the box is safe because the setter copies the value into the
+    /// state struct's field rather than retaining the reference.
+    /// </para>
+    /// </summary>
+    private object BoxButtonMask(ulong mask)
+    {
+        if (lastButtonBox is not null && lastButtonMask == mask)
+        {
+            return lastButtonBox;
+        }
+
+        lastButtonMask = mask;
+        lastButtonBox = Enum.ToObject(buttonEnumType, mask);
+        return lastButtonBox;
+    }
+
+    /// <summary>
+    /// Boxed <c>HMHat</c> value for a direction name, cached per name.
+    ///
+    /// <para>
+    /// The name comes from a fixed set of nine directions, but this used to
+    /// run a case-insensitive <see cref="Enum.Parse(Type, string, bool)"/>
+    /// inside a try/catch on every frame — a string search plus a box, to
+    /// re-derive one of nine constants. Unknown names still resolve to the
+    /// zero value, and are cached too so a bad name cannot reintroduce a
+    /// per-frame exception.
+    /// </para>
+    /// </summary>
+    private object BoxHat(string hatName)
+    {
+        if (hatBoxes.TryGetValue(hatName, out var cached))
+        {
+            return cached;
+        }
+
+        object hat;
+        try { hat = Enum.Parse(hatEnumType, hatName, ignoreCase: true); }
+        catch (ArgumentException) { hat = Enum.ToObject(hatEnumType, 0); }
+        hatBoxes[hatName] = hat;
+        return hat;
+    }
+
+    /// <summary>
     /// Submits one input frame. Sticks in [-1,1], triggers in [0,1].
     /// Returns false if the underlying reflected call failed — callers
     /// should count consecutive failures and stop calling after a few,
@@ -1407,12 +1849,15 @@ internal sealed class DynamicHidMaestroController : IDisposable
     public bool Submit(
         float lx, float ly, float rx, float ry, float lt, float rt,
         IReadOnlyList<(string ButtonName, bool Down)> buttons, string hatName,
-        byte batteryLevel, bool batteryCharging, bool batteryFull)
+        byte batteryLevel, bool batteryCharging, bool batteryFull,
+        in MotionSubmission motion, in TouchSubmission touch)
     {
         if (disposed)
         {
             return false;
         }
+
+        EnsureIdentityClaimed();
 
         try
         {
@@ -1420,12 +1865,12 @@ internal sealed class DynamicHidMaestroController : IDisposable
             // with 0.5 = center on signed axes (StandardAxes' contract).
             // Triggers arrive already [0,1] (0 = released), which IS the
             // unsigned-axis convention, so they pass through unscaled.
-            if (axisLeftX is not null) { axesInstance[axisLeftX] = (lx + 1f) * 0.5f; }
-            if (axisLeftY is not null) { axesInstance[axisLeftY] = (ly + 1f) * 0.5f; }
-            if (axisRightX is not null) { axesInstance[axisRightX] = (rx + 1f) * 0.5f; }
-            if (axisRightY is not null) { axesInstance[axisRightY] = (ry + 1f) * 0.5f; }
-            if (axisLeftTrigger is not null) { axesInstance[axisLeftTrigger] = lt; }
-            if (axisRightTrigger is not null) { axesInstance[axisRightTrigger] = rt; }
+            writeLeftX?.Invoke((NormalizeAxis(lx, -1f) + 1f) * 0.5f);
+            writeLeftY?.Invoke((NormalizeAxis(ly, -1f) + 1f) * 0.5f);
+            writeRightX?.Invoke((NormalizeAxis(rx, -1f) + 1f) * 0.5f);
+            writeRightY?.Invoke((NormalizeAxis(ry, -1f) + 1f) * 0.5f);
+            writeLeftTrigger?.Invoke(NormalizeAxis(lt, 0f));
+            writeRightTrigger?.Invoke(NormalizeAxis(rt, 0f));
 
             ulong mask = 0;
             foreach (var (name, down) in buttons)
@@ -1445,22 +1890,21 @@ internal sealed class DynamicHidMaestroController : IDisposable
                         name, string.Join(", ", buttonValues.Keys));
                 }
             }
-            setButtons.Apply(boxedState, Enum.ToObject(buttonEnumType, mask));
-
-            object hat;
-            try { hat = Enum.Parse(hatEnumType, hatName, ignoreCase: true); }
-            catch { hat = Enum.ToObject(hatEnumType, 0); }
-            setHat.Apply(boxedState, hat);
+            setButtons.Apply(boxedState, BoxButtonMask(mask));
+            setHat.Apply(boxedState, BoxHat(hatName));
 
             // Charge, when this SDK exposes it. Leaving these at their
             // default is not neutral: the DualSense and DS4 reports always
             // carry a battery field, so an unwritten level goes out as
             // zero and the pad announces itself as nearly flat.
-            setBatteryLevel?.Apply(boxedState, batteryLevel);
-            setBatteryCharging?.Apply(boxedState, batteryCharging);
-            setBatteryFull?.Apply(boxedState, batteryFull);
+            setBatteryLevel?.Invoke(batteryLevel);
+            setBatteryCharging?.Invoke(batteryCharging);
+            setBatteryFull?.Invoke(batteryFull);
 
-            _ = submitState.Invoke(controller, submitArgs);
+            WriteMotion(in motion);
+            WriteTouch(in touch);
+
+            submitFrame();
 
             if (consecutiveSubmitFailures > 0)
             {
@@ -1493,6 +1937,69 @@ internal sealed class DynamicHidMaestroController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Claims the created pad's OS identity as soon as the SDK can name
+    /// it, so device enumeration stops offering it as an input source.
+    /// </summary>
+    /// <remarks>
+    /// Called from the submit path, where it costs one bool test once the
+    /// id is known. It has to be retried rather than read once: the pad
+    /// does not exist as an OS device the instant it is created, so the
+    /// id is only available a little later. Retrying is bounded — an SDK
+    /// that never reports one is a supported configuration, it just falls
+    /// back to the other signals, and this must not turn into a
+    /// reflection call on every frame forever.
+    /// </remarks>
+    private void EnsureIdentityClaimed()
+    {
+        if (identityGaveUp || InstanceId is not null)
+        {
+            return;
+        }
+
+        var id = ReadInstanceId(controller);
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            InstanceId = id;
+            VirtualDeviceIdentity.ClaimPath(id);
+            logger.LogInformation(
+                "HIDMaestro dynamic: claimed virtual pad instance {InstanceId}; it will not be offered as an input.",
+                id);
+            return;
+        }
+
+        if (DateTime.UtcNow >= identityDeadlineUtc)
+        {
+            identityGaveUp = true;
+            logger.LogWarning(
+                "HIDMaestro dynamic: the SDK never reported an InstanceId for this pad. It may appear in the " +
+                "input device list as if it were physical hardware; the hardware-signature filter is the " +
+                "remaining defence.");
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>HMController.InstanceId</c> if this SDK exposes it.
+    /// </summary>
+    private static float NormalizeAxis(float value, float minimum) =>
+        float.IsFinite(value) ? Math.Clamp(value, minimum, 1f) : 0f;
+
+    private static string? ReadInstanceId(object controller)
+    {
+        try
+        {
+            var property = controller.GetType().GetProperty(
+                "InstanceId", BindingFlags.Public | BindingFlags.Instance);
+            return property?.GetValue(controller) as string;
+        }
+        catch (Exception)
+        {
+            // Identity is a nicety; a bridge that works without it is far
+            // better than one that refuses to start because of it.
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         if (disposed)
@@ -1500,6 +2007,11 @@ internal sealed class DynamicHidMaestroController : IDisposable
             return;
         }
         disposed = true;
+
+        // Stop claiming the instance before the device goes away, so a
+        // later pad that reuses the same id is not mistaken for this one.
+        VirtualDeviceIdentity.Release(serial: null, path: InstanceId);
+
         UnsubscribeOutputEvents();
         TryRemoveController(controller, context, logger);
     }

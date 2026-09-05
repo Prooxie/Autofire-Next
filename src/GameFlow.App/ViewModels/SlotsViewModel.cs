@@ -225,13 +225,7 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
         // Turning the checkbox on unassigns whatever was already there
         // (the Available list is separately disabled in XAML so nothing
         // NEW can be added while it's on).
-        TemplateEditor.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(DeviceTemplateEditorViewModel.DemoPreview) && TemplateEditor.DemoPreview)
-            {
-                ClearAssignedDevicesForSelectedSlot();
-            }
-        };
+        TemplateEditor.PropertyChanged += OnTemplateEditorPropertyChanged;
 
         OutputKindOptions =
         [
@@ -253,21 +247,11 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
         registry.SlotsChanged += OnSlotsChanged;
         catalog.Updated += OnCatalogUpdated;
         this.localization = localization;
-        localization.CultureChanged += (_, _) =>
-        {
-            OnPropertyChanged(nameof(VirtualControllersHeader));
-            OnPropertyChanged(nameof(AddControllerLabel));
-            OnPropertyChanged(nameof(SlotEnabledLabel));
-            OnPropertyChanged(nameof(SlotDuplicateLabel));
-            OnPropertyChanged(nameof(SlotSaveLabel));
-            OnPropertyChanged(nameof(SlotDeleteLabel));
-            OnPropertyChanged(nameof(TouchpadTabHeader));
-            OnPropertyChanged(nameof(SlotSettingsTabHeader));
-            OnPropertyChanged(nameof(NoSlotSelectedLabel));
-            OnPropertyChanged(nameof(PreviewTabHeader));
-            OnPropertyChanged(nameof(OutputTabHeader));
-            OnPropertyChanged(nameof(MappingsTabHeader));
-        };
+
+        // Named handler, not a lambda — an anonymous subscription to a
+        // singleton service can never be detached, so Dispose could not
+        // actually release this view model (or the editors it owns).
+        localization.CultureChanged += OnCultureChanged;
 
         Rebuild();
     }
@@ -410,6 +394,16 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
     public string PreviewTabHeader => Loc("DevicesSlotPreviewTab", "Preview");
     public string OutputTabHeader => Loc("DevicesSlotOutputTab", "Output");
     public string MappingsTabHeader => Loc("DevicesSlotMappingsTab", "Mappings");
+
+    /// <summary>
+    /// Header for the merged preview / assignment / mapping page.
+    /// </summary>
+    /// <remarks>
+    /// Replaces three sibling tabs that all described the same controller.
+    /// The remaining headers stay defined because the strings are still
+    /// used as section titles inside it.
+    /// </remarks>
+    public string SetupTabHeader => Loc("DevicesSlotSetupPageTab", "Controller");
 
     private string slotName = string.Empty;
     public string SlotName
@@ -825,6 +819,31 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SelectedSlotProfiles));
     }
 
+    private void OnTemplateEditorPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DeviceTemplateEditorViewModel.DemoPreview) && TemplateEditor.DemoPreview)
+        {
+            ClearAssignedDevicesForSelectedSlot();
+        }
+    }
+
+    private void OnCultureChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(VirtualControllersHeader));
+        OnPropertyChanged(nameof(AddControllerLabel));
+        OnPropertyChanged(nameof(SlotEnabledLabel));
+        OnPropertyChanged(nameof(SlotDuplicateLabel));
+        OnPropertyChanged(nameof(SlotSaveLabel));
+        OnPropertyChanged(nameof(SlotDeleteLabel));
+        OnPropertyChanged(nameof(TouchpadTabHeader));
+        OnPropertyChanged(nameof(SlotSettingsTabHeader));
+        OnPropertyChanged(nameof(NoSlotSelectedLabel));
+        OnPropertyChanged(nameof(PreviewTabHeader));
+        OnPropertyChanged(nameof(OutputTabHeader));
+        OnPropertyChanged(nameof(MappingsTabHeader));
+        OnPropertyChanged(nameof(SetupTabHeader));
+    }
+
     public void Dispose()
     {
         if (disposed)
@@ -834,5 +853,13 @@ public sealed class SlotsViewModel : ViewModelBase, IDisposable
         disposed = true;
         registry.SlotsChanged -= OnSlotsChanged;
         catalog.Updated -= OnCatalogUpdated;
+        localization.CultureChanged -= OnCultureChanged;
+        TemplateEditor.PropertyChanged -= OnTemplateEditorPropertyChanged;
+
+        // The editors this view model owns hold their own singleton-scoped
+        // subscriptions; disposing them here keeps that ownership explicit
+        // rather than relying on the shell outliving everything.
+        TemplateEditor.Dispose();
+        TouchpadEditor.Dispose();
     }
 }

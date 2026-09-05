@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -187,11 +188,12 @@ public sealed class TouchGestureRowViewModel : ViewModelBase
 /// carries a touch surface; see <c>SlotsViewModel.SelectedSlotHasTouchpad</c>.
 /// </para>
 /// </summary>
-public sealed class TouchpadEditorViewModel : ViewModelBase
+public sealed class TouchpadEditorViewModel : ViewModelBase, IDisposable
 {
     private readonly ILocalizationService localization;
     private Action<TouchpadMapRule?>? saver;
     private bool loading;
+    private bool disposed;
 
     public TouchpadEditorViewModel(ILocalizationService localization)
     {
@@ -212,9 +214,30 @@ public sealed class TouchpadEditorViewModel : ViewModelBase
 
         AddGestureCommand = new RelayCommand(AddGesture);
         RemoveGestureCommand = new RelayCommand<string>(RemoveGesture);
-        Gestures.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasGestures));
+        Gestures.CollectionChanged += OnGesturesChanged;
 
-        localization.CultureChanged += (_, _) => RaiseLabels();
+        // Named handler, not a lambda: the localization service is a
+        // process-wide singleton, so an anonymous subscription can never
+        // be detached and keeps this editor (and every row it holds)
+        // alive for the life of the app.
+        this.localization.CultureChanged += OnCultureChanged;
+    }
+
+    private void OnGesturesChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+        OnPropertyChanged(nameof(HasGestures));
+
+    private void OnCultureChanged(object? sender, EventArgs e) => RaiseLabels();
+
+    /// <summary>Detaches the singleton-owned culture subscription.</summary>
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+        disposed = true;
+        Gestures.CollectionChanged -= OnGesturesChanged;
+        localization.CultureChanged -= OnCultureChanged;
     }
 
     // ─── Option sources ───

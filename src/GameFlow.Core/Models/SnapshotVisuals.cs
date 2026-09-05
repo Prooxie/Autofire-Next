@@ -48,7 +48,12 @@ public static class SnapshotVisuals
         if (MathF.Abs(a.RightStick.Y - b.RightStick.Y) > Epsilon) { return false; }
         if (!TouchEquivalent(a, b)) { return false; }
 
-        return PressedButtonsEqual(a.Buttons, b.Buttons);
+        // A mask IS the pressed set, so equality is the comparison this
+        // used to spell out over two dictionaries — including the case it
+        // was written for, where one snapshot carries a key explicitly set
+        // to false and the other omits it. A bit that is clear says the
+        // same thing either way.
+        return a.Buttons == b.Buttons;
     }
 
     /// <summary>
@@ -104,27 +109,4 @@ public static class SnapshotVisuals
         return true;
     }
 
-    /// <summary>
-    /// Compares the PRESSED sets rather than the dictionaries. A snapshot
-    /// may carry a key explicitly set to false where another simply omits
-    /// it, and those two draw the same thing.
-    /// </summary>
-    private static bool PressedButtonsEqual(
-        IReadOnlyDictionary<ButtonId, bool> a,
-        IReadOnlyDictionary<ButtonId, bool> b)
-    {
-        if (ReferenceEquals(a, b)) { return true; }
-
-        foreach (var kv in a)
-        {
-            if (kv.Value && !(b.TryGetValue(kv.Key, out var bv) && bv)) { return false; }
-        }
-
-        foreach (var kv in b)
-        {
-            if (kv.Value && !(a.TryGetValue(kv.Key, out var av) && av)) { return false; }
-        }
-
-        return true;
-    }
 }

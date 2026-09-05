@@ -137,7 +137,8 @@ public sealed class ControllerVisualStateSnapshotTests
         var vm = CreateViewModel();
         Push(vm, ControllerSnapshot.Empty("Pad"));
 
-        var buttons = new Dictionary<ButtonId, bool> { [ButtonId.South] = true };
+        var buttons = ButtonMask.Empty;
+        buttons[ButtonId.South] = true;
         Push(vm, ControllerSnapshot.Empty("Pad").WithButtons(buttons));
 
         Assert.True(vm.RawSnapshot.IsPressed(ButtonId.South));

@@ -165,34 +165,29 @@ public static class DsuSnapshotMapper
     /// Cross), which is what a player pressing it expects regardless of
     /// what is printed on their pad.
     /// </summary>
-    public static DsuButtons MapButtons(IReadOnlyDictionary<ButtonId, bool>? buttons)
+    public static DsuButtons MapButtons(ButtonMask buttons)
     {
-        if (buttons is null)
-        {
-            return DsuButtons.None;
-        }
-
         var result = DsuButtons.None;
 
-        if (IsDown(buttons, ButtonId.South)) result |= DsuButtons.Cross;
-        if (IsDown(buttons, ButtonId.East)) result |= DsuButtons.Circle;
-        if (IsDown(buttons, ButtonId.West)) result |= DsuButtons.Square;
-        if (IsDown(buttons, ButtonId.North)) result |= DsuButtons.Triangle;
+        if (IsDown(in buttons, ButtonId.South)) result |= DsuButtons.Cross;
+        if (IsDown(in buttons, ButtonId.East)) result |= DsuButtons.Circle;
+        if (IsDown(in buttons, ButtonId.West)) result |= DsuButtons.Square;
+        if (IsDown(in buttons, ButtonId.North)) result |= DsuButtons.Triangle;
 
-        if (IsDown(buttons, ButtonId.LeftShoulder)) result |= DsuButtons.L1;
-        if (IsDown(buttons, ButtonId.RightShoulder)) result |= DsuButtons.R1;
-        if (IsDown(buttons, ButtonId.LeftTriggerButton)) result |= DsuButtons.L2;
-        if (IsDown(buttons, ButtonId.RightTriggerButton)) result |= DsuButtons.R2;
+        if (IsDown(in buttons, ButtonId.LeftShoulder)) result |= DsuButtons.L1;
+        if (IsDown(in buttons, ButtonId.RightShoulder)) result |= DsuButtons.R1;
+        if (IsDown(in buttons, ButtonId.LeftTriggerButton)) result |= DsuButtons.L2;
+        if (IsDown(in buttons, ButtonId.RightTriggerButton)) result |= DsuButtons.R2;
 
-        if (IsDown(buttons, ButtonId.Back)) result |= DsuButtons.Share;
-        if (IsDown(buttons, ButtonId.Start)) result |= DsuButtons.Options;
-        if (IsDown(buttons, ButtonId.LeftStick)) result |= DsuButtons.LeftStick;
-        if (IsDown(buttons, ButtonId.RightStick)) result |= DsuButtons.RightStick;
+        if (IsDown(in buttons, ButtonId.Back)) result |= DsuButtons.Share;
+        if (IsDown(in buttons, ButtonId.Start)) result |= DsuButtons.Options;
+        if (IsDown(in buttons, ButtonId.LeftStick)) result |= DsuButtons.LeftStick;
+        if (IsDown(in buttons, ButtonId.RightStick)) result |= DsuButtons.RightStick;
 
-        if (IsDown(buttons, ButtonId.DpadUp)) result |= DsuButtons.DpadUp;
-        if (IsDown(buttons, ButtonId.DpadDown)) result |= DsuButtons.DpadDown;
-        if (IsDown(buttons, ButtonId.DpadLeft)) result |= DsuButtons.DpadLeft;
-        if (IsDown(buttons, ButtonId.DpadRight)) result |= DsuButtons.DpadRight;
+        if (IsDown(in buttons, ButtonId.DpadUp)) result |= DsuButtons.DpadUp;
+        if (IsDown(in buttons, ButtonId.DpadDown)) result |= DsuButtons.DpadDown;
+        if (IsDown(in buttons, ButtonId.DpadLeft)) result |= DsuButtons.DpadLeft;
+        if (IsDown(in buttons, ButtonId.DpadRight)) result |= DsuButtons.DpadRight;
 
         // Guide and Touchpad are deliberately absent: the protocol carries
         // them as their own bytes, not as bits in this word.
@@ -235,8 +230,7 @@ public static class DsuSnapshotMapper
 
     private static byte ToDigitalByte(bool pressed) => pressed ? (byte)255 : (byte)0;
 
-    private static bool IsDown(IReadOnlyDictionary<ButtonId, bool> buttons, ButtonId id) =>
-        buttons.TryGetValue(id, out var down) && down;
+    private static bool IsDown(in ButtonMask buttons, ButtonId id) => buttons[id];
 
     /// <summary>
     /// Projects one finger onto the protocol's touch slot. DSU carries

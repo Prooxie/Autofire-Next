@@ -279,6 +279,22 @@ public sealed partial class ControllerVisualStateViewModel
     /// that matches the host-supplied preference (or the first available
     /// when no preference is stored).
     /// </summary>
+    /// <summary>
+    /// True once a theme lookup has actually run for the current style.
+    /// </summary>
+    /// <remarks>
+    /// Distinguishes "no theme installed for this style" from "the theme
+    /// has not been resolved yet", which the view previously could not
+    /// tell apart — both were simply a null <see cref="ActiveTheme"/>. So
+    /// every panel showed the "no controller theme installed" message
+    /// during startup, while the registry was still being scanned and the
+    /// artwork decoded, and only stopped once the theme arrived. On the
+    /// physical panels, whose style is resolved from the detected device
+    /// and therefore settles later than the virtual ones, that error was
+    /// on screen for seconds.
+    /// </remarks>
+    public bool HasResolvedTheme { get; private set; }
+
     public void RefreshActiveTheme()
     {
         var registry = themeRegistry;
@@ -338,6 +354,14 @@ public sealed partial class ControllerVisualStateViewModel
             OnPropertyChanged(nameof(ActiveTheme));
             OnPropertyChanged(nameof(IsThemeActive));
             OnPropertyChanged(nameof(ActiveThemeDisplayName));
+        }
+
+        // A lookup has now run for this style, whatever it found. Set
+        // last so the view never sees "resolved" before the result.
+        if (!HasResolvedTheme)
+        {
+            HasResolvedTheme = true;
+            OnPropertyChanged(nameof(HasResolvedTheme));
         }
     }
 

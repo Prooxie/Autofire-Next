@@ -27,10 +27,51 @@ public sealed class SlotRegistry
     private readonly Lock gate = new();
     private List<ControllerSlot> slots = [];
 
-    public SlotRegistry(ILogger<SlotRegistry> logger)
+    /// <summary>
+    /// Detached, Index-ordered view of <see cref="slots"/>, rebuilt only
+    /// when the registry actually changes.
+    ///
+    /// <para>
+    /// <see cref="GetSlots"/> used to deep-clone every slot, sort them and
+    /// materialise a fresh list on <b>every call</b>, under the lock. That
+    /// is a read the runtime loop performs once per tick — up to 1000 times
+    /// a second — plus once per frame from the effects producer and the DSU
+    /// server, so a registry that changed a few times an hour was rebuilding
+    /// its entire contents tens of thousands of times a second. Publishing a
+    /// snapshot on mutation instead makes the common read allocation-free
+    /// and lock-cheap while keeping the same contract: callers still get
+    /// objects detached from the registry's own mutable state.
+    /// </para>
+    ///
+    /// <para>
+    /// The published instances are shared between readers and must be
+    /// treated as read-only. Nothing mutates a slot outside this class;
+    /// callers that need an editable copy use <see cref="GetSlot"/>, which
+    /// still clones.
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<ControllerSlot> snapshot = [];
+
+    /// <summary>Cached alongside <see cref="snapshot"/> so the runtime tick's "is there anything to run?" check costs a field read.</summary>
+    private bool hasEnabledSlots;
+
+    /// <summary>
+    /// Backing file. Defaults to <see cref="AppPaths.SlotsFile"/>; the
+    /// override exists so tests can exercise the registry without reading
+    /// or overwriting the running user's real slot configuration — the
+    /// same seam <see cref="DeviceSettingsStore"/> already uses.
+    /// </summary>
+    private readonly string filePath;
+
+    public SlotRegistry(ILogger<SlotRegistry> logger, string? overridePath = null)
     {
         this.logger = logger;
+        filePath = overridePath ?? AppPaths.SlotsFile;
         Load();
+        lock (gate)
+        {
+            PublishSnapshotLocked();
+        }
     }
 
     /// <summary>Raised after any successful mutation (create/delete/edit).</summary>
@@ -53,8 +94,18 @@ public sealed class SlotRegistry
     {
         lock (gate)
         {
-            return slots.OrderBy(s => s.Index).Select(s => s.Clone()).ToList();
+            return snapshot;
         }
+    }
+
+    /// <summary>
+    /// True when at least one slot is enabled. Read once per runtime tick
+    /// to decide whether the multi-slot path runs at all, so it answers
+    /// from the cached snapshot rather than materialising one.
+    /// </summary>
+    public bool HasEnabledSlots
+    {
+        get { lock (gate) { return hasEnabledSlots; } }
     }
 
     /// <summary>Returns a detached copy of one slot, or null.</summary>
@@ -248,13 +299,12 @@ public sealed class SlotRegistry
     {
         try
         {
-            var path = AppPaths.SlotsFile;
-            if (!File.Exists(path))
+            if (!File.Exists(filePath))
             {
                 return;
             }
 
-            var json = File.ReadAllText(path);
+            var json = File.ReadAllText(filePath);
             var loaded = JsonSerializer.Deserialize<List<ControllerSlot>>(json, ProfileJsonOptions.Default);
             if (loaded is not null)
             {
@@ -311,12 +361,35 @@ public sealed class SlotRegistry
         }
     }
 
+    /// <summary>
+    /// Republishes <see cref="snapshot"/> from the current slot list.
+    /// Must be called with <see cref="gate"/> held, after every mutation.
+    /// </summary>
+    private void PublishSnapshotLocked()
+    {
+        var published = new List<ControllerSlot>(slots.Count);
+        var anyEnabled = false;
+        foreach (var slot in slots.OrderBy(s => s.Index))
+        {
+            published.Add(slot.Clone());
+            anyEnabled |= slot.Enabled;
+        }
+
+        snapshot = published;
+        hasEnabledSlots = anyEnabled;
+    }
+
     private void Persist()
     {
+        // Every mutation path persists, so this is the one place guaranteed
+        // to run after a change with the lock held — republishing here means
+        // a new mutation can never forget to refresh the snapshot.
+        PublishSnapshotLocked();
+
         try
         {
             var json = JsonSerializer.Serialize(slots, ProfileJsonOptions.Default);
-            File.WriteAllText(AppPaths.SlotsFile, json);
+            File.WriteAllText(filePath, json);
         }
         catch (Exception exception)
         {

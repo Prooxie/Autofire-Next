@@ -3,6 +3,7 @@ using GameFlow.Core.Pipeline;
 using GameFlow.Infrastructure.Profiles;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace GameFlow.Infrastructure.Runtime;
 
@@ -53,6 +54,7 @@ public sealed class RuntimeCoordinator(
     Input.IMouseOutputWriter mouseOutputWriter,
     DeviceSettingsStore deviceSettingsStore,
     Effects.RumbleFeedbackStore rumbleFeedbackStore,
+    IOptions<Configuration.AppRuntimeOptions> runtimeOptions,
     ILogger<RuntimeCoordinator> logger) : BackgroundService
 {
     private readonly IInputSourceFactory inputSourceFactory = inputSourceFactory;
@@ -67,6 +69,7 @@ public sealed class RuntimeCoordinator(
     private readonly Input.IMouseOutputWriter mouseOutputWriter = mouseOutputWriter;
     private readonly DeviceSettingsStore deviceSettingsStore = deviceSettingsStore;
     private readonly Effects.RumbleFeedbackStore rumbleFeedbackStore = rumbleFeedbackStore;
+    private readonly Configuration.AppRuntimeOptions runtimeOptions = runtimeOptions.Value;
     private readonly ILogger<RuntimeCoordinator> logger = logger;
     private readonly SemaphoreSlim providerGate = new(1, 1);
 
@@ -89,8 +92,29 @@ public sealed class RuntimeCoordinator(
     private static readonly TimeSpan SlotRebuildDebounce = TimeSpan.FromMilliseconds(400);
     private int disposeStarted;
 
+    /// <summary>Reused buffer for the per-tick owned-signature aggregation; see <see cref="PublishOwnedHardwareSignatures"/>.</summary>
+    private readonly List<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> ownedSignatureScratch = [];
+
+    /// <summary>Last set actually pushed to the catalog, so an unchanged tick costs nothing.</summary>
+    private (ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)[] publishedOwnedSignatures = [];
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // `Runtime:StartRuntimeOnLaunch` has been a documented switch since
+        // the options type was introduced, but nothing ever read it — setting
+        // it to false started the loop anyway. Honouring it here is what the
+        // option always claimed to do: no providers are created, no virtual
+        // device is emitted, and the UI still runs against an idle snapshot
+        // store, which is exactly the diagnostic/headless shape the option
+        // describes.
+        if (!runtimeOptions.StartRuntimeOnLaunch)
+        {
+            logger.LogInformation(
+                "Runtime loop disabled by configuration (Runtime:StartRuntimeOnLaunch = false). " +
+                "No input source, output sink or slot pipeline will be created.");
+            return;
+        }
+
         using var highResolutionTimerLease = new WindowsHighResolutionTimerLease(logger);
 
         slotRegistry.SlotsChanged += OnSlotsChanged;
@@ -195,21 +219,7 @@ public sealed class RuntimeCoordinator(
                     // assigning our own output to ourselves was a
                     // feedback loop that ended in the sink's give-up
                     // latch ("gets shutdown and cannot create anymore").
-                    var ownedSignatures = new HashSet<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)>();
-                    if (currentOutputSink?.OwnedHardwareSignature is { } topLevelSignature
-                        && currentOutputSink.OwnedSignatureActivatedAt is { } topLevelActivatedAt)
-                    {
-                        ownedSignatures.Add((topLevelSignature.Vid, topLevelSignature.Pid, topLevelActivatedAt));
-                    }
-                    if (slotRuntime is not null)
-                    {
-                        foreach (var signature in slotRuntime.GetActiveOutputSignatures())
-                        {
-                            ownedSignatures.Add(signature);
-                        }
-                    }
-                    inputDeviceCatalog.SetIgnoredHardwareSignatures(
-                        [.. ownedSignatures.OrderBy(s => s.Vid).ThenBy(s => s.Pid).ThenBy(s => s.ActivatedAt)]);
+                    PublishOwnedHardwareSignatures();
 
                     if (consecutiveTickFailures > 0)
                     {
@@ -397,10 +407,11 @@ public sealed class RuntimeCoordinator(
             // contribute nothing to the filter.
             var ownedSignature = currentOutputSink.OwnedHardwareSignature;
             var ownedActivatedAt = currentOutputSink.OwnedSignatureActivatedAt;
-            inputDeviceCatalog.SetIgnoredHardwareSignatures(
+            publishedOwnedSignatures =
                 ownedSignature is null || ownedActivatedAt is null
                     ? []
-                    : [(ownedSignature.Value.Vid, ownedSignature.Value.Pid, ownedActivatedAt.Value)]);
+                    : [(ownedSignature.Value.Vid, ownedSignature.Value.Pid, ownedActivatedAt.Value)];
+            inputDeviceCatalog.SetIgnoredHardwareSignatures(publishedOwnedSignatures);
 
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -479,6 +490,7 @@ public sealed class RuntimeCoordinator(
         finally
         {
             inputDeviceCatalog.SetIgnoredDeviceIds([]);
+            publishedOwnedSignatures = [];
             inputDeviceCatalog.SetIgnoredHardwareSignatures([]);
             _ = Interlocked.Exchange(ref disposeStarted, 0);
         }
@@ -540,6 +552,18 @@ public sealed class RuntimeCoordinator(
         // and retained rumble belonging to the slot that was just
         // disabled. Only fall back to the single-profile pipeline after
         // that teardown has completed.
+        // Pinned panels do not belong to a slot, so they are fed before
+        // the no-slots exit rather than after it.
+        //
+        // This sat below the early return, which meant a pinned device
+        // only animated while some OTHER controller happened to have an
+        // enabled slot. With none — a fresh install, every slot disabled,
+        // or the setup guide's layout check, which runs before the slot it
+        // is going to create exists — the panel drew the right controller
+        // and then never moved, which reads as the pad not being detected
+        // at all.
+        PublishPinnedPhysicalSnapshots(multiInput, now);
+
         if (!hasEnabledSlots)
         {
             return false;
@@ -550,10 +574,85 @@ public sealed class RuntimeCoordinator(
         {
             snapshotStore.Update(r.Input, r.Output, r.Result);
         }
-
-        PublishPinnedPhysicalSnapshots(multiInput, now);
         return true;
     }
+
+    /// <summary>
+    /// Recomputes the set of hardware signatures belonging to this app's own
+    /// virtual outputs and pushes it to the input catalog — but only when it
+    /// has actually changed since the last push.
+    ///
+    /// <para>
+    /// This runs on the runtime tick, i.e. up to 1000 times a second. It used
+    /// to allocate a <see cref="HashSet{T}"/>, run a three-level LINQ ordering
+    /// and materialise an array every single tick, then hand that to
+    /// <c>SetIgnoredHardwareSignatures</c>, which took a lock and ran its own
+    /// <c>Distinct().ToArray()</c> before discovering nothing had changed. The
+    /// contents change only when a provider is activated or a slot's sink
+    /// materialises its device, so the steady state is now allocation-free and
+    /// touches no lock at all.
+    /// </para>
+    ///
+    /// <para>
+    /// The published order is sorted rather than incidental: the catalog
+    /// decides "did this change?" with an order-sensitive comparison, so an
+    /// unstable order would read as constant churn even when the active set
+    /// is identical.
+    /// </para>
+    /// </summary>
+    private void PublishOwnedHardwareSignatures()
+    {
+        ownedSignatureScratch.Clear();
+
+        if (currentOutputSink?.OwnedHardwareSignature is { } topLevelSignature
+            && currentOutputSink.OwnedSignatureActivatedAt is { } topLevelActivatedAt)
+        {
+            ownedSignatureScratch.Add((topLevelSignature.Vid, topLevelSignature.Pid, topLevelActivatedAt));
+        }
+
+        if (slotRuntime is not null)
+        {
+            foreach (var signature in slotRuntime.GetActiveOutputSignatures())
+            {
+                if (!ownedSignatureScratch.Contains(signature))
+                {
+                    ownedSignatureScratch.Add(signature);
+                }
+            }
+        }
+
+        ownedSignatureScratch.Sort(SignatureOrder);
+
+        if (ownedSignatureScratch.Count == publishedOwnedSignatures.Length)
+        {
+            var identical = true;
+            for (int i = 0; i < publishedOwnedSignatures.Length; i++)
+            {
+                if (ownedSignatureScratch[i] != publishedOwnedSignatures[i])
+                {
+                    identical = false;
+                    break;
+                }
+            }
+
+            if (identical)
+            {
+                return;
+            }
+        }
+
+        publishedOwnedSignatures = [.. ownedSignatureScratch];
+        inputDeviceCatalog.SetIgnoredHardwareSignatures(publishedOwnedSignatures);
+    }
+
+    private static readonly Comparison<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> SignatureOrder =
+        static (left, right) =>
+        {
+            var byVid = left.Vid.CompareTo(right.Vid);
+            if (byVid != 0) { return byVid; }
+            var byPid = left.Pid.CompareTo(right.Pid);
+            return byPid != 0 ? byPid : left.ActivatedAt.CompareTo(right.ActivatedAt);
+        };
 
     internal static bool ShouldRebuildSlots(
         bool hasEnabledSlots,

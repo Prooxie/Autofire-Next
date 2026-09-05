@@ -15,7 +15,7 @@ public static class KeyboardGamepadSynthesizer
     public static ControllerSnapshot Synthesize(string deviceName, IReadOnlySet<int> pressedVirtualKeys)
     {
         float lx = 0, ly = 0, rx = 0, ry = 0, lt = 0, rt = 0;
-        var buttons = new Dictionary<ButtonId, bool>();
+        var buttons = ButtonMask.Empty;
 
         foreach (var vk in pressedVirtualKeys)
         {

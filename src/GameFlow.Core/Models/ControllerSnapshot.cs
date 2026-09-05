@@ -130,7 +130,11 @@ public sealed record ControllerSnapshot
     /// </para>
     /// </summary>
     public IReadOnlyList<TouchContact> TouchContacts { get; init; } = [];
-    public IReadOnlyDictionary<ButtonId, bool> Buttons { get; init; } = ButtonState.CreateEmptyMap();
+    /// <summary>
+    /// Which buttons are down. One bit per <see cref="ButtonId"/> — see
+    /// <see cref="ButtonMask"/> for why this is not a dictionary.
+    /// </summary>
+    public ButtonMask Buttons { get; init; }
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 
     public static ControllerSnapshot Empty(string? deviceName = null)
@@ -138,7 +142,6 @@ public sealed record ControllerSnapshot
         return new()
         {
             DeviceName = deviceName ?? string.Empty,
-            Buttons = ButtonState.CreateEmptyMap(),
             Timestamp = DateTimeOffset.UtcNow
         };
     }
@@ -150,7 +153,7 @@ public sealed record ControllerSnapshot
 
     public bool IsPressed(ButtonId buttonId)
     {
-        return Buttons.TryGetValue(buttonId, out var isPressed) && isPressed;
+        return Buttons[buttonId];
     }
 
     public ControllerSnapshot WithStick(StickId stickId, StickVector value)
@@ -160,7 +163,7 @@ public sealed record ControllerSnapshot
                 : this with { RightStick = value.Clamp() };
     }
 
-    public ControllerSnapshot WithButtons(IReadOnlyDictionary<ButtonId, bool> buttons)
+    public ControllerSnapshot WithButtons(ButtonMask buttons)
     {
         return this with { Buttons = buttons };
     }

@@ -12,10 +12,14 @@ namespace GameFlow.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddAutofireInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    /// <summary>
+    /// Registers every Infrastructure service: profiles, settings,
+    /// localization, the device catalog, the slot runtime, effects, and the
+    /// network services (web controller, stream overlay, DSU).
+    /// </summary>
+    public static IServiceCollection AddGameFlowInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         _ = services.Configure<AppRuntimeOptions>(configuration.GetSection("Runtime"));
-        _ = services.Configure<Overlay.OverlayOptions>(configuration.GetSection("Overlay"));
         _ = services.AddMemoryCache();
         _ = services.AddPortableObjectLocalization(options => options.ResourcesPath = "Localization");
 
@@ -103,7 +107,6 @@ public static class DependencyInjection
         _ = services.AddSingleton<Runtime.DeviceCategoryOverrideStore>();
         _ = services.AddHostedService<RuntimeCoordinator>();
         _ = services.AddHostedService<RawInputEnumerationService>();
-        _ = services.AddHostedService<Overlay.OverlayServer>();
 
         // Web controller: the hub is shared state between the socket
         // server (writes phone input) and the input source (reads it),

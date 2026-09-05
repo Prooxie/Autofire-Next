@@ -189,7 +189,16 @@ public static class ThemeHitTester
     {
         switch (node)
         {
-            case VariableNode v when v.Name.Contains(':'):
+            // Any variable name, colon or not. The guard here used to
+            // require a colon, on the assumption that every theme binding
+            // is "group:member" — but a bare name is legal and at least one
+            // is in wide use: every Sony pack names the PS button `home`.
+            // A colon-less binding returned null, so the PS/Guide button
+            // produced no hit result at all and could not be clicked or
+            // hovered, and the `"home" => "Guide"` arm below had never once
+            // been reached. Filtering belongs to the mapper, which returns
+            // null for anything it does not recognise, not here.
+            case VariableNode v:
                 return v.Name;
 
             case UnaryNode u:

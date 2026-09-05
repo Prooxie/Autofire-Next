@@ -125,11 +125,11 @@ First launch creates a default profile under:
 
 |Platform|Location|
 |-|-|
-|Windows|`%LOCALAPPDATA%/AutofireNext/`|
-|Linux|`\~/.local/share/AutofireNext/`|
-|macOS|`\~/Library/Application Support/AutofireNext/`|
+|Windows|`%LOCALAPPDATA%/GAMEFLOW/`|
+|Linux|`\~/.local/share/GAMEFLOW/`|
+|macOS|`\~/Library/Application Support/GAMEFLOW/`|
 
-> Still named `AutofireNext` on purpose — it predates the rename, and changing it would orphan existing installs. Nobody types or sees this path; the app itself always says GameFlow.
+> Upgrading from a pre-rename build? The folder used to be called `AutofireNext`. On first launch GameFlow **copies** everything from it into the new folder — profiles, settings, slots, per-device tuning — and leaves the old folder untouched, so it doubles as a backup. The copy only happens when the new folder is empty, so it can never overwrite newer data.
 
 \---
 
@@ -202,12 +202,14 @@ The page has a transparent background, reconnects automatically, and renders dir
 
 |Key|Default|Description|
 |-|-|-|
-|`DashboardRefreshHz`|`60`|UI refresh rate for the live dashboard (30–1000). This drives a full redraw of every controller surface on screen, so it is the dominant UI cost — lower it on a weak machine. Independent of the mapping tick, which polls at its own rate and is unaffected|
-|`StartRuntimeOnLaunch`|`true`|Whether the input/output runtime starts automatically|
+|`DashboardRefreshHz`|`0`|UI refresh rate for the live dashboard (30–1000). `0` means "follow the display's own refresh rate". This drives a full redraw of every controller surface on screen, so it is the dominant UI cost — pin it lower on a weak machine. Independent of the mapping tick, which polls at its own rate and is unaffected|
+|`StartRuntimeOnLaunch`|`true`|Whether the input/output runtime starts automatically. Set to `false` for diagnostic runs: no input source, output sink or slot pipeline is created, so the app starts with no virtual controller and no device claimed|
 |`DefaultCulture`|`en`|Fallback UI language|
 |`Updates:RepoOwner` / `RepoName`|`Prooxie` / `GameFlow`|GitHub-releases update checker|
 
 Profiles are JSON in the application data directory (see Quick Start), editable by hand or entirely through the **Profiles** tab.
+
+Any key above can also be set from the environment, with `__` separating levels — `GAMEFLOW_Runtime__DashboardRefreshHz=120`. The pre-rename `AUTOFIRE_` prefix is still read; `GAMEFLOW_` wins if both are set.
 
 ---
 

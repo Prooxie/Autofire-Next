@@ -195,7 +195,12 @@ public partial class ControllerSurface : UserControl
 
         if (noThemeMessage is not null)
         {
-            noThemeMessage.IsVisible = vm.ActiveTheme is null;
+            // Only once a lookup has actually run. A null ActiveTheme on its
+            // own also means "not resolved yet", and treating the two the
+            // same put "no controller theme installed" on every panel during
+            // startup — longest on the physical ones, whose style depends on
+            // the detected device and so settles last.
+            noThemeMessage.IsVisible = vm.HasResolvedTheme && vm.ActiveTheme is null;
         }
     }
 }

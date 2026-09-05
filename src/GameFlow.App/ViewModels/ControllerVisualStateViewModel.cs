@@ -184,7 +184,7 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
             diagnosticTickCounter = 0;
             if (Serilog.Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
             {
-                var pressedCount = newSnapshot.Buttons.Count(kv => kv.Value);
+                var pressedCount = newSnapshot.Buttons.PressedCount;
                 Serilog.Log.Debug(
                     "VisualState[{Panel}]: device={Device} VID/PID={Vid:X4}/{Pid:X4} style={Style} buttons={Pressed}/{Total} ls=({LX:F2},{LY:F2}) rs=({RX:F2},{RY:F2}) lt={LT:F2} rt={RT:F2}",
                     panelId,
@@ -193,7 +193,7 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
                     newSnapshot.ProductId,
                     visualStyle,
                     pressedCount,
-                    newSnapshot.Buttons.Count,
+                    ButtonState.Count,
                     newSnapshot.LeftStick.X,
                     newSnapshot.LeftStick.Y,
                     newSnapshot.RightStick.X,
@@ -736,12 +736,13 @@ public sealed partial class ControllerVisualStateViewModel : ViewModelBase
             _ => $"{snapshot.TouchContactCount} touches"
         };
 
-        var pressed = snapshot.Buttons
-            .Where(pair => pair.Value)
-            .Select(pair => FormatButton(pair.Key))
-            .Take(6)
-            .ToArray();
-        PressedButtonsText = pressed.Length == 0 ? "—" : string.Join(" · ", pressed);
+        var pressed = new List<string>(6);
+        foreach (var button in snapshot.Buttons)
+        {
+            if (pressed.Count == 6) { break; }
+            pressed.Add(FormatButton(button));
+        }
+        PressedButtonsText = pressed.Count == 0 ? "—" : string.Join(" · ", pressed);
     }
 
     private static bool ContainsAny(string haystack, params string[] needles)

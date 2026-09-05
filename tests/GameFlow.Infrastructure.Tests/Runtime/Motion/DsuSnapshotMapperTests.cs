@@ -187,9 +187,9 @@ public sealed class DsuSnapshotMapperStickTests
 
 public sealed class DsuSnapshotMapperButtonTests
 {
-    private static IReadOnlyDictionary<ButtonId, bool> Pressed(params ButtonId[] ids)
+    private static ButtonMask Pressed(params ButtonId[] ids)
     {
-        var map = ButtonState.Clone(ButtonState.CreateEmptyMap());
+        var map = ButtonMask.Empty;
         foreach (var id in ids)
         {
             map[id] = true;
@@ -257,9 +257,13 @@ public sealed class DsuSnapshotMapperButtonTests
     }
 
     [Fact]
-    public void ANullButtonMapReadsAsNeutralInsteadOfThrowing()
+    public void ADefaultButtonMapReadsAsNeutral()
     {
-        Assert.Equal(DsuButtons.None, DsuSnapshotMapper.MapButtons(null));
+        // This used to guard against a null dictionary. ButtonMask is a
+        // value type, so "no buttons" is now unrepresentable as anything
+        // other than the default — the assertion survives as the check
+        // that default really does mean nothing pressed.
+        Assert.Equal(DsuButtons.None, DsuSnapshotMapper.MapButtons(default));
     }
 
     [Fact]

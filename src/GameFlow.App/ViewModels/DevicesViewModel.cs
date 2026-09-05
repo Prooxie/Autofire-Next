@@ -913,5 +913,10 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         catalog.RawInspectionUpdated -= OnRawInspectionUpdated;
         slotRegistry.SlotsChanged -= OnSlotsChanged;
         localization.CultureChanged -= OnCultureChanged;
+
+        // The template editor holds its own culture subscription against
+        // the same singleton service; this view model created it, so this
+        // view model releases it.
+        TemplateEditor.Dispose();
     }
 }

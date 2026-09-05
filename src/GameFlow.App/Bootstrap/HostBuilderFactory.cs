@@ -62,7 +62,12 @@ public static class HostBuilderFactory
             {
                 _ = configurationBuilder.SetBasePath(AppContext.BaseDirectory);
                 _ = configurationBuilder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                // Both prefixes are read, GAMEFLOW_ last so it wins on a
+                // conflict. AUTOFIRE_ is the pre-rebrand name and stays
+                // supported so an existing launcher script or service
+                // definition does not silently stop applying its overrides.
                 _ = configurationBuilder.AddEnvironmentVariables(prefix: "AUTOFIRE_");
+                _ = configurationBuilder.AddEnvironmentVariables(prefix: "GAMEFLOW_");
             })
             .UseSerilog((hostingContext, services, loggerConfiguration) =>
             {
@@ -100,7 +105,7 @@ public static class HostBuilderFactory
                 _ = services.AddSingleton(loggingLevelSwitch);
                 _ = services.AddSingleton<ILogLevelSwitch>(_ => new SerilogLogLevelSwitch(loggingLevelSwitch));
 
-                _ = services.AddAutofireInfrastructure(hostingContext.Configuration);
+                _ = services.AddGameFlowInfrastructure(hostingContext.Configuration);
                 _ = services.AddSingleton<IProfileFileDialogService, ProfileFileDialogService>();
                 _ = services.AddSingleton<StartupChecksCoordinator>();
                 _ = services.AddTransient<SettingsDialogViewModel>();
@@ -132,6 +137,14 @@ public static class HostBuilderFactory
                 // and each showing must start from step one with a fresh
                 // subscription that the window disposes on close.
                 _ = services.AddTransient<SetupWalkthroughViewModel>();
+
+                // Shared with the setup walkthrough, which drives the same
+                // button-calibration flow rather than carrying a second copy
+                // of it. Singleton because that calibration holds live raw
+                // input state for the selected device: a second instance
+                // would present the wizard while the state it reads is being
+                // maintained by the first.
+                _ = services.AddSingleton<DevicesViewModel>();
 
                 _ = services.AddSingleton<ShellViewModel>();
                 _ = services.AddSingleton<ShellWindow>();

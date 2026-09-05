@@ -32,13 +32,14 @@ public sealed record SlotOutputProfileOption(string Key, string Label);
 /// Picking a profile also re-classifies the template's kind family so
 /// the dashboard theme follows the selection.</para>
 /// </summary>
-public sealed class DeviceTemplateEditorViewModel : ViewModelBase
+public sealed class DeviceTemplateEditorViewModel : ViewModelBase, IDisposable
 {
     private readonly DeviceTemplateStore store;
     private readonly HidMaestroProfileCatalogService profileCatalog;
 
     private DeviceOutputTemplate? template;
     private bool loading;
+    private bool disposed;
     private Action<DeviceOutputTemplate>? externalSaver;
 
     public DeviceTemplateEditorViewModel(
@@ -47,17 +48,10 @@ public sealed class DeviceTemplateEditorViewModel : ViewModelBase
         HidMaestroProfileCatalogService profileCatalog)
     {
         this.localization = localization ?? throw new ArgumentNullException(nameof(localization));
-        localization.CultureChanged += (_, _) =>
-        {
-            OnPropertyChanged(nameof(EmitLabel));
-            OnPropertyChanged(nameof(EmitTooltip));
-            OnPropertyChanged(nameof(OutputDeviceLabel));
-            OnPropertyChanged(nameof(OutputProfileLabel));
-            OnPropertyChanged(nameof(OutputProfileTooltip));
-            OnPropertyChanged(nameof(DemoPreviewLabel));
-            OnPropertyChanged(nameof(DemoPreviewTooltip));
-            RebuildProfileOptions();
-        };
+
+        // Named handler, not a lambda: the localization service outlives
+        // this editor, and an anonymous subscription cannot be detached.
+        this.localization.CultureChanged += OnCultureChanged;
         this.store = store ?? throw new ArgumentNullException(nameof(store));
         this.profileCatalog = profileCatalog ?? throw new ArgumentNullException(nameof(profileCatalog));
 
@@ -85,6 +79,29 @@ public sealed class DeviceTemplateEditorViewModel : ViewModelBase
     public bool HasOutputProfileOptions => OutputProfileOptions.Count > 1;
 
     private IReadOnlyList<HidMaestroCatalogProfile> loadedCatalog = [];
+
+    private void OnCultureChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(EmitLabel));
+        OnPropertyChanged(nameof(EmitTooltip));
+        OnPropertyChanged(nameof(OutputDeviceLabel));
+        OnPropertyChanged(nameof(OutputProfileLabel));
+        OnPropertyChanged(nameof(OutputProfileTooltip));
+        OnPropertyChanged(nameof(DemoPreviewLabel));
+        OnPropertyChanged(nameof(DemoPreviewTooltip));
+        RebuildProfileOptions();
+    }
+
+    /// <summary>Detaches the singleton-owned culture subscription.</summary>
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+        disposed = true;
+        localization.CultureChanged -= OnCultureChanged;
+    }
 
     private async void LoadProfileCatalogAsync()
     {

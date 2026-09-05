@@ -267,11 +267,41 @@ public sealed class InputDeviceCatalog
     private IReadOnlyList<InputDeviceInfo> MergeSources()
     {
         var now = DateTimeOffset.UtcNow;
+
+        // "First seen" means first seen in the device's CURRENT period of
+        // presence, so the record has to be dropped when it goes away.
+        //
+        // This map only ever grew, and that quietly broke the
+        // hardware-signature filter that hides GameFlow's own emitted
+        // pads. A device id is a hash of vendor, product and name, so a
+        // virtual pad that is removed and re-created hashes to the same
+        // id — and inherited the timestamp from the previous one. The
+        // filter asks whether a device appeared at or after the sink that
+        // owns its signature activated; against a timestamp left over
+        // from a pad that existed before this run's sink, that is always
+        // false, so the pad was published as physical hardware. It then
+        // showed up in the input picker, could be assigned to another
+        // slot as a feedback loop, and got battery-polled — which is
+        // where a virtual pad reporting 10% on a wired profile came from.
+        //
+        // Worse, it was self-perpetuating: one crashed run leaves an
+        // orphan behind, the orphan seeds the stale timestamp, and every
+        // launch afterwards inherits it even once the orphan is swept.
+        var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var raw in devicesBySource.Values.SelectMany(list => list))
         {
+            present.Add(raw.Id);
             if (!firstSeenById.ContainsKey(raw.Id))
             {
                 firstSeenById[raw.Id] = now;
+            }
+        }
+
+        if (firstSeenById.Count != present.Count)
+        {
+            foreach (var goneId in firstSeenById.Keys.Where(id => !present.Contains(id)).ToList())
+            {
+                firstSeenById.Remove(goneId);
             }
         }
 

@@ -31,6 +31,12 @@ public sealed class SlotRuntime : IAsyncDisposable
     private readonly List<SlotPipeline> pipelines = [];
     private readonly Dictionary<string, int> slotFailureCounts = new(StringComparer.Ordinal);
 
+    /// <summary>Reused buffer for <see cref="GetActiveOutputSignatures"/>, which runs on the tick path.</summary>
+    private readonly List<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> signatureScratch = [];
+
+    /// <summary>Last published signature array; handed back unchanged while the set is stable.</summary>
+    private IReadOnlyList<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> publishedSignatures = [];
+
     /// <summary>
     /// Output sinks cached ACROSS rebuilds, keyed by slot id. Rebuilds
     /// happen on every slot edit (debounced to 400 ms), and recreating
@@ -71,7 +77,7 @@ public sealed class SlotRuntime : IAsyncDisposable
     }
 
     /// <summary>True if there is at least one enabled slot to run.</summary>
-    public bool HasEnabledSlots => registry.GetSlots().Any(s => s.Enabled);
+    public bool HasEnabledSlots => registry.HasEnabledSlots;
 
     /// <summary>
     /// (Vid, Pid) signatures of every currently-active slot's virtual
@@ -81,12 +87,59 @@ public sealed class SlotRuntime : IAsyncDisposable
     /// outputs can ever be enumerated (and therefore selected) as an
     /// input device — see SlotPipeline.OutputHardwareSignature.
     /// </summary>
-    public IReadOnlyList<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> GetActiveOutputSignatures() =>
-        [.. pipelines
-            .Select(p => (Sig: p.OutputHardwareSignature, At: p.OutputSignatureActivatedAt))
-            .Where(x => x.Sig is not null && x.At is not null)
-            .Select(x => (x.Sig!.Value.Vid, x.Sig.Value.Pid, x.At!.Value))
-            .Distinct()];
+    public IReadOnlyList<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> GetActiveOutputSignatures()
+    {
+        // Sinks materialise their OS device asynchronously, so a signature
+        // can appear (or an activation timestamp change) some ticks after
+        // the rebuild that created the pipeline. Recomputing is therefore
+        // still necessary — but it is done into a reused buffer and only
+        // published when the contents actually differ, so the steady state
+        // costs no allocation and the coordinator can skip its own work by
+        // reference-comparing what it got back.
+        signatureScratch.Clear();
+        foreach (var pipeline in pipelines)
+        {
+            if (pipeline.OutputHardwareSignature is not { } signature ||
+                pipeline.OutputSignatureActivatedAt is not { } activatedAt)
+            {
+                continue;
+            }
+
+            var entry = (signature.Vid, signature.Pid, activatedAt);
+            if (!signatureScratch.Contains(entry))
+            {
+                signatureScratch.Add(entry);
+            }
+        }
+
+        if (SameAsPublished(signatureScratch, publishedSignatures))
+        {
+            return publishedSignatures;
+        }
+
+        publishedSignatures = signatureScratch.ToArray();
+        return publishedSignatures;
+    }
+
+    private static bool SameAsPublished(
+        List<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> candidate,
+        IReadOnlyList<(ushort Vid, ushort Pid, DateTimeOffset ActivatedAt)> published)
+    {
+        if (candidate.Count != published.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < candidate.Count; i++)
+        {
+            if (candidate[i] != published[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Tears down existing slot pipelines and builds fresh ones for the
@@ -97,15 +150,16 @@ public sealed class SlotRuntime : IAsyncDisposable
     public async Task RebuildAsync(ProfileDocument activeProfile, string outputProvider)
     {
         var rebuildSw = System.Diagnostics.Stopwatch.StartNew();
+        var currentSlots = registry.GetSlots();
         var enabledCount = 0;
-        foreach (var s in registry.GetSlots()) { if (s.Enabled) enabledCount++; }
+        foreach (var s in currentSlots) { if (s.Enabled) enabledCount++; }
         logger.LogInformation(
             "Slot runtime: RebuildAsync starting (enabledSlots={EnabledSlots}, totalSlots={TotalSlots}, output={Output}).",
-            enabledCount, registry.GetSlots().Count, outputProvider);
+            enabledCount, currentSlots.Count, outputProvider);
 
         await DisposePipelinesAsync();
 
-        foreach (var slot in registry.GetSlots())
+        foreach (var slot in currentSlots)
         {
             if (!slot.Enabled)
             {
@@ -157,6 +211,22 @@ public sealed class SlotRuntime : IAsyncDisposable
         }
 
         await PruneSinkCacheAsync();
+
+        // Once, after every slot's sink exists — never per slot. Creating a
+        // second virtual controller re-triggers Windows PnP driver-bind
+        // activity that overwrites the FIRST one's friendly name, so any
+        // multi-slot session ends up with a mis-named device unless the
+        // names are re-applied after all the creation has settled. The SDK
+        // exposes this specifically for that race; the sinks own the SDK
+        // binding, so they perform it.
+        foreach (var (_, sink) in sinkCache.Values)
+        {
+            if (sink is IPostRebuildFinalizer finalizer)
+            {
+                finalizer.FinalizeAfterRebuild();
+                break;
+            }
+        }
 
         rebuildSw.Stop();
         logger.LogInformation(
@@ -217,7 +287,27 @@ public sealed class SlotRuntime : IAsyncDisposable
             return;
         }
 
-        Action<double, double> handler = (low, high) => rumbleFeedbackStore.Set(slotId, low, high);
+        // Logs the first non-zero rumble a game asks this slot for.
+        //
+        // "Rumble does not work" has several stopping points between the
+        // game and the motor, and each is silent on its own. This is the
+        // hand-off from the virtual pad to the effects pipeline: if this
+        // line never appears, no game ever asked; if it appears and the
+        // pad stays still, the break is downstream in the effects writer.
+        var announced = false;
+        Action<double, double> handler = (low, high) =>
+        {
+            if (!announced && (low > 0d || high > 0d))
+            {
+                announced = true;
+                logger.LogInformation(
+                    "Slot {Slot}: first rumble request from a game — low={Low:F2} high={High:F2}. " +
+                    "It is now the effects pipeline's job to reach the physical pad.",
+                    slotId, low, high);
+            }
+
+            rumbleFeedbackStore.Set(slotId, low, high);
+        };
         source.RumbleReceived += handler;
         rumbleSubscriptions[slotId] = (source, handler);
     }

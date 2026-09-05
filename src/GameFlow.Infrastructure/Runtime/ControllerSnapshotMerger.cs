@@ -26,7 +26,7 @@ public static class ControllerSnapshotMerger
         StickVector left = new(0, 0);
         StickVector right = new(0, 0);
         float leftTrigger = 0, rightTrigger = 0;
-        var buttons = new Dictionary<GameFlow.Core.Enums.ButtonId, bool>();
+        var buttons = ButtonMask.Empty;
 
         foreach (var snapshot in snapshots)
         {
@@ -41,13 +41,10 @@ public static class ControllerSnapshotMerger
             if (snapshot.LeftTrigger > leftTrigger) leftTrigger = snapshot.LeftTrigger;
             if (snapshot.RightTrigger > rightTrigger) rightTrigger = snapshot.RightTrigger;
 
-            foreach (var entry in snapshot.Buttons)
-            {
-                if (entry.Value)
-                {
-                    buttons[entry.Key] = true;
-                }
-            }
+            // A button is down on the merged pad if it is down on any
+            // contributing one — which is exactly a bitwise OR now, rather
+            // than a walk over one dictionary per device per frame.
+            buttons |= snapshot.Buttons;
         }
 
         return new ControllerSnapshot

@@ -75,6 +75,11 @@ internal readonly record struct SdlGamepadEffectPlan(
                 AdaptiveTriggerEffect.Constant => AdaptiveTriggerMode.Feedback,
                 AdaptiveTriggerEffect.Section => AdaptiveTriggerMode.Weapon,
                 AdaptiveTriggerEffect.Vibration => AdaptiveTriggerMode.Vibration,
+                AdaptiveTriggerEffect.SlopeFeedback => AdaptiveTriggerMode.SlopeFeedback,
+                AdaptiveTriggerEffect.MultiplePositionFeedback
+                    => AdaptiveTriggerMode.MultiplePositionFeedback,
+                AdaptiveTriggerEffect.MultiplePositionVibration
+                    => AdaptiveTriggerMode.MultiplePositionVibration,
                 _ => AdaptiveTriggerMode.Off,
             },
             StartPosition = value.StartPosition / 255f,

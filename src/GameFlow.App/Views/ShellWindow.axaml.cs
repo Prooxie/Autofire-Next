@@ -69,6 +69,37 @@ public partial class ShellWindow : Window
     /// </remarks>
     private bool warmUpHandedOff;
 
+    /// <summary>
+    /// The fastest interval that has already overrun on this machine, or
+    /// null before anything has. Recovery stays strictly under it.
+    /// </summary>
+    /// <remarks>
+    /// Reset when the user changes the configured rate, since that is a
+    /// deliberate instruction to try something different and the old
+    /// verdict no longer describes what was asked for.
+    /// </remarks>
+    /// <summary>Per-window dashboard tick telemetry; see RefreshTimerOnTick.</summary>
+    private int tickWindowCount;
+    private int tickWindowOverruns;
+    private double tickWindowGapMs;
+    private double tickWindowWorstGapMs;
+    private double tickWindowRefreshMs;
+    private double tickWindowWorstRefreshMs;
+
+    private TimeSpan? failedCeiling;
+
+    /// <summary>When <see cref="failedCeiling"/> was last set or relaxed.</summary>
+    private DateTime failedCeilingSetUtc = DateTime.MinValue;
+
+    /// <summary>How long a ceiling stands before a quiet machine may raise it.</summary>
+    private static readonly TimeSpan CeilingRelaxAfter = TimeSpan.FromSeconds(10);
+
+    /// <summary>Ceiling relaxation per quiet interval (shorter = faster allowed).</summary>
+    private const double CeilingRelaxFactor = 0.7;
+
+    /// <summary>How close recovery may step to a failed rate without reaching it.</summary>
+    private const double CeilingApproach = 1.15;
+
     private ShellViewModel? shellViewModel;
     private bool isRefreshing;
     private bool isClosing;
@@ -170,6 +201,8 @@ public partial class ShellWindow : Window
         var interval = TimeSpan.FromMilliseconds(1000d / hz);
         if (refreshTimer.Interval != interval)
         {
+            failedCeiling = null;
+            failedCeilingSetUtc = DateTime.MinValue;
             refreshTimer.Interval = interval;
 
             // Says where the number came from. "60 Hz" alone cannot be
@@ -484,6 +517,18 @@ public partial class ShellWindow : Window
             return;
         }
 
+        // Theme art still streaming in is not evidence about this machine.
+        // The decode storm ends; a rate chosen during it does not, and the
+        // measured cost is not even in the refresh (0.2 ms against a
+        // 115 ms gap) — it is the repaint each completed decode posts.
+        // Judging the hardware while that is running is what took the
+        // dashboard from 165 Hz to its floor in a second and a half.
+        if (ThemeSurface.HasPendingDecodes)
+        {
+            lastOverrunUtc = nowUtc;
+            return;
+        }
+
         // Only react to a real overrun — more than double the budget —
         // so ordinary jitter does not trigger a downgrade.
         if (gap > current + current)
@@ -495,6 +540,10 @@ public partial class ShellWindow : Window
             var slower = TimeSpan.FromMilliseconds(Math.Min(current.TotalMilliseconds * 2, 100));
             if (slower > current)
             {
+                // The rate that just failed becomes the ceiling recovery
+                // may not reach again. See the note in the recovery branch.
+                failedCeiling = failedCeiling is { } previous && previous > current ? previous : current;
+                failedCeilingSetUtc = nowUtc;
                 refreshTimer.Interval = slower;
                 Log.Warning(
                     "Dashboard tick throttled to {Hz:F0} Hz — the UI thread could not keep up at {Was:F0} Hz.",
@@ -522,7 +571,46 @@ public partial class ShellWindow : Window
             return;
         }
 
-        var faster = TimeSpan.FromMilliseconds(Math.Max(current.TotalMilliseconds / 2, wanted.TotalMilliseconds));
+        // A ceiling records what this machine could not hold AT THE TIME.
+        // Startup contention, a burst of theme decoding, another
+        // application's spike — none of them describe the machine a minute
+        // later, and nothing ever lifted the record. Relaxing it after a
+        // long quiet stretch is what stops the first few seconds of a
+        // session deciding the refresh rate for the whole of it.
+        if (failedCeiling is { } stale && nowUtc - failedCeilingSetUtc >= CeilingRelaxAfter)
+        {
+            failedCeiling = TimeSpan.FromMilliseconds(stale.TotalMilliseconds * CeilingRelaxFactor);
+            failedCeilingSetUtc = nowUtc;
+        }
+
+        var targetMs = Math.Max(current.TotalMilliseconds / 2, wanted.TotalMilliseconds);
+
+        // Step TOWARD a failed rate instead of refusing to move at all.
+        //
+        // Remembering a failed rate as a ceiling was right; testing the
+        // halved interval against it was not. Halving overshoots the
+        // ceiling in a single jump every time — from 10 Hz the step is to
+        // 20 Hz, which is past a 15 Hz ceiling — so the test rejected
+        // every recovery step that could ever be proposed and the rate
+        // could only travel downwards. One stall during startup therefore
+        // pinned the dashboard at its 10 Hz floor for the rest of the
+        // session, which is precisely the permanent choppiness the
+        // recovery path exists to prevent.
+        //
+        // Approaching the ceiling asymptotically keeps the property that
+        // matters — the rate stays strictly below what has been shown to
+        // fail, so it cannot oscillate — while still allowing movement.
+        if (failedCeiling is { } ceiling)
+        {
+            targetMs = Math.Max(targetMs, ceiling.TotalMilliseconds * CeilingApproach);
+        }
+
+        var faster = TimeSpan.FromMilliseconds(targetMs);
+        if (faster >= current)
+        {
+            return; // No headroom left under the ceiling.
+        }
+
         refreshTimer.Interval = faster;
 
         // Counts as activity, so the next step up needs another full quiet
@@ -539,12 +627,42 @@ public partial class ShellWindow : Window
         var nowUtc = DateTime.UtcNow;
         var gap = nowUtc - lastTickUtc;
         lastTickUtc = nowUtc;
-        if (gap.TotalMilliseconds > 120 && (nowUtc - lastTickGapWarnUtc).TotalSeconds >= 5)
+
+        // Aggregate rather than sample. The old line reported ONE overrun
+        // per five seconds, which cannot distinguish "one hitch every few
+        // seconds" from "every single tick is late" — and those call for
+        // completely different fixes. Counting them, and separating the
+        // time spent inside the refresh from the time lost elsewhere on
+        // the dispatcher, says which.
+        tickWindowCount++;
+        tickWindowGapMs += gap.TotalMilliseconds;
+        if (gap.TotalMilliseconds > tickWindowWorstGapMs) { tickWindowWorstGapMs = gap.TotalMilliseconds; }
+        if (gap.TotalMilliseconds > refreshTimer.Interval.TotalMilliseconds * 2) { tickWindowOverruns++; }
+
+        if ((nowUtc - lastTickGapWarnUtc).TotalSeconds >= 5 && tickWindowCount > 0)
         {
+            var budgetMs = refreshTimer.Interval.TotalMilliseconds;
+            var meanGap = tickWindowGapMs / tickWindowCount;
+
+            if (tickWindowOverruns > 0 || meanGap > budgetMs * 1.5)
+            {
+                Log.Warning(
+                    "Dashboard ticks: {Count} in {Window:F0}s at a {Budget:F0} ms budget — mean gap {Mean:F0} ms, "
+                    + "worst {Worst:F0} ms, {Overruns} overrun(s). Refresh work itself: mean {RefreshMean:F1} ms, "
+                    + "worst {RefreshWorst:F0} ms. Time not in refresh is elsewhere on the dispatcher.",
+                    tickWindowCount, (nowUtc - lastTickGapWarnUtc).TotalSeconds, budgetMs,
+                    meanGap, tickWindowWorstGapMs, tickWindowOverruns,
+                    tickWindowCount == 0 ? 0 : tickWindowRefreshMs / tickWindowCount,
+                    tickWindowWorstRefreshMs);
+            }
+
             lastTickGapWarnUtc = nowUtc;
-            Log.Warning(
-                "UI thread saturated: {GapMs:F0} ms between {WantedMs:F0} ms dashboard ticks — a repaint or event handler is hogging the dispatcher.",
-                gap.TotalMilliseconds, refreshTimer.Interval.TotalMilliseconds);
+            tickWindowCount = 0;
+            tickWindowOverruns = 0;
+            tickWindowGapMs = 0;
+            tickWindowWorstGapMs = 0;
+            tickWindowRefreshMs = 0;
+            tickWindowWorstRefreshMs = 0;
         }
 
         AdaptTickRate(gap);
@@ -565,7 +683,11 @@ public partial class ShellWindow : Window
         try
         {
             isRefreshing = true;
+            var refreshStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             await viewModel.RefreshRuntimeAsync();
+            var refreshMs = System.Diagnostics.Stopwatch.GetElapsedTime(refreshStarted).TotalMilliseconds;
+            tickWindowRefreshMs += refreshMs;
+            if (refreshMs > tickWindowWorstRefreshMs) { tickWindowWorstRefreshMs = refreshMs; }
         }
         catch (OperationCanceledException) { }
         catch (ObjectDisposedException)

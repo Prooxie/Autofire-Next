@@ -66,7 +66,7 @@ public static class MouseGamepadSynthesizer
         float rx = Math.Clamp(frame.Dx / sensitivity, -1f, 1f);
         float ry = Math.Clamp(-frame.Dy / sensitivity, -1f, 1f); // screen Y down → stick up
 
-        var buttons = new Dictionary<ButtonId, bool>();
+        var buttons = ButtonMask.Empty;
         if (frame.Middle)  buttons[ButtonId.RightStick] = true;
         if (frame.Button4) buttons[ButtonId.LeftShoulder] = true;
         if (frame.Button5) buttons[ButtonId.RightShoulder] = true;

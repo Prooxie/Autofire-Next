@@ -169,18 +169,26 @@ public static class DualSenseEffectEncoder
 
         block[..11].Clear();
 
-        // The firmware's position scale is 0-255 across the pull. Start is
-        // capped one below maximum so a fully-forward start still leaves
-        // somewhere for the effect to act.
-        var start = (byte)Math.Clamp(Math.Round(settings.StartPosition * 255), 0, 254);
-        var end = (byte)Math.Clamp(Math.Round(settings.EndPosition * 255), 0, 255);
-        var strength = (byte)Math.Clamp(Math.Round(settings.Strength * 255), 0, 255);
+        // Positions are ZONES, not a 0-255 travel value, and strengths are
+        // one of eight levels. The firmware divides the pull into ten zones
+        // and every extended effect addresses them by index.
+        var startZone = ToZone(settings.StartPosition);
+        var endZone = ToZone(settings.EndPosition);
+        var level = ToLevel(settings.Strength);
 
         // An inverted or empty band would make the effect vanish with no
         // indication why, so it is corrected to a minimal valid band.
-        if (end <= start)
+        if (endZone <= startZone)
         {
-            end = (byte)Math.Min(255, start + 1);
+            endZone = (byte)Math.Min(9, startZone + 1);
+        }
+
+        // Nothing to ask for. Told to the caller as "no effect" so the
+        // enable bit stays clear rather than arming an empty one.
+        if (level == 0 && settings.Mode != AdaptiveTriggerMode.Off)
+        {
+            block[0] = TriggerOff;
+            return true;
         }
 
         switch (settings.Mode)
@@ -189,35 +197,104 @@ public static class DualSenseEffectEncoder
                 block[0] = TriggerOff;
                 return true;
 
-            // Uniform resistance from `start` onward.
+            // Uniform resistance from `startZone` onward.
             case AdaptiveTriggerMode.Feedback:
             case AdaptiveTriggerMode.SlopeFeedback:
             case AdaptiveTriggerMode.MultiplePositionFeedback:
                 block[0] = TriggerFeedback;
-                block[1] = start;
-                block[2] = strength;
+                WriteZones(block, startZone, level);
                 return true;
 
             // Resistance across a band that then gives way — a trigger pull.
+            // Both edges travel as a two-bit mask rather than as positions.
             case AdaptiveTriggerMode.Weapon:
-                block[0] = TriggerWeapon;
-                block[1] = start;
-                block[2] = end;
-                block[3] = strength;
-                return true;
+                {
+                    // The firmware rejects a band starting before zone 2.
+                    var weaponStart = (byte)Math.Clamp((int)startZone, 2, 8);
+                    var weaponEnd = (byte)Math.Clamp((int)endZone, weaponStart + 1, 9);
+                    var band = (ushort)((1 << weaponStart) | (1 << weaponEnd));
+
+                    block[0] = TriggerWeapon;
+                    block[1] = (byte)(band & 0xFF);
+                    block[2] = (byte)((band >> 8) & 0xFF);
+                    block[3] = (byte)(level - 1);
+                    return true;
+                }
 
             case AdaptiveTriggerMode.Vibration:
             case AdaptiveTriggerMode.MultiplePositionVibration:
-                block[0] = TriggerVibration;
-                block[1] = start;
-                block[2] = strength;
-                block[3] = (byte)Math.Clamp(settings.FrequencyHz, 1, 255);
-                return true;
+                {
+                    var frequency = (byte)Math.Clamp(settings.FrequencyHz, 0, 255);
+                    if (frequency == 0)
+                    {
+                        // A buzz at no frequency is silence, and asking for
+                        // one leaves the trigger armed but dead.
+                        block[0] = TriggerOff;
+                        return true;
+                    }
+
+                    block[0] = TriggerVibration;
+                    WriteZones(block, startZone, level);
+
+                    // Frequency is the NINTH parameter, not the third. This
+                    // is what made the vibration modes produce nothing at
+                    // all: written at block[3] it landed in the amplitude
+                    // mask and left the frequency byte zero, so the pad was
+                    // handed a buzz with no rate to buzz at.
+                    block[9] = frequency;
+                    return true;
+                }
 
             default:
                 return false;
         }
     }
+
+    /// <summary>
+    /// Fills the active-zone mask and the per-zone amplitude nibbles that
+    /// every extended DualSense trigger effect shares.
+    /// </summary>
+    /// <remarks>
+    /// Effects 0x21, 0x25 and 0x26 are the firmware's EXTENDED set, and
+    /// they do not take a start byte and a strength byte. They take a
+    /// ten-bit mask of which zones are engaged followed by three bits of
+    /// amplitude per zone, packed little-endian across four bytes. Writing
+    /// simple parameters into that layout does not fail — it addresses an
+    /// arbitrary handful of zones at arbitrary strengths, which is why the
+    /// resistance modes felt roughly plausible while vibration felt like
+    /// nothing.
+    /// </remarks>
+    private static void WriteZones(Span<byte> block, byte startZone, byte level)
+    {
+        var amplitude = (byte)((level - 1) & 0x07);
+
+        ushort activeZones = 0;
+        uint amplitudeZones = 0;
+
+        for (var zone = startZone; zone < ZoneCount; zone++)
+        {
+            activeZones |= (ushort)(1 << zone);
+            amplitudeZones |= (uint)amplitude << (3 * zone);
+        }
+
+        block[1] = (byte)(activeZones & 0xFF);
+        block[2] = (byte)((activeZones >> 8) & 0xFF);
+        block[3] = (byte)(amplitudeZones & 0xFF);
+        block[4] = (byte)((amplitudeZones >> 8) & 0xFF);
+        block[5] = (byte)((amplitudeZones >> 16) & 0xFF);
+        block[6] = (byte)((amplitudeZones >> 24) & 0xFF);
+    }
+
+    /// <summary>Zones the firmware divides the trigger pull into.</summary>
+    private const int ZoneCount = 10;
+
+    /// <summary>A 0..1 position as a zone index.</summary>
+    private static byte ToZone(float unit) =>
+        (byte)Math.Clamp((int)Math.Round(unit * (ZoneCount - 1)), 0, ZoneCount - 1);
+
+    /// <summary>A 0..1 strength as one of the firmware's eight levels.</summary>
+    private static byte ToLevel(float unit) =>
+        (byte)Math.Clamp((int)Math.Round(unit * 8), 0, 8);
 }
 
 /// <summary>The two rumble encodings selected by SDL's PS5 HIDAPI driver.</summary>

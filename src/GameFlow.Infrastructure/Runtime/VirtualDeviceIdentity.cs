@@ -39,6 +39,39 @@ public static class VirtualDeviceIdentity
     /// </summary>
     private const string HidMaestroPathMarker = "hidmaestro";
 
+    /// <summary>
+    /// Enumerator every software-created device is named under. See the
+    /// note in <see cref="IsVirtual"/>.
+    /// </summary>
+    private const string RootEnumeratorPrefix = @"ROOT\";
+
+    /// <summary>
+    /// Instance-path prefix of a HID device created by a HID minidriver
+    /// with no bus device underneath it.
+    /// </summary>
+    /// <remarks>
+    /// This is the spelling HIDMaestro's own pads actually enumerate
+    /// under, which neither of the other two signals covers. A live
+    /// capture of a virtual DualShock 4 gave SDL the interface path
+    /// <c>\\?\HID#HIDCLASS#1&amp;4784345&amp;10b&amp;0000#{4d1e55b2-...}</c>:
+    /// no <c>hidmaestro</c> anywhere in it, and <c>HID</c> rather than
+    /// <c>ROOT</c> as the enumerator, so it was classified as physical
+    /// hardware on every poll and only ever hidden later, by the slower
+    /// vendor/product filter — which is exactly the "appears as a real
+    /// controller first, then vanishes" flicker.
+    ///
+    /// <para>
+    /// Real pads never look like this. They arrive over a bus and the
+    /// second path segment names their identity —
+    /// <c>HID\VID_054C&amp;PID_0CE6&amp;MI_03\...</c> over USB,
+    /// <c>HID\{00001124-...}_VID&amp;0002054C_PID&amp;0CE6\...</c> over
+    /// Bluetooth. <c>HIDCLASS</c> in that position means the HID stack
+    /// itself parented the device because nothing else did, which on a
+    /// gamepad means software created it.
+    /// </para>
+    /// </remarks>
+    private const string SoftwareHidPrefix = @"HID\HIDCLASS\";
+
     private static readonly ConcurrentDictionary<string, byte> ClaimedSerials =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -57,13 +90,54 @@ public static class VirtualDeviceIdentity
         }
     }
 
-    /// <summary>Registers a created device by its OS path.</summary>
+    /// <summary>Registers a created device by its OS path or instance id.</summary>
     public static void ClaimPath(string? path)
     {
-        if (!string.IsNullOrWhiteSpace(path))
+        var normalized = NormalizePath(path);
+        if (normalized.Length > 0)
         {
-            _ = ClaimedPaths.TryAdd(path.Trim(), 0);
+            _ = ClaimedPaths.TryAdd(normalized, 0);
         }
+    }
+
+    /// <summary>
+    /// Reduces the several spellings Windows uses for one device to a
+    /// single comparable form.
+    /// </summary>
+    /// <remarks>
+    /// The same device is named differently depending on who is asking.
+    /// The SDK reports an instance id — <c>ROOT\VID_045E&amp;PID_028E&amp;IG_00\0</c>
+    /// — while SDL reports the device interface path,
+    /// <c>\\?\ROOT#VID_045E&amp;PID_028E&amp;IG_00#0000#{4d1e55b2-…}</c>.
+    /// They describe one device: separators differ, the interface path
+    /// carries a prefix and a trailing class GUID. Folding both to
+    /// uppercase, backslash-separated, prefix- and GUID-free lets a claim
+    /// made from one source match a lookup from the other.
+    /// </remarks>
+    private static string NormalizePath(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var text = value.Trim().Replace('#', '\\');
+
+        if (text.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+            text.StartsWith(@"\\.\", StringComparison.Ordinal))
+        {
+            text = text[4..];
+        }
+
+        // Drop a trailing interface-class GUID, which the instance id form
+        // never carries.
+        var guid = text.IndexOf(@"\{", StringComparison.Ordinal);
+        if (guid >= 0)
+        {
+            text = text[..guid];
+        }
+
+        return text.Trim('\\').ToUpperInvariant();
     }
 
     /// <summary>Forgets a device this process destroyed.</summary>
@@ -74,9 +148,10 @@ public static class VirtualDeviceIdentity
             _ = ClaimedSerials.TryRemove(serial.Trim(), out _);
         }
 
-        if (!string.IsNullOrWhiteSpace(path))
+        var normalized = NormalizePath(path);
+        if (normalized.Length > 0)
         {
-            _ = ClaimedPaths.TryRemove(path.Trim(), out _);
+            _ = ClaimedPaths.TryRemove(normalized, out _);
         }
     }
 
@@ -108,8 +183,35 @@ public static class VirtualDeviceIdentity
             return false;
         }
 
-        var path = devicePath.Trim();
-        return ClaimedPaths.ContainsKey(path)
-            || path.Contains(HidMaestroPathMarker, StringComparison.OrdinalIgnoreCase);
+        var path = NormalizePath(devicePath);
+        if (path.Length == 0)
+        {
+            return false;
+        }
+
+        if (ClaimedPaths.ContainsKey(path) ||
+            path.Contains(HidMaestroPathMarker, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Parented by the HID stack rather than by a bus, and therefore
+        // software-created. See SoftwareHidPrefix.
+        if (path.StartsWith(SoftwareHidPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Root-enumerated, and therefore software-created.
+        //
+        // This is the signal that survives a crash. A claim only covers
+        // pads THIS process made, so a previous run that did not shut down
+        // cleanly leaves its pads behind, still enumerating, with nothing
+        // claiming them — and the "hidmaestro" name is on a sibling
+        // software node, not on the HID interface SDL reports. What is
+        // left is the enumerator: real pads arrive over a bus (USB, or
+        // BTHENUM over Bluetooth) and are named for it, while a device
+        // with no bus behind it is created by software and named ROOT.
+        return path.StartsWith(RootEnumeratorPrefix, StringComparison.OrdinalIgnoreCase);
     }
 }

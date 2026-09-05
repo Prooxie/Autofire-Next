@@ -169,8 +169,8 @@ public sealed record AppSettings
     /// <para>
     /// Off by default, deliberately. This opens a UDP listener, and a network
     /// service the user never asked for should not appear the first time the
-    /// app runs — the same reasoning behind
-    /// <see cref="GameFlow.Infrastructure.Overlay.OverlayOptions.Enabled"/>.
+    /// app runs — the same reasoning that keeps the web controller and the
+    /// stream overlay opt-in.
     /// </para>
     /// </summary>
     public bool MotionServerEnabled { get; init; }

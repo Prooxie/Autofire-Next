@@ -160,6 +160,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         GameFlow.Infrastructure.Runtime.Slots.SlotSnapshotStore slotSnapshotStore,
         GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog,
         GameFlow.Infrastructure.Runtime.Slots.PhysicalPanelPinService physicalPanelPins,
+        DevicesViewModel devicesPanel,
         GameFlow.Infrastructure.Runtime.DeviceCategoryOverrideStore deviceCategoryOverrides,
         GameFlow.Infrastructure.Runtime.DeviceSettingsStore deviceSettingsStore,
         IProfileFileDialogService profileFileDialogService,
@@ -209,8 +210,28 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
         ControllerStyleOptions = CreateControllerStyleOptions();
         MappingEditor          = new MappingEditorViewModel(loggerFactory.CreateLogger<MappingEditorViewModel>(), localizationService);
         MappingEditor.RulesChanged += OnMappingRulesChanged;
-        DevicesPanel           = new DevicesViewModel(inputDeviceCatalog, localizationService, deviceTemplateStore, buttonMapStore, keyboardStateSource, mouseStateSource, hidMaestroCatalog, deviceCategoryOverrides, deviceSettingsStore, slotRegistry, slotSnapshotStore);
+        DevicesPanel           = devicesPanel ?? throw new ArgumentNullException(nameof(devicesPanel));
         SlotsPanel             = new SlotsViewModel(slotRegistry, inputDeviceCatalog, deviceTemplateStore, profileSession, localizationService, hidMaestroCatalog, deviceSettingsStore);
+
+        // Tuning follows the virtual-controller selection rather than
+        // keeping a second picker of its own.
+        //
+        // Tuning only ever edits a virtual controller's slot, so offering
+        // its own slot list restated a choice the user had already made one
+        // tab over — and the two pickers could disagree, leaving the tuning
+        // panel editing a different controller from the one on screen.
+        SlotsPanel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(SlotsViewModel.SelectedSlot))
+            {
+                return;
+            }
+
+            var id = SlotsPanel.SelectedSlot?.Id;
+            DevicesPanel.SelectedTuningSlot = string.IsNullOrEmpty(id)
+                ? null
+                : DevicesPanel.TuningSlotOptions.FirstOrDefault(slot => slot.Id == id);
+        };
 
         this.slotRegistry = slotRegistry;
         this.slotSnapshotStore = slotSnapshotStore;
@@ -627,6 +648,36 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
     /// when one is chosen (any of the 225 profiles classify), the
     /// template's kind otherwise.
     /// </summary>
+    /// <summary>
+    /// Controller art for a slot's physical side, from the catalog rather
+    /// than from frames. See the note on
+    /// <see cref="DashboardControllerPanelViewModel.PhysicalStyle"/>.
+    /// </summary>
+    private ControllerVisualStyle ResolveSlotPhysicalStyle(
+        GameFlow.Infrastructure.Runtime.Slots.ControllerSlot slot)
+    {
+        foreach (var deviceId in slot.InputDeviceIds)
+        {
+            var device = inputDeviceCatalog.Devices.FirstOrDefault(d => d.Id == deviceId);
+            if (device is null)
+            {
+                continue;
+            }
+
+            var style = GameFlow.Core.Models.ControllerHardwareCatalog.Resolve(
+                device.VendorId, device.ProductId);
+            if (style != ControllerVisualStyle.Auto)
+            {
+                return style;
+            }
+        }
+
+        // Nothing assigned yet, or hardware the catalog does not know.
+        // Auto still resolves once a frame arrives, so this is a head
+        // start rather than a replacement for it.
+        return ControllerVisualStyle.Auto;
+    }
+
     private static ControllerVisualStyle ResolveSlotVirtualStyle(GameFlow.Infrastructure.Runtime.Slots.ControllerSlot slot)
     {
         var template = slot.OutputTemplate;
@@ -697,6 +748,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
                 {
                     LightColor = LightColorForSlot(slot),
                     VirtualStyle = ResolveSlotVirtualStyle(slot),
+                    PhysicalStyle = ResolveSlotPhysicalStyle(slot),
                     IsDemoPreview = slot.OutputTemplate.DemoPreview,
                 };
                 ControllerPanels.Insert(Math.Min(idx, ControllerPanels.Count), panel);
@@ -706,6 +758,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
                 existing.Title = slot.Name;
                 existing.LightColor = LightColorForSlot(slot);
                 existing.VirtualStyle = ResolveSlotVirtualStyle(slot);
+                existing.PhysicalStyle = ResolveSlotPhysicalStyle(slot);
                 existing.IsDemoPreview = slot.OutputTemplate.DemoPreview;
                 int cur = ControllerPanels.IndexOf(existing);
                 if (cur != idx && idx < ControllerPanels.Count)
@@ -1393,7 +1446,7 @@ public sealed class ShellViewModel : ViewModelBase, IDisposable
             var pair = slotSnapshotStore.Get(panel.SlotId);
             panel.OutputStatus = slotSnapshotStore.GetOutputStatus(panel.SlotId);
             panel.PhysicalVisual.Update(panel.SlotId + ":physical", PhysicalInputLabel,
-                pair.Physical, ControllerVisualStyle.Auto);
+                pair.Physical, panel.PhysicalStyle);
             panel.VirtualVisual.Update(panel.SlotId + ":virtual", VirtualOutputLabel,
                 pair.Virtual, panel.VirtualStyle);
         }

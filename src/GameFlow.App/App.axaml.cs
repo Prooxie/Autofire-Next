@@ -197,6 +197,21 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// How long the host gets to stop cleanly, so native providers (SDL,
+    /// HIDMaestro) can release OS handles before the process exits. Without
+    /// that window the CLR can run finalizers after the native DLLs have
+    /// been unloaded, which faults.
+    /// </summary>
+    private static readonly TimeSpan GracefulStopTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// When the exit watchdog gives up and kills the process. Must remain
+    /// strictly greater than <see cref="GracefulStopTimeout"/> plus room for
+    /// dispose and the final log flush.
+    /// </summary>
+    private static readonly TimeSpan ForcedExitTimeout = TimeSpan.FromSeconds(8);
+
     private void DesktopOnExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
     {
         if (Interlocked.Exchange(ref shutdownStarted, 1) == 1)
@@ -204,16 +219,25 @@ public partial class App : Application
             return;
         }
 
-        // Watchdog: spawn a *background* thread that waits a few
-        // seconds and then force-kills the process if any of the
+        // Watchdog: spawn a *background* thread that waits out the whole
+        // graceful budget and then force-kills the process if any of the
         // cleanup steps below have hung. Background = doesn't itself
         // prevent process exit, so when the polite shutdown finishes
         // promptly the watchdog is harmless. When it doesn't — typically
         // a native provider's foreground thread we can't reach from
         // managed code — Process.Kill() reclaims everything.
+        //
+        // The delay MUST stay longer than GracefulStopTimeout. It was
+        // shorter (4 s against a 5 s stop), which meant a host that took
+        // between four and five seconds to stop was hard-killed while
+        // still inside the budget it had been given — skipping exactly the
+        // ordered native teardown that budget exists to allow, which is
+        // what the AccessViolation-on-exit note below is about. The
+        // watchdog is the backstop for a hang, not a second, shorter
+        // deadline racing the first.
         new Thread(() =>
         {
-            Thread.Sleep(TimeSpan.FromSeconds(4));
+            Thread.Sleep(ForcedExitTimeout);
             try
             {
                 System.Diagnostics.Process.GetCurrentProcess().Kill();
@@ -225,7 +249,7 @@ public partial class App : Application
         })
         {
             IsBackground = true,
-            Name         = "Autofire-Exit-Watchdog",
+            Name         = "GameFlow-Exit-Watchdog",
         }.Start();
 
         var currentHost = Interlocked.Exchange(ref host, null);
@@ -244,7 +268,7 @@ public partial class App : Application
             // time to release OS handles before the process exits.  Without this
             // the CLR garbage collector may run finalizers AFTER the native DLLs
             // have already been unloaded, causing an AccessViolation on shutdown.
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var cts = new CancellationTokenSource(GracefulStopTimeout);
             currentHost.StopAsync(cts.Token).GetAwaiter().GetResult();
         }
         catch (OperationCanceledException)

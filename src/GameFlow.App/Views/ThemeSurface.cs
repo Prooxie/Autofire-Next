@@ -217,6 +217,7 @@ public sealed class ThemeSurface : Control
             lightbarMaskCache.Clear();
             hoveredHit = null;
             pressedHit = null;
+            PrewarmArt(value);
             InvalidateVisual();
         }
     }
@@ -257,6 +258,79 @@ public sealed class ThemeSurface : Control
     {
         BitmapDecoded -= OnBitmapDecoded;
         base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <summary>
+    /// Starts a decode for every image the theme references, including
+    /// the ones an idle render never touches.
+    /// </summary>
+    /// <remarks>
+    /// Theme bitmaps decode on a background thread and the first request
+    /// for one returns nothing. For art the ordinary render draws that is
+    /// invisible — it is faulted in during the first paint and cached long
+    /// before anyone can interact. The click and active overlays are drawn
+    /// only while a control is held, so the first request for them is the
+    /// user's first HOVER: the highlight has no silhouette to use for that
+    /// frame and falls back to a rectangle, then corrects itself once the
+    /// decode lands. Correct, but the wrong shape flashes up first, and it
+    /// happens once per control.
+    ///
+    /// <para>
+    /// Walking the document when the theme is set moves that work to a
+    /// moment when nothing is waiting on it. The decodes are already
+    /// asynchronous and deduplicated by path across every surface, so a
+    /// pack shared by eight panels is still decoded once.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// True while any theme bitmap is still being decoded.
+    /// </summary>
+    /// <remarks>
+    /// Startup faults in the better part of three hundred images across a
+    /// multi-slot dashboard, and every completed decode posts a repaint.
+    /// The dispatcher is genuinely saturated for that stretch — but by
+    /// work that ends, and that says nothing about what the machine can
+    /// sustain. The adaptive tick rate used to read it as a verdict on the
+    /// hardware and step 165 Hz down to its 10 Hz floor inside a second
+    /// and a half, then stay there.
+    /// </remarks>
+    internal static bool HasPendingDecodes => !DecodesInFlight.IsEmpty;
+
+    private static void PrewarmArt(InstalledTheme? theme)
+    {
+        if (theme is null)
+        {
+            return;
+        }
+
+        foreach (var node in theme.Document.Children)
+        {
+            PrewarmNode(node, theme);
+        }
+    }
+
+    private static void PrewarmNode(ThemeNode node, InstalledTheme theme)
+    {
+        var path = node switch
+        {
+            ImageNode image => image.ImagePath,
+            LightbarNode lightbar => lightbar.ImagePath,
+            TrailPadNode trail => trail.ImagePath,
+            PBarNode bar => bar.ImagePath,
+            _ => null,
+        };
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            // Return value deliberately discarded: the point is to start
+            // the decode, which the first call does on its way to null.
+            _ = LoadBitmap(path, theme);
+        }
+
+        foreach (var child in node.Children)
+        {
+            PrewarmNode(child, theme);
+        }
     }
 
     private void OnBitmapDecoded()
@@ -472,6 +546,9 @@ public sealed class ThemeSurface : Control
     // still fires for the host so the VM's SelectElement pipeline runs.
 
     private ThemeHitResult? hoveredHit;
+
+    /// <summary>Elements whose highlight path has been reported once.</summary>
+    private readonly HashSet<string> highlightDiagnosed = new(StringComparer.Ordinal);
     private ThemeHitResult? pressedHit;
 
     /// <summary>
@@ -560,7 +637,7 @@ public sealed class ThemeSurface : Control
         // input pipeline / VM update chain, NOT in the theme engine.
         if (!firstButtonPressLogged)
         {
-            var pressedNow = snapshot.Buttons.Count(kv => kv.Value);
+            var pressedNow = snapshot.Buttons.PressedCount;
             if (pressedNow > 0)
             {
                 firstButtonPressLogged = true;
@@ -595,7 +672,7 @@ public sealed class ThemeSurface : Control
             Log.IsEnabled(Serilog.Events.LogEventLevel.Debug))
         {
             lastFeedbackDiagnostic = now;
-            var pressed = snapshot.Buttons.Count(kv => kv.Value);
+            var pressed = snapshot.Buttons.PressedCount;
             var samples = new System.Text.StringBuilder();
             foreach (var node in theme.Document.Children)
             {
@@ -612,7 +689,7 @@ public sealed class ThemeSurface : Control
                 "ThemeSurface[{Mode}] tick: device={Device} pressed={Pressed}/{Total} L=({LX:F2},{LY:F2}) R=({RX:F2},{RY:F2}) LT={LT:F2} RT={RT:F2} showhide=[{Samples}]",
                 isPhysicalView ? "physical" : "virtual",
                 snapshot.DeviceName,
-                pressed, snapshot.Buttons.Count,
+                pressed, ButtonState.Count,
                 snapshot.LeftStick.X, snapshot.LeftStick.Y,
                 snapshot.RightStick.X, snapshot.RightStick.Y,
                 snapshot.LeftTrigger, snapshot.RightTrigger,
@@ -953,6 +1030,24 @@ public sealed class ThemeSurface : Control
         var mask = theme is null ? null : GetHighlightMask(theme, hit.ShapeImagePath);
         var brush = pressed ? HighlightBrush : HoverHighlightBrush;
 
+        // One line per element, the first time it is highlighted. A
+        // highlight that comes out as a plain rectangle has two causes that
+        // look identical on screen — no silhouette art for the element, so
+        // the rounded-rect fallback below is drawing, or art that resolved
+        // but whose opacity mask is not being applied — and nothing in the
+        // log distinguished them.
+        if (highlightDiagnosed.Add(hit.ElementId))
+        {
+            Log.Information(
+                "Highlight {Element}: art={Art}, mask={Mask}, bounds={W:F0}x{H:F0} at ({X:F0},{Y:F0}) — drawing {Path}.",
+                hit.ElementId,
+                hit.ShapeImagePath ?? "<none declared>",
+                mask is null ? "NOT LOADED" : "loaded",
+                hit.Bounds.Width, hit.Bounds.Height, hit.Bounds.X, hit.Bounds.Y,
+                mask is not null ? "silhouette"
+                    : IsRoundControl(hit.ElementId) ? "ellipse fallback" : "rounded-rect fallback");
+        }
+
         if (mask is not null)
         {
             using (ctx.PushOpacityMask(mask, hit.Bounds))
@@ -997,7 +1092,29 @@ public sealed class ThemeSurface : Control
         }
 
         var bitmap = LoadBitmap(imagePath, theme);
-        var mask = bitmap is null ? null : new ImageBrush(bitmap) { Stretch = Stretch.Fill };
+
+        // A null here is almost never "no art" — it is "not decoded YET".
+        // Theme bitmaps decode on a background thread and the first call
+        // for any image always returns null, with a repaint posted once it
+        // lands. Caching that null made it permanent, and it landed on
+        // exactly one class of art: the click/active overlays. Those are
+        // drawn only while a control is held, so unlike the D-pad arms,
+        // face buttons and trigger fills they are never decoded by an
+        // ordinary render — the first hover was always the first request,
+        // always got null, and cached it for the session. That is why L1,
+        // R1, the touchpad, Options/Share and the PS button fell back to a
+        // rectangle while everything else silhouetted correctly.
+        //
+        // Leaving it uncached costs one resolve per frame while a decode is
+        // in flight, which is a dictionary probe: LoadBitmap short-circuits
+        // both a completed decode and a genuinely missing file from its own
+        // caches.
+        if (bitmap is null)
+        {
+            return null;
+        }
+
+        var mask = new ImageBrush(bitmap) { Stretch = Stretch.Fill };
         highlightMaskCache[imagePath] = mask;
         return mask;
     }

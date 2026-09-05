@@ -249,12 +249,27 @@ public sealed class ControllerEffectProducer(
     /// </summary>
     internal static AdaptiveTriggerCommand ToCommand(ResolvedAdaptiveTrigger settings)
     {
+        // One effect per mode. This used to narrow seven modes onto four
+        // effects and the plan widened them back, so the round trip was
+        // lossy in the middle of the pipeline: choosing Multiple-position
+        // feedback or Slope feedback produced plain Constant resistance,
+        // and choosing Multiple-position vibration produced plain
+        // Vibration. The firmware distinguishes all of them and the
+        // DualSense encoder already writes distinct effect ids, so the
+        // narrowing threw away detail nothing downstream wanted lost —
+        // silently, with the UI still showing the mode that had been
+        // picked.
         var effect = settings.Mode switch
         {
             AdaptiveTriggerMode.Off => AdaptiveTriggerEffect.Off,
+            AdaptiveTriggerMode.Feedback => AdaptiveTriggerEffect.Constant,
             AdaptiveTriggerMode.Weapon => AdaptiveTriggerEffect.Section,
-            AdaptiveTriggerMode.Vibration or AdaptiveTriggerMode.MultiplePositionVibration
-                => AdaptiveTriggerEffect.Vibration,
+            AdaptiveTriggerMode.Vibration => AdaptiveTriggerEffect.Vibration,
+            AdaptiveTriggerMode.SlopeFeedback => AdaptiveTriggerEffect.SlopeFeedback,
+            AdaptiveTriggerMode.MultiplePositionFeedback
+                => AdaptiveTriggerEffect.MultiplePositionFeedback,
+            AdaptiveTriggerMode.MultiplePositionVibration
+                => AdaptiveTriggerEffect.MultiplePositionVibration,
             _ => AdaptiveTriggerEffect.Constant,
         };
 

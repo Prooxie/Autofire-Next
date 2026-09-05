@@ -128,5 +128,14 @@ public enum AdaptiveTriggerEffect : byte
     Section = 2,
 
     /// <summary>Repeated resistance steps — the "machine gun" feel.</summary>
-    Vibration = 3
+    Vibration = 3,
+
+    /// <summary>Resistance that ramps between two positions.</summary>
+    SlopeFeedback = 4,
+
+    /// <summary>Per-position resistance across the whole pull.</summary>
+    MultiplePositionFeedback = 5,
+
+    /// <summary>Per-position buzz across the whole pull.</summary>
+    MultiplePositionVibration = 6
 }

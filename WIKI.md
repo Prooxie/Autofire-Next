@@ -277,5 +277,32 @@ netsh http add urlacl url=http://+:8080/ user=Everyone
 
 - **Adding a rule type:** follow the existing pattern in `src/GameFlow.Core/Models/Rules/` — a record deriving `MappingRule`, registered in `MappingRule`'s `[JsonDerivedType]` list, with its pass added to `ControllerMappingPipeline.Process()`. Keep state that needs to persist across ticks (schedulers, latches) as a small dictionary field on the pipeline, matching every other stateful rule.
 - **Platform interop:** if you're touching `EvdevInterop.cs`/`UinputInterop.cs`, verify struct layouts and ioctl numbers by compiling a small C program against real headers rather than trusting memory — that's how the existing Linux interop was grounded, and it caught a real ABI mismatch during development (`ioctl`'s request parameter needing 8 bytes, not 4, on x86_64).
+- **The runtime tick is an allocation-free path.** `RuntimeCoordinator`'s
+  loop runs at the profile's polling rate — up to 1000 Hz — and everything it
+  reaches runs that often too, once per enabled slot. Anything allocated
+  there becomes garbage-collection pressure, and a collection pause is what a
+  player feels as input lag, so treat a per-frame `new`, LINQ chain, string
+  interpolation or reflection call as a defect rather than a style question.
+  The established patterns: partition rules into typed arrays once when the
+  pipeline is built (`ControllerMappingPipeline`'s constructor), keep reusable
+  scratch buffers as fields, cache anything derived from configuration rather
+  than recomputing it, and publish a shared snapshot on mutation instead of
+  cloning on read (`SlotRegistry`). Where a value must be pushed to another
+  component, compare it against what was last pushed and skip the call when
+  nothing changed — see `RuntimeCoordinator.PublishOwnedHardwareSignatures`.
+  `ControllerSnapshot.Buttons` is a `ButtonMask` — one bit per button in a
+  `uint` — for exactly this reason; reach for the same shape before adding
+  another per-frame collection.
+- **Adding a field to the virtual controller:** the HIDMaestro sink builds
+  one `HMGamepadState` per frame, and every field it does not write still
+  goes out on the wire as zero — which the consuming game believes. That is
+  not the same as the field being absent, and it has bitten this project
+  three times: virtual pads reporting ~10% battery forever, a touchpad click
+  that was silently dropped, and a virtual DualSense reporting itself
+  perfectly still with nothing on its touch surface. When the SDK grows a
+  state member, check whether GameFlow has the data for it, and cover it in
+  `HidMaestroSubmitCoverageTests`. Where GameFlow genuinely cannot know a
+  value, say so explicitly rather than writing a zero — `HasGyro` is the
+  model: a pad with no sensor submits *no motion*, not "not moving".
 - **Tests:** `tests/GameFlow.Core.Tests` covers the pipeline and pure logic (no OS dependency); `tests/GameFlow.Infrastructure.Tests` covers platform interop, controller effects, device ownership, web protocols, and overlay compilation. Run `dotnet test GameFlow.sln` before handing off a change.
 - **Versioning:** the single source of truth is `Directory.Build.props`'s `<Version>`, used as the fallback for local builds. Tagged releases (`v*`) override it via `-p:Version=${GITHUB_REF_NAME#v}` in `.github/workflows/ci.yml` — tag `v1.0.1` and CI picks it up with no workflow changes needed.

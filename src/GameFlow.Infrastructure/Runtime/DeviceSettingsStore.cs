@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GameFlow.Core.Models;
+using GameFlow.Infrastructure.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace GameFlow.Infrastructure.Runtime;
@@ -49,6 +50,13 @@ public sealed class DeviceSettingsStore
         filePath = overridePath ?? Path.Combine(ResolveDataDirectory(), "device-settings.json");
         Load();
     }
+
+    /// <summary>
+    /// Absolute path of the JSON file this store reads and writes. Exposed
+    /// so diagnostics and support bundles can report where per-device tuning
+    /// actually lives, rather than assuming it.
+    /// </summary>
+    public string FilePath => filePath;
 
     /// <summary>Raised after any mutation so the UI can react without polling.</summary>
     public event EventHandler? SettingsChanged;
@@ -277,11 +285,20 @@ public sealed class DeviceSettingsStore
         }
     }
 
-    private static string ResolveDataDirectory()
-    {
-        // Same "AutofireNext" folder the rest of the app already uses —
-        // deliberately unchanged so existing installs keep their data.
-        var baseDirectory = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(baseDirectory, "AutofireNext");
-    }
+    /// <summary>
+    /// The app-wide data folder (<see cref="AppPaths.BaseDirectory"/>).
+    ///
+    /// <para>
+    /// This used to resolve <c>%LocalAppData%\AutofireNext</c> directly,
+    /// with a comment claiming it matched "the rest of the app". That
+    /// stopped being true at the GameFlow rebrand: everything else moved
+    /// to <c>%LocalAppData%\GAMEFLOW</c> (with a one-time copy of the
+    /// legacy folder), so per-device tuning was the only state left
+    /// behind in the old location — invisible to the migration, to
+    /// <see cref="AppPathOverrides"/>, and to anyone backing up the data
+    /// folder. Going through <see cref="AppPaths"/> puts it back with
+    /// the rest of the app and picks up the legacy copy for free.
+    /// </para>
+    /// </summary>
+    private static string ResolveDataDirectory() => AppPaths.BaseDirectory;
 }

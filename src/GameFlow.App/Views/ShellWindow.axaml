@@ -1136,48 +1136,6 @@
                  nothing to save under — the tab used to render an empty
                  picker and a line explaining it was unusable, which is a
                  whole tab spent saying "not yet". -->
-            <TabItem Header="Tuning" IsVisible="{Binding DevicesPanel.HasTuningSlots}">
-              <Grid Margin="20,16" DataContext="{Binding DevicesPanel}" RowDefinitions="Auto,*" RowSpacing="12">
-
-                <StackPanel Grid.Row="0" Spacing="6">
-                  <TextBlock Text="Controller tuning" FontSize="18" FontWeight="SemiBold" />
-                  <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
-                             Text="Choose a virtual-controller slot. A selected physical device edits its override; without one, tuning stays available for an assigned offline device or the slot defaults." />
-                  <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock Text="Slot" VerticalAlignment="Center" />
-                    <ComboBox ItemsSource="{Binding TuningSlotOptions}"
-                              SelectedItem="{Binding SelectedTuningSlot}"
-                              DisplayMemberBinding="{Binding Name}"
-                              MinWidth="220" />
-                    <Button Content="Reset to defaults"
-                            Command="{Binding ResetTuningCommand}" Padding="10,4" />
-                  </StackPanel>
-                </StackPanel>
-
-                <Border Grid.Row="1" BorderThickness="1" CornerRadius="6" Padding="12"
-                        BorderBrush="{DynamicResource AppBorder}">
-                  <Panel>
-                    <!-- IsVisible resolves against this control's OWN DataContext,
-                         which the line below has just set to the editor — so the
-                         path is HasDevice, not DeviceSettingsEditor.HasDevice.
-                         The longer path silently bound to nothing; compiled
-                         bindings turned that into a build error. -->
-                    <views:DeviceSettingsEditorView DataContext="{Binding DeviceSettingsEditor}"
-                                                    IsVisible="{Binding HasDevice}" />
-                    <!-- The tab only appears once a slot exists, so this is
-                         the narrower case: a slot is picked and no tuning
-                         target resolved. Saying nothing at all leaves a
-                         blank panel that reads as a broken tab. -->
-                    <TextBlock Text="Pick a slot to tune."
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Opacity="0.55"
-                               IsVisible="{Binding !DeviceSettingsEditor.HasDevice}" />
-                  </Panel>
-                </Border>
-
-              </Grid>
-            </TabItem>
-
             <TabItem Header="{Binding DevicesVirtualTabHeader}">
 
           <Grid x:Name="SlotsRoot" Margin="20,16" DataContext="{Binding SlotsPanel}"
@@ -1309,7 +1267,18 @@
                  disappears part-way down a scroll reads as a glitch. -->
             <TabControl Grid.Row="2" IsVisible="{Binding HasSelectedSlot}"
                         ClipToBounds="True">
-                <TabItem Header="{Binding PreviewTabHeader}">
+                <!--
+                    Preview, device/profile assignment and mappings, together.
+
+                    These were three sibling tabs all describing one
+                    controller, and the split forced a round trip to do
+                    anything useful: the mappings tab opened by telling you
+                    to "return to Preview and click the control you want",
+                    which is a tab admitting it is in the wrong place.
+                    Setting a controller up now reads top to bottom on one
+                    page — see it, say what drives it, map it.
+                -->
+                <TabItem Header="{Binding SetupTabHeader}">
                   <ScrollViewer>
                     <StackPanel Spacing="12" Margin="0,10,0,0">
                       <Border Classes="card" Padding="14">
@@ -1351,12 +1320,10 @@
                           </StackPanel>
                         </Border>
                       </Grid>
-                    </StackPanel>
-                  </ScrollViewer>
-                </TabItem>
-                <TabItem Header="{Binding SlotSettingsTabHeader}">
-                <ScrollViewer>
-                <StackPanel Spacing="14" Margin="0,10,0,0">
+
+                      <TextBlock Text="Devices &amp; profiles" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
+                      <TextBlock Classes="hint" Text="Which physical controller drives this slot, and which profiles apply to it." />
+                      <Separator Margin="0,2,0,4" Opacity="0.35" />
 
                   <!-- Identity and lifecycle live above the tabs now, so
                        renaming a controller does not mean leaving the tab
@@ -1501,18 +1468,12 @@
                     </StackPanel>
                   </StackPanel>
 
-                </StackPanel>
-              </ScrollViewer>
-                </TabItem>
 
-                <TabItem Header="{Binding MappingsTabHeader}">
-                  <ScrollViewer>
-                    <StackPanel Spacing="12" Margin="0,10,0,0">
                       <Border Classes="card" Padding="16">
                         <StackPanel Spacing="8">
                           <TextBlock Text="Mappings" FontSize="16" FontWeight="SemiBold" />
                           <TextBlock Classes="hint"
-                                     Text="For the fastest setup, return to Preview and click the exact virtual control you want to produce. The focused editor will ask for its physical source." />
+                                     Text="For the fastest setup, click the exact virtual control you want to produce on the controller above. The focused editor will ask for its physical source." />
                           <Button Content="Open complete mapping rule editor"
                                   Command="{Binding #ShellRoot.DataContext.OpenMappingsCommand}"
                                   HorizontalAlignment="Left" />
@@ -1757,6 +1718,36 @@
 
                     </StackPanel>
                   </ScrollViewer>
+                </TabItem>
+
+                <!--
+                    Tuning, for the slot already selected above.
+
+                    This used to be a sibling of Virtual controllers with a
+                    slot picker of its own, which restated a choice the user
+                    had just made one tab over — and the two could disagree,
+                    so the tuning panel could be editing a different
+                    controller from the one being previewed. Tuning only ever
+                    applies to a virtual controller's slot, so it belongs
+                    with the rest of that slot's settings.
+                -->
+                <TabItem Header="Tuning">
+                  <Grid Margin="0,10,0,0" RowDefinitions="Auto,*" RowSpacing="10"
+                        DataContext="{Binding $parent[Window].DataContext.DevicesPanel}">
+                    <Button Grid.Row="0" HorizontalAlignment="Right" Padding="10,4"
+                            Content="Reset to defaults"
+                            Command="{Binding ResetTuningCommand}"
+                            IsEnabled="{Binding DeviceSettingsEditor.HasDevice}" />
+                    <Panel Grid.Row="1">
+                      <views:DeviceSettingsEditorView
+                          DataContext="{Binding DeviceSettingsEditor}"
+                          IsVisible="{Binding HasDevice}" />
+                      <TextBlock Text="Select a virtual controller to tune."
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 Opacity="0.55"
+                                 IsVisible="{Binding !DeviceSettingsEditor.HasDevice}" />
+                    </Panel>
+                  </Grid>
                 </TabItem>
               </TabControl>
           </Grid>

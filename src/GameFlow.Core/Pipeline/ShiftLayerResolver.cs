@@ -32,7 +32,7 @@ public sealed class ShiftLayerResolver
     private readonly Dictionary<string, bool> wasPressed = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> holdGateStartedAt = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> cycleIndex = new(StringComparer.Ordinal);
-    private readonly Dictionary<ButtonId, bool> lastPhysicalButtons = new();
+    private ButtonMask lastPhysicalButtons;
 
     private DateTimeOffset lastActivityAt = DateTimeOffset.MinValue;
     private bool stickyEngagedThisRise;
@@ -53,19 +53,20 @@ public sealed class ShiftLayerResolver
         // next-action reversion — ANY button transitioning (either
         // direction) counts as activity, not just layer activators.
         var anyOtherButtonRoseThisTick = false;
-        foreach (var (id, pressed) in physical.Buttons)
+        var nowPressed = physical.Buttons;
+        var changed = nowPressed ^ lastPhysicalButtons;
+        if (changed != ButtonMask.Empty)
         {
-            var was = lastPhysicalButtons.GetValueOrDefault(id);
-            if (pressed != was)
-            {
-                lastActivityAt = now;
-                if (pressed && !was)
-                {
-                    anyOtherButtonRoseThisTick = true;
-                }
-            }
-            lastPhysicalButtons[id] = pressed;
+            lastActivityAt = now;
+
+            // A rise is a button that changed AND is down now. The whole
+            // "did anything transition, and did anything go down" question
+            // is two mask operations, where it used to be a walk over every
+            // button id with a dictionary lookup and a dictionary write
+            // each — on every tick, whether or not anything moved.
+            anyOtherButtonRoseThisTick = (changed & nowPressed) != ButtonMask.Empty;
         }
+        lastPhysicalButtons = nowPressed;
 
         var previousActive = ActiveLayerId;
         var candidate = ActiveLayerId;

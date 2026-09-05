@@ -1033,7 +1033,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
     /// No-op when the device has no map. Lets controllers whose buttons
     /// are recognized in a different order be normalized.
     /// </summary>
-    private void ApplyButtonMap(OpenedDevice device, Dictionary<ButtonId, bool> buttons)
+    private void ApplyButtonMap(OpenedDevice device, ref ButtonMask buttons)
     {
         var map = buttonMapStore.GetOrNull(device.DeviceId);
         if (map is null || map.IsEmpty)
@@ -1126,7 +1126,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
 
         inputDeviceCatalog.SetProviderStatus($"Using SDL3 mapped gamepad: {device.DisplayName}.");
 
-        ApplyButtonMap(device, buttons);
+        ApplyButtonMap(device, ref buttons);
 
         ReadBreadcrumb("gamepad: reading sticks + vendor/product");
         var vendorId  = SdlInterop.GetGamepadVendor(device.Handle);
@@ -1262,7 +1262,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
 
         inputDeviceCatalog.SetProviderStatus($"Using SDL3 generic joystick or HID fallback: {device.DisplayName}. Mapping is provisional until the binding editor is finished.");
 
-        ApplyButtonMap(device, buttons);
+        ApplyButtonMap(device, ref buttons);
 
         return new ControllerSnapshot
         {
@@ -1420,9 +1420,29 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
         // build — so this cannot be left to "the right hints are set".
         var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        string BuildStableId(string kindTag, ushort vid, ushort pid, string name)
+        // A virtual pad gets its own signature space, so it can never
+        // collide with the hardware it is impersonating.
+        //
+        // Impersonation is exact: one of our emitted pads carries the same
+        // vendor, product AND name as the real controller, so it hashed to
+        // the identical id and the two were separated only by the ordinal
+        // suffix below — which is handed out in enumeration order, and
+        // that order is not stable across restarts. When the virtual pad
+        // enumerated first it took the bare id and the real controller
+        // became "-2". Every slot referencing the bare id then resolved to
+        // a device that is deliberately hidden from the catalog, so the
+        // controller read as offline, showed its raw id instead of a name,
+        // and could not be configured — until the virtual controller was
+        // killed and the real one reclaimed the id.
+        //
+        // Marking the signature rather than reordering enumeration keeps
+        // every existing id for real hardware byte-for-byte identical, so
+        // no saved slot assignment has to be migrated.
+        string BuildStableId(string kindTag, ushort vid, ushort pid, string name, bool isVirtual)
         {
-            var signature = $"{vid:X4}:{pid:X4}:{name}";
+            var signature = isVirtual
+                ? $"virtual:{vid:X4}:{pid:X4}:{name}"
+                : $"{vid:X4}:{pid:X4}:{name}";
             var ordinal = seenSignatureCounts.TryGetValue(signature, out var count) ? count + 1 : 1;
             seenSignatureCounts[signature] = ordinal;
             var suffix = ordinal > 1 ? $"-{ordinal}" : string.Empty;
@@ -1454,7 +1474,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
                     continue;
                 }
 
-                var gamepadId = BuildStableId("gamepad", vid, pid, name);
+                var isVirtualGamepad = VirtualDeviceIdentity.IsVirtual(gamepadPath, serial: null);
+                var gamepadId = BuildStableId("gamepad", vid, pid, name, isVirtualGamepad);
                 liveMap[gamepadId] = instanceId;
                 var power = GetCachedPower(gamepadId);
 
@@ -1469,7 +1490,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
                     DeviceCategory.Gamepad,
                     power.Percentage,
                     power.State,
-                    VirtualDeviceIdentity.IsVirtual(gamepadPath, serial: null)));
+                    LogVirtualVerdict(gamepadId, gamepadPath, isVirtualGamepad)));
             }
         }
         finally
@@ -1510,7 +1531,8 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
                     continue;
                 }
 
-                var joystickId = BuildStableId("joystick", vid, pid, name);
+                var isVirtualJoystick = VirtualDeviceIdentity.IsVirtual(joystickPath, serial: null);
+                var joystickId = BuildStableId("joystick", vid, pid, name, isVirtualJoystick);
                 liveMap[joystickId] = instanceId;
                 var power = GetCachedPower(joystickId);
 
@@ -1525,7 +1547,7 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
                     DeviceCategory.Joystick,
                     power.Percentage,
                     power.State,
-                    VirtualDeviceIdentity.IsVirtual(joystickPath, serial: null)));
+                    LogVirtualVerdict(joystickId, joystickPath, isVirtualJoystick)));
             }
         }
         finally
@@ -1783,6 +1805,20 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
                 continue;
             }
 
+            // Never battery-poll one of our own emitted pads.
+            //
+            // A virtual controller has no battery, but SDL will happily
+            // answer for one, and what it answers is the report's default
+            // rather than a measurement — which is how a virtual pad came
+            // to announce itself at 10% on battery, permanently, including
+            // for a WIRED Xbox 360 profile that cannot have one. Reading
+            // it also opens a handle to a device this process created, for
+            // a number that means nothing.
+            if (info.IsVirtual)
+            {
+                continue;
+            }
+
             if (telemetryHandles.TryGetValue(info.Id, out var existing))
             {
                 opened[info.Id] = existing;
@@ -1907,6 +1943,35 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
             }
         }
     }
+
+    /// <summary>
+    /// Decides whether an enumerated device is one of ours, and says so
+    /// in the log the first time each device is seen.
+    /// </summary>
+    /// <remarks>
+    /// The verdict is invisible otherwise, and getting it wrong is subtle
+    /// in both directions: a virtual pad mistaken for hardware can be fed
+    /// back into another slot and gets battery-polled, while real hardware
+    /// mistaken for virtual simply vanishes from the picker with no way to
+    /// override it. Logging the path alongside the verdict makes a report
+    /// of either one actionable instead of guesswork.
+    /// </remarks>
+    private bool LogVirtualVerdict(string deviceId, string? devicePath, bool isVirtual)
+    {
+        if (virtualVerdictLogged.Add(deviceId))
+        {
+            logger.LogInformation(
+                "Device {DeviceId} classified as {Kind} (path: {Path}).",
+                deviceId,
+                isVirtual ? "VIRTUAL (one of ours)" : "physical",
+                string.IsNullOrWhiteSpace(devicePath) ? "<none reported>" : devicePath);
+        }
+
+        return isVirtual;
+    }
+
+    /// <summary>Devices whose classification has already been logged once.</summary>
+    private readonly HashSet<string> virtualVerdictLogged = new(StringComparer.OrdinalIgnoreCase);
 
     private DevicePowerInfo GetCachedPower(string deviceId) =>
         powerByDeviceId.TryGetValue(deviceId, out var power)

@@ -115,7 +115,10 @@ public sealed class SnapshotVisualsTests
     public void APressedButtonIsNotEquivalent()
     {
         var up = ControllerSnapshot.Empty();
-        var down = up with { Buttons = new Dictionary<ButtonId, bool> { [ButtonId.South] = true } };
+
+        var pressed = ButtonMask.Empty;
+        pressed[ButtonId.South] = true;
+        var down = up with { Buttons = pressed };
 
         Assert.False(SnapshotVisuals.AreEquivalent(up, down));
     }
@@ -123,13 +126,17 @@ public sealed class SnapshotVisualsTests
     [Fact]
     public void AnExplicitlyReleasedButtonMatchesAnAbsentOne()
     {
-        // Producers disagree about whether to carry released keys at all,
-        // and both draw the same thing.
-        var absent = ControllerSnapshot.Empty() with { Buttons = new Dictionary<ButtonId, bool>() };
-        var explicitFalse = ControllerSnapshot.Empty() with
-        {
-            Buttons = new Dictionary<ButtonId, bool> { [ButtonId.South] = false },
-        };
+        // Producers used to disagree about whether to carry released keys
+        // at all, and both drew the same thing. A ButtonMask makes that
+        // structurally impossible — a clear bit is the only way to say
+        // "not pressed" — but the assertion is kept because the property
+        // it protects (writing a button as false is not a visible change)
+        // is still the one callers depend on.
+        var absent = ControllerSnapshot.Empty();
+
+        var released = ButtonMask.Empty;
+        released[ButtonId.South] = false;
+        var explicitFalse = ControllerSnapshot.Empty() with { Buttons = released };
 
         Assert.True(SnapshotVisuals.AreEquivalent(absent, explicitFalse));
     }

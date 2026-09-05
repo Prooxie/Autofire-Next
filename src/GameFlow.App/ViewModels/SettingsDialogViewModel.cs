@@ -317,7 +317,9 @@ public sealed partial class SettingsDialogViewModel : ObservableObject
                 CheckRequirementsOnStartup = CheckRequirementsOnStartup,
             };
 
-            await userSettings.ApplyAsync(updated).ConfigureAwait(false);
+            // This command is entered on Avalonia's UI thread. Preserve its
+            // synchronization context for both success and failure notifications.
+            await userSettings.ApplyAsync(updated);
 
             // The path-override change may have moved the in-effect
             // directories; refresh the read-only display rows so the user

@@ -1,4 +1,5 @@
 using GameFlow.Core.Models;
+using GameFlow.Infrastructure.Configuration;
 using GameFlow.Infrastructure.Runtime;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -232,6 +233,32 @@ public sealed class DeviceSettingsStoreTests
 
     private static DeviceSettingsStore CreateStore(string path) =>
         new(NullLogger<DeviceSettingsStore>.Instance, path);
+
+    [Fact]
+    public void The_default_file_lives_in_the_app_data_folder()
+    {
+        // Regression: this store resolved %LocalAppData%\AutofireNext
+        // directly, with a comment claiming it matched "the rest of the
+        // app". The GameFlow rebrand moved everything else to
+        // AppPaths.BaseDirectory, so per-device tuning was the only state
+        // stranded in the old folder — outside the rebrand's migration,
+        // outside AppPathOverrides, and outside anyone's backup of the
+        // data folder.
+        var store = new DeviceSettingsStore(NullLogger<DeviceSettingsStore>.Instance);
+
+        Assert.Equal(
+            Path.Combine(AppPaths.BaseDirectory, "device-settings.json"),
+            store.FilePath);
+    }
+
+    [Fact]
+    public void An_explicit_path_overrides_the_default()
+    {
+        var path = TemporarySettingsPath();
+        var store = CreateStore(path);
+
+        Assert.Equal(path, store.FilePath);
+    }
 
     private static string TemporarySettingsPath() =>
         Path.Combine(Path.GetTempPath(), $"gameflow-device-settings-{Guid.NewGuid():N}.json");

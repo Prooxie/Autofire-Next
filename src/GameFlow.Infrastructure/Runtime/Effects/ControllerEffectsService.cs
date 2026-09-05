@@ -69,6 +69,12 @@ public sealed class ControllerEffectsService : BackgroundService
     /// <summary>Last observed backend availability, so the transition logs once each way.</summary>
     private bool backendAvailable = true;
 
+    /// <summary>Set once the first non-zero rumble write has been reported.</summary>
+    private bool rumbleDeliveryLogged;
+
+    /// <summary>Whether the first adaptive-trigger write has been reported.</summary>
+    private bool adaptiveDeliveryLogged;
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Support is NOT decided here. The backend is the SDL input
@@ -188,6 +194,47 @@ public sealed class ControllerEffectsService : BackgroundService
                 // One bad device must not stop the others.
                 logger.LogDebug(exception, "Effect write to {Device} threw; treating as a failed write.", write.DeviceId);
                 ok = false;
+            }
+
+            // The last hop: a non-zero rumble actually handed to the
+            // physical pad. Together with the slot-level line upstream this
+            // brackets the whole path, so a silent motor points at exactly
+            // one of the two halves rather than at the whole feature.
+            if (!rumbleDeliveryLogged &&
+                (write.State.LowFrequencyRumble > 0d || write.State.HighFrequencyRumble > 0d))
+            {
+                rumbleDeliveryLogged = true;
+                logger.LogInformation(
+                    "Controller effects: first rumble write to {Device} — low={Low:F2} high={High:F2}, accepted={Accepted}.",
+                    write.DeviceId,
+                    write.State.LowFrequencyRumble,
+                    write.State.HighFrequencyRumble,
+                    ok);
+            }
+
+            // Same bracketing for adaptive triggers as for rumble above.
+            // A trigger mode that "does not work" can fail at the encoder,
+            // in the plan, or at the pad, and the three are indistinguishable
+            // from the outside — this names which effect was asked for and
+            // whether the pad took it.
+            var leftEffect = write.State.LeftTrigger?.Effect ?? AdaptiveTriggerEffect.Off;
+            var rightEffect = write.State.RightTrigger?.Effect ?? AdaptiveTriggerEffect.Off;
+
+            if (!adaptiveDeliveryLogged &&
+                (leftEffect != AdaptiveTriggerEffect.Off || rightEffect != AdaptiveTriggerEffect.Off))
+            {
+                adaptiveDeliveryLogged = true;
+                logger.LogInformation(
+                    "Controller effects: first adaptive-trigger write to {Device} — left={Left} "
+                    + "(start={LStart} end={LEnd} strength={LStrength} freq={LFreq}Hz), right={Right}, accepted={Accepted}.",
+                    write.DeviceId,
+                    leftEffect,
+                    write.State.LeftTrigger?.StartPosition ?? 0,
+                    write.State.LeftTrigger?.EndPosition ?? 0,
+                    write.State.LeftTrigger?.Strength ?? 0,
+                    write.State.LeftTrigger?.FrequencyHz ?? 0,
+                    rightEffect,
+                    ok);
             }
 
             if (ok)

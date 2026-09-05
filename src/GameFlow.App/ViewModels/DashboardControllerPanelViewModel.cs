@@ -187,6 +187,29 @@ public sealed class DashboardControllerPanelViewModel : ViewModelBase
     /// </summary>
     public GameFlow.Core.Enums.ControllerVisualStyle VirtualStyle { get => virtualStyle; set => SetProperty(ref virtualStyle, value); }
 
+    private GameFlow.Core.Enums.ControllerVisualStyle physicalStyle
+        = GameFlow.Core.Enums.ControllerVisualStyle.Auto;
+
+    /// <summary>
+    /// Controller art for this panel's physical side, resolved from the
+    /// assigned device's vendor/product rather than from its frames.
+    /// </summary>
+    /// <remarks>
+    /// The virtual side has always known its own kind — it is whatever the
+    /// slot was created to emit — so it drew immediately. The physical
+    /// side was left on Auto, which reads vendor and product off the
+    /// incoming snapshot, so it could not resolve anything until the
+    /// runtime produced a frame for that device. The visible result was a
+    /// dashboard whose right half was a finished controller while the left
+    /// still read "no controller theme installed for this style". The
+    /// catalog knows what the pad is as soon as it is assigned.
+    /// </remarks>
+    public GameFlow.Core.Enums.ControllerVisualStyle PhysicalStyle
+    {
+        get => physicalStyle;
+        set => SetProperty(ref physicalStyle, value);
+    }
+
     /// <summary>This slot's physical (input) side of the comparison.</summary>
     public ControllerVisualStateViewModel PhysicalVisual { get; }
 

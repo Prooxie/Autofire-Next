@@ -49,7 +49,7 @@ public sealed class MultiButtonAutofireExecutor
         this.rule = rule;
     }
 
-    public void Apply(ControllerSnapshot physical, Dictionary<ButtonId, bool> virtualButtons, DateTimeOffset now)
+    public void Apply(ControllerSnapshot physical, ref ButtonMask virtualButtons, DateTimeOffset now)
     {
         if (rule.SourceButton == ButtonId.None || rule.Steps.Count == 0)
         {
