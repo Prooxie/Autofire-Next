@@ -14,6 +14,13 @@ public sealed class RawAxisRowViewModel(int index) : ViewModelBase
     public int Index { get; } = index;
     public string Label => $"Axis {Index}";
 
+    /// <summary>
+    /// The unscaled SDL reading. The analog calibration wizard compares
+    /// these against a baseline, so it needs the raw value rather than
+    /// the display forms below.
+    /// </summary>
+    public short Raw => raw;
+
     public double Normalized => (raw + 32768.0) / 65535.0;
     public string RawText => raw.ToString(CultureInfo.InvariantCulture);
 

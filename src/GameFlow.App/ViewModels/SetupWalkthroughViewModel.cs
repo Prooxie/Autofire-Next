@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using GameFlow.Infrastructure.Runtime.Templates;
 using GameFlow.Infrastructure.Runtime;
@@ -97,8 +98,23 @@ public sealed class SetupWalkthroughViewModel : ViewModelBase, IDisposable
         NextCommand = new RelayCommand(Next, () => CanGoNext);
         BackCommand = new RelayCommand(Back, () => stepIndex > 0);
 
+        // The calibration step's "Next" is gated on calibration not
+        // running, and nothing else here observes that. Without this the
+        // gate only refreshed when the device catalog happened to change,
+        // so the button's enabled state trailed the wizard by however
+        // long the next catalog refresh took.
+        Devices.PropertyChanged += OnDevicesPropertyChanged;
+
         catalog.Updated += OnCatalogUpdated;
         RefreshDetectedDevices();
+    }
+
+    private void OnDevicesPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DevicesViewModel.IsAnyCalibrating))
+        {
+            RaiseCanExecuteChanged();
+        }
     }
 
     // ─── Step machine ─────────────────────────────────────────────────
@@ -183,11 +199,11 @@ public sealed class SetupWalkthroughViewModel : ViewModelBase, IDisposable
         // that looks finished and does nothing.
         1 => HasUsableDevice || SkipDeviceStep,
 
-        // Calibration owns the pad while it runs — every press is being
-        // captured as an answer, so a press meant for "Next" would be
-        // swallowed and recorded against whichever button was being asked
-        // for.
-        2 => !Devices.IsCalibrating,
+        // Calibration owns the pad while it runs — every press, and every
+        // stick or trigger movement, is being captured as an answer, so
+        // input meant for "Next" would be swallowed and recorded against
+        // whichever control was being asked for.
+        2 => !Devices.IsAnyCalibrating,
         _ => true,
     };
 
@@ -436,7 +452,42 @@ public sealed class SetupWalkthroughViewModel : ViewModelBase, IDisposable
         ? "Found it. Continue when you are ready."
         : "Nothing yet — connect a controller by USB or Bluetooth and it will appear here on its own.";
 
-    private void OnCatalogUpdated(object? sender, EventArgs e) => RefreshDetectedDevices();
+    /// <summary>
+    /// Catalog changes arrive on the SDL worker thread, and everything
+    /// <see cref="RefreshDetectedDevices"/> touches is UI-bound — the
+    /// detected-device collection, the selection, and through it the
+    /// Devices view model's commands, whose
+    /// <c>NotifyCanExecuteChanged</c> verifies dispatcher access and
+    /// throws. That throw was swallowed by the SDL worker's
+    /// keep-the-loop-alive handler as a bare "SDL worker tick failed;
+    /// continuing.", so the walkthrough's device list silently stopped
+    /// updating whenever a pad appeared or vanished.
+    ///
+    /// <para>
+    /// Posted rather than checked-then-invoked, and coalesced, for the
+    /// same reason <c>DevicesViewModel</c> does it: the catalog can fire
+    /// far faster than the UI can consume it, and a selection change
+    /// raises the event synchronously.
+    /// </para>
+    /// </summary>
+    private void OnCatalogUpdated(object? sender, EventArgs e)
+    {
+        if (refreshQueued)
+        {
+            return;
+        }
+        refreshQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            refreshQueued = false;
+            if (!disposed)
+            {
+                RefreshDetectedDevices();
+            }
+        });
+    }
+
+    private bool refreshQueued;
 
     private void RefreshDetectedDevices()
     {
@@ -558,8 +609,9 @@ public sealed class SetupWalkthroughViewModel : ViewModelBase, IDisposable
 
         disposed = true;
         catalog.Updated -= OnCatalogUpdated;
+        Devices.PropertyChanged -= OnDevicesPropertyChanged;
 
-        if (Devices.IsCalibrating)
+        if (Devices.IsAnyCalibrating)
         {
             Devices.CancelCalibrationCommand.Execute(null);
         }

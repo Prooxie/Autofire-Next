@@ -9,7 +9,7 @@
 **Ultimate multi-platform, multi-language controller tool for remapping and compability layering, Any input device in, any virtual controller out: Xbox, PlayStation or Nintendo. third-party gamepad, keyboard or/and mouse.**
 
 
-**v1.0.1 Beta** · Built with **.NET 10** · **Avalonia UI** · **SDL3** · **HIDMaestro** · **ViGemBus**
+**v1.0.5** · Built with **.NET 10** · **Avalonia UI** · **SDL3** · **HIDMaestro**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-informational)](#requirements)
@@ -50,6 +50,7 @@ For the full feature reference, per-rule mechanics, and platform-by-platform ver
 |**Button combos**|One press → a timed sequence of virtual presses|
 |**Freeze macro**|Captures the stick vector on the rising edge of a button; optional pulse-while-frozen|
 |**Per-device tuning**|Deadzone, anti-deadzone, full-at, sensitivity, response curve, and invert — per stick, per trigger, **per slot AND per device**, so the same pad feels different on two different slots. Offline slots remain editable through inheritable defaults; rumble, lighting, and adaptive-trigger settings reach assigned supported hardware through the effects thread.|
+|**Device calibration**|Press-to-detect for buttons and D-pad, move-to-detect for sticks and triggers. Fixes a pad SDL recognises with the wrong button order, or a converter that reports the right stick on the trigger axes. Each stick binds as two independent axes; a pad whose L2/R2 are plain switches binds them as on/off triggers|
 |**Rumble-linked adaptive triggers**|A DualSense trigger can stiffen with the game's rumble, or buzz along with it — the impulse-trigger feel, without the game knowing. Per trigger, with its own amount|
 |**Keyboard \& mouse as gamepad**|Full keyboard state (not just a handful of buttons) synthesized into a gamepad snapshot — works on **Windows, Linux, and macOS**|
 |**Motion server**|DSU / Cemuhook over UDP (26760 by default) — Cemu, Dolphin, Yuzu and Ryujinx read gyro and accelerometer straight from any slot with a motion-capable pad. Off by default; enable it in the Dashboard's Motion Server section|
@@ -110,7 +111,7 @@ sudo usermod -aG input $USER
 
 Keyboard/mouse capture needs **Input Monitoring** permission (System Settings → Privacy \& Security → Input Monitoring). GameFlow asks for it on first run and writes the answer to the log either way — if the permission is refused, keyboards and mice still appear on the Devices page and simply never register a press, so the log line is the only thing that tells a refusal apart from a bug. macOS shows that prompt once and once only; after a refusal, System Settings is the only way back.
 
-\---
+---
 
 ## Quick Start
 
@@ -131,11 +132,15 @@ First launch creates a default profile under:
 
 > Upgrading from a pre-rename build? The folder used to be called `AutofireNext`. On first launch GameFlow **copies** everything from it into the new folder — profiles, settings, slots, per-device tuning — and leaves the old folder untouched, so it doubles as a backup. The copy only happens when the new folder is empty, so it can never overwrite newer data.
 
-\---
+---
 
 ## How to Use
 
 ### Basics
+
+The fastest route is **Setup guide** in the sidebar. Six steps: pick the controller, check its layout lines up (calibrating it there if it doesn't), choose what games should see, name it, and review both sides live. It creates and assigns the slot for you.
+
+By hand:
 
 1. **Profiles** tab → create a profile, or start from the default.
 2. **Devices** tab → confirm your physical device is listed.
@@ -143,6 +148,20 @@ First launch creates a default profile under:
 4. **Dashboard** → confirm the virtual side (marked with a **VIRTUAL** badge) mirrors your input through the mapping.
 
 A slot's own virtual output is hidden from every input picker — you can't feed a virtual controller back in as a source.
+
+### Fix a pad that reads wrong
+
+If the wrong button lights up, or a stick does nothing while moving it pulls a trigger, the pad's physical layout doesn't match what SDL believes it is. This is common on PS2-to-USB and PS2-to-PS3 converters, which present a DualShock 3's identity while wiring the axes differently.
+
+**Devices** tab → select the pad → two calibration passes, either of which can also be started from inside the Setup guide:
+
+* **Calibrate buttons** — press each button as prompted. Handles D-pads reported as a hat, not just plain buttons.
+* **Calibrate sticks & triggers** — six prompts, each asking for the *positive* direction (right, up, or fully pulled), so the direction you push decides the orientation. Each stick binds two independent axes, because a converter that scrambles the axis order rarely moves X and Y together.
+  * If a trigger is a plain switch with no analog travel, press it and it binds as an on/off trigger that still reports a real value to the game.
+  * **Silence** forces a target to zero — needed after moving a stick onto axes SDL believed were the triggers, since SDL keeps reporting that motion as L2/R2 as well.
+  * Each prompt waits for you to let go before it starts listening, so releasing one control can't answer the next question.
+
+Both passes save per device, merge into the same map, and apply before any mapping rule — so the corrected input is what the virtual controller emits, not just what the on-screen layout draws. **Clear mapping** removes everything saved for that pad.
 
 ### Tune a device (deadzones, curves, rumble, lighting, adaptive triggers)
 
@@ -159,7 +178,7 @@ On the Adaptive tab, **React to rumble** ties a trigger to what the game is actu
 
 Up to 16 phones can connect at once. Each browser tab keeps a stable pad number across automatic WebSocket reconnects, and stale sockets cannot overwrite a replacement connection. Game rumble returns through the browser Vibration API when the phone supports it; GameFlow sends an explicit stop when rumble ends or the connection closes.
 
-> \*\*Windows firewall note:\*\* binding to all interfaces needs an admin URL ACL, or the server falls back to localhost-only and phones can't reach it (the log says which mode it's in):
+> **Windows firewall note:** binding to all interfaces needs an admin URL ACL, or the server falls back to localhost-only and phones can't reach it (the log says which mode it's in):
 > ```
 > netsh http add urlacl url=http://+:8080/ user=Everyone
 > ```
@@ -187,7 +206,7 @@ The page has a transparent background, reconnects automatically, and renders dir
 ```json
 {
   "Runtime": {
-    "DashboardRefreshHz": 165,
+    "DashboardRefreshHz": 0,
     "StartRuntimeOnLaunch": true,
     "DefaultCulture": "en",
     "Updates": {
@@ -221,7 +240,7 @@ Any key above can also be set from the environment, with `__` separating levels 
 
 Older profiles referencing retired providers (XInput, GameInput, x360ce, ViGEm, PS3, and similar) migrate to `sdl`/`hidmaestro` automatically.
 
-\---
+---
 
 ## Project Structure
 
@@ -281,6 +300,7 @@ Shift layers resolve first each tick, gating which rules are active. Every slot'
 Documented here rather than discovered by surprise:
 
 * **No virtual *gamepad* output on Linux or macOS.** Mouse output is real on both; a real virtual controller (via `uinput`'s gamepad mode, or DriverKit on macOS) is future work.
+* **GameFlow does not hide your physical controller from games.** Both pads stay visible, so a game that reads every connected controller sees your input twice. There is no integration with [HidHide](https://github.com/nefarius/HidHide) or any equivalent — hiding is a separate tool's job, and GameFlow neither installs nor configures one. If you use HidHide, whitelist `GameFlow.App.exe` or GameFlow loses the pad along with everything else.
 * **Bundled controller theme placement is known-imperfect** on some skins — several were generated from asset-pack sprites without authoritative layout data. Fixing this properly needs template-matching each sprite against its base image; tracked, not yet done.
 * **The macOS input path has never run on a Mac.** It is written against IOKit's documented HID API, but there is no macOS toolchain in the build environment, so nothing about it has been exercised on hardware — unlike the Linux interop, which was checked against real kernel headers. Absolute-mode pointers (some tablets) are also unsupported by it, and the volume/mute keys are not mappable there because they are Consumer-page usages the reader does not claim.
 * **Remote Link** — on the roadmap, not started.

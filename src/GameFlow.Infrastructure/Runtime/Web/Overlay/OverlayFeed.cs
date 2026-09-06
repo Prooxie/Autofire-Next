@@ -65,7 +65,11 @@ public sealed class OverlayFeed(
             ? template.OutputKind
             : HidMaestroProfiles.ClassifyFamily(template.OutputProfileId);
 
-        return themes.GetThemeForStyle(HidMaestroProfiles.ResolveVisualStyle(family));
+        var style = HidMaestroProfiles.ResolveVisualStyle(family);
+        // Same stand-in rule as the dashboard surfaces: an overlay that
+        // draws a near-identical pad beats one that draws nothing on a
+        // live stream.
+        return themes.GetThemeForStyle(themes.ResolveRenderableStyle(style));
     }
 
     /// <summary>

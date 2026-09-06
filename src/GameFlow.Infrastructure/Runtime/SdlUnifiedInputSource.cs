@@ -1033,18 +1033,21 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
     /// No-op when the device has no map. Lets controllers whose buttons
     /// are recognized in a different order be normalized.
     /// </summary>
-    private void ApplyButtonMap(OpenedDevice device, ref ButtonMask buttons)
-    {
-        var map = buttonMapStore.GetOrNull(device.DeviceId);
-        if (map is null || map.IsEmpty)
-        {
-            return;
-        }
-
-        var joystick = device.Kind == DeviceKind.Gamepad
+    /// <summary>
+    /// The raw joystick behind an opened device. A gamepad handle wraps
+    /// one; a joystick handle already is one. Every calibrated remap
+    /// reads through this rather than through the gamepad API, because
+    /// the whole point of a remap is that SDL's own view of which
+    /// physical control is which is wrong for this device.
+    /// </summary>
+    private static IntPtr GetRawJoystick(OpenedDevice device) =>
+        device.Kind == DeviceKind.Gamepad
             ? SdlInterop.GetGamepadJoystick(device.Handle)
             : device.Handle;
-        if (joystick == IntPtr.Zero)
+
+    private static void ApplyButtonMap(DeviceButtonMap? map, IntPtr joystick, ref ButtonMask buttons)
+    {
+        if (map is null || (map.Buttons.Count == 0 && map.Hats.Count == 0) || joystick == IntPtr.Zero)
         {
             return;
         }
@@ -1079,6 +1082,68 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
         }
     }
 
+    /// <summary>
+    /// Overwrites the sticks and triggers SDL produced with whatever the
+    /// device's calibrated analog map says actually drives them. Only
+    /// bound targets are touched; the rest keep SDL's own reading.
+    ///
+    /// <para>
+    /// A stick needs both of its half-axes bound to move correctly, and
+    /// the two are independent here on purpose: a converter that
+    /// scrambles the axis order rarely moves X and Y by the same amount,
+    /// and one that reports a stick where SDL expects a trigger leaves
+    /// the other half-axis exactly where it was.
+    /// </para>
+    /// </summary>
+    private static void ApplyAxisMap(
+        DeviceButtonMap? map,
+        IntPtr joystick,
+        ref StickVector leftStick,
+        ref StickVector rightStick,
+        ref float leftTrigger,
+        ref float rightTrigger)
+    {
+        if (map is null || map.Axes.Count == 0 || joystick == IntPtr.Zero)
+        {
+            return;
+        }
+
+        float leftX = leftStick.X, leftY = leftStick.Y;
+        float rightX = rightStick.X, rightY = rightStick.Y;
+
+        foreach (var (target, binding) in map.Axes)
+        {
+            var value = Resolve(binding, joystick);
+            switch (target)
+            {
+                case AnalogTarget.LeftStickX: leftX = value; break;
+                case AnalogTarget.LeftStickY: leftY = value; break;
+                case AnalogTarget.RightStickX: rightX = value; break;
+                case AnalogTarget.RightStickY: rightY = value; break;
+                case AnalogTarget.LeftTrigger: leftTrigger = Math.Clamp(value, 0f, 1f); break;
+                case AnalogTarget.RightTrigger: rightTrigger = Math.Clamp(value, 0f, 1f); break;
+            }
+        }
+
+        leftStick = new StickVector(leftX, leftY).Clamp();
+        rightStick = new StickVector(rightX, rightY).Clamp();
+    }
+
+    /// <summary>
+    /// Reads the one raw control a binding names. Reading only that one
+    /// keeps a per-tick remap down to a single interop call per bound
+    /// target.
+    /// </summary>
+    private static float Resolve(in AnalogBinding binding, IntPtr joystick)
+    {
+        var axisValue = binding.Kind == AnalogSourceKind.Axis
+            ? SdlInterop.GetJoystickAxis(joystick, binding.Index)
+            : (short)0;
+        var buttonPressed = binding.Kind == AnalogSourceKind.Button
+            && SdlInterop.GetJoystickButton(joystick, binding.Index);
+        return AxisMapEvaluator.Resolve(binding, axisValue, buttonPressed);
+    }
+
     private ControllerSnapshot ReadGamepadSnapshot(OpenedDevice device)
     {
         var buttons = ButtonState.Clone(ButtonState.CreateEmptyMap());
@@ -1110,9 +1175,6 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
         var leftTrigger = NormalizeGamepadTrigger(SdlInterop.GetGamepadAxis(device.Handle, SdlInterop.GamepadAxis.LeftTrigger));
         var rightTrigger = NormalizeGamepadTrigger(SdlInterop.GetGamepadAxis(device.Handle, SdlInterop.GamepadAxis.RightTrigger));
 
-        buttons[ButtonId.LeftTriggerButton] = leftTrigger >= 0.65f;
-        buttons[ButtonId.RightTriggerButton] = rightTrigger >= 0.65f;
-
         ReadBreadcrumb("gamepad: reading TOUCHPAD (DualSense-specific)");
         var touchContacts = ReadTouchState(device.Handle);
         ReadBreadcrumb("gamepad: touchpad read returned OK");
@@ -1126,8 +1188,6 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
 
         inputDeviceCatalog.SetProviderStatus($"Using SDL3 mapped gamepad: {device.DisplayName}.");
 
-        ApplyButtonMap(device, ref buttons);
-
         ReadBreadcrumb("gamepad: reading sticks + vendor/product");
         var vendorId  = SdlInterop.GetGamepadVendor(device.Handle);
         var productId = SdlInterop.GetGamepadProduct(device.Handle);
@@ -1137,6 +1197,24 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
         var rightStick = new StickVector(
             NormalizeSignedAxis(SdlInterop.GetGamepadAxis(device.Handle, SdlInterop.GamepadAxis.RightX)),
             -NormalizeSignedAxis(SdlInterop.GetGamepadAxis(device.Handle, SdlInterop.GamepadAxis.RightY))).Clamp();
+
+        // Calibration last, and both halves of it against the same map,
+        // so one lookup covers buttons and axes. The analog map runs
+        // BEFORE the trigger-to-button derivation below: a pad whose L2
+        // is a plain switch gets its trigger value from that switch, and
+        // LeftTriggerButton then follows the corrected value rather than
+        // the dead SDL axis.
+        var calibration = buttonMapStore.GetOrNull(device.DeviceId);
+        // Uncalibrated is the common case, and it must stay free: no
+        // extra interop, no second handle lookup, on a path that runs
+        // per device per tick.
+        var joystick = calibration is null ? IntPtr.Zero : GetRawJoystick(device);
+        ApplyAxisMap(calibration, joystick, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger);
+
+        buttons[ButtonId.LeftTriggerButton] = leftTrigger >= 0.65f;
+        buttons[ButtonId.RightTriggerButton] = rightTrigger >= 0.65f;
+
+        ApplyButtonMap(calibration, joystick, ref buttons);
 
         // Disambiguates the freeze. If a log ends at "reading sticks +
         // vendor/product" with no line below, the stall is in one of the SDL
@@ -1257,24 +1335,33 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
             ? NormalizePositiveHalfAxis(SdlInterop.GetJoystickAxis(device.Handle, 5))
             : 0f;
 
-        buttons[ButtonId.LeftTriggerButton] = leftTrigger >= 0.65f;
-        buttons[ButtonId.RightTriggerButton] = rightTrigger >= 0.65f;
+        var leftStick = new StickVector(
+            axisCount > 0 ? NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 0)) : 0f,
+            axisCount > 1 ? -NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 1)) : 0f).Clamp();
+        var rightStick = new StickVector(
+            axisCount > 2 ? NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 2)) : 0f,
+            axisCount > 3 ? -NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 3)) : 0f).Clamp();
 
         inputDeviceCatalog.SetProviderStatus($"Using SDL3 generic joystick or HID fallback: {device.DisplayName}. Mapping is provisional until the binding editor is finished.");
 
-        ApplyButtonMap(device, ref buttons);
+        // The axis order above is a guess — the first four axes are
+        // assumed to be the two sticks — so an unrecognized pad is
+        // exactly the case a calibrated analog map exists for.
+        var calibration = buttonMapStore.GetOrNull(device.DeviceId);
+        ApplyAxisMap(calibration, device.Handle, ref leftStick, ref rightStick, ref leftTrigger, ref rightTrigger);
+
+        buttons[ButtonId.LeftTriggerButton] = leftTrigger >= 0.65f;
+        buttons[ButtonId.RightTriggerButton] = rightTrigger >= 0.65f;
+
+        ApplyButtonMap(calibration, device.Handle, ref buttons);
 
         return new ControllerSnapshot
         {
             DeviceName = device.DisplayName,
             VendorId   = SdlInterop.GetJoystickVendor(device.Handle),
             ProductId  = SdlInterop.GetJoystickProduct(device.Handle),
-            LeftStick = new StickVector(
-                axisCount > 0 ? NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 0)) : 0f,
-                axisCount > 1 ? -NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 1)) : 0f).Clamp(),
-            RightStick = new StickVector(
-                axisCount > 2 ? NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 2)) : 0f,
-                axisCount > 3 ? -NormalizeSignedAxis(SdlInterop.GetJoystickAxis(device.Handle, 3)) : 0f).Clamp(),
+            LeftStick = leftStick,
+            RightStick = rightStick,
             LeftTrigger = leftTrigger,
             RightTrigger = rightTrigger,
             TouchContactCount = 0,
@@ -2194,7 +2281,9 @@ public sealed class SdlUnifiedInputSource : IInputSource, IPollRateAware, GameFl
 
     private static float NormalizeSignedAxis(short value)
     {
-        return value == short.MinValue ? -1f : Math.Clamp(value / 32767f, -1f, 1f);
+        // Shared with the calibrated analog map so the two paths cannot
+        // disagree about what a raw axis value means.
+        return AxisMapEvaluator.Normalize(value);
     }
 
     private static float NormalizePositiveHalfAxis(short value)

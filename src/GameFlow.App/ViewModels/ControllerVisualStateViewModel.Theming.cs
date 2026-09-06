@@ -298,7 +298,15 @@ public sealed partial class ControllerVisualStateViewModel
     public void RefreshActiveTheme()
     {
         var registry = themeRegistry;
-        IReadOnlyList<InstalledTheme> variants = registry?.GetThemesForStyle(visualStyle) ?? [];
+        // A style that ships no theme pack of its own draws with the
+        // closest family member instead of drawing nothing — a
+        // DualShock 3, and anything presenting itself as one, would
+        // otherwise render an empty panel. Styles that have their own
+        // themes resolve to themselves, so the picker below is unchanged
+        // for every one of them.
+        IReadOnlyList<InstalledTheme> variants = registry is null
+            ? []
+            : registry.GetThemesForStyle(registry.ResolveRenderableStyle(visualStyle));
 
         // Replace AvailableThemeVariants in place to avoid losing the
         // ComboBox's binding identity. We do a small diff against the

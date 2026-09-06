@@ -8,6 +8,83 @@ GitHub's auto-generated commit list appended below it.
 Format: one `## vX.Y.Z` heading per release, newest first. The heading
 text must match the tag exactly — that is what the extraction keys on.
 
+## v1.0.5
+
+### Added
+
+- **Sticks and triggers can be calibrated, not just buttons.** Per-device
+  calibration only ever covered buttons and hats, and an axis is not a
+  button — so a pad whose analog controls arrive on the wrong axes could
+  not be corrected at all. Reported from a PS2 pad behind a PS2-to-PS3
+  converter: the converter presents a DualShock 3's VID/PID, SDL applies
+  the DualShock 3 mapping, and the converter's right stick lands on the
+  axes that mapping calls the triggers. The stick read dead while moving
+  it pulled L2/R2.
+
+  Six move-to-detect prompts, two per stick and one per trigger. Two per
+  stick because a stick is two independent axes on the wire and a
+  scrambled axis order rarely moves X and Y together. Every prompt asks
+  for the positive direction — right, up, or fully pulled — so the
+  direction pushed decides the orientation and there is no separate
+  "inverted?" question. Travel shape (centred, half, or resting at an
+  extreme) is inferred from where the axis sits at rest, which is the
+  only thing that can tell a unipolar trigger from a stick half-axis.
+
+  This could not be worked around at the profile level: a trigger source
+  is clamped to 0..1, so a stick arriving on one lost its entire negative
+  half before any mapping rule could see it.
+
+- **On/off triggers for pads whose L2/R2 are switches.** Answering a
+  trigger prompt with a button binds it as a digital trigger — full value
+  pressed, zero released — so a game reading the analog axis gets a real
+  value instead of nothing. Most PS2 converters have no trigger axis to
+  bind. An analog trigger also closes a digital button early in its pull,
+  so a button press is held back briefly to see whether an axis follows;
+  the axis wins if it does, rather than a pressure-sensitive trigger
+  being quietly reduced to a switch.
+
+- **Silencing an orphaned axis.** Moving a stick onto the trigger axes
+  does not stop SDL reporting that same motion as L2/R2. A target can now
+  be forced to zero, which is distinct from leaving it unbound — unbound
+  keeps whatever SDL produced.
+
+- **Both calibration passes are offered inside the setup guide**, not
+  only on the Devices page. A pad whose stick lands on the wrong axis is
+  exactly the pad being set up for the first time, and the guide's own
+  preview shows it as a dead stick that pulls a trigger.
+
+### Fixed
+
+- **A DualShock 3 drew no controller at all.** GameFlow ships no
+  PlayStation 3 theme pack, and a style with no pack rendered an empty
+  panel — as did the legacy generic Xbox style that older persisted
+  preferences still carry. Both now draw with the closest family member
+  that does have one (DualShock 4 and Xbox One respectively), restricted
+  to controllers whose button complement is a superset so nothing goes
+  undrawn. Substitution happens only when the alternative is drawing
+  nothing: a style with its own themes never reaches a stand-in, so
+  removing every DualShock 4 skin still surfaces the "install a theme"
+  message rather than quietly showing a DualSense. The skin picker keeps
+  matching exactly, and each substitution is logged once, since it is
+  otherwise invisible on screen.
+
+- **The setup guide's device list silently stopped updating.** Catalog
+  changes arrive on the SDL worker thread and the guide mutated UI-bound
+  state directly from it, so the dispatcher access check threw and the
+  worker's keep-the-loop-alive handler swallowed it as a bare "SDL worker
+  tick failed; continuing." Every pad connected or disconnected while the
+  guide was open went unnoticed. The guide's "Next" button also only
+  re-evaluated whether calibration was running when the device catalog
+  happened to change, so its enabled state trailed the wizard.
+
+### Changed
+
+- **Per-device maps carry axis bindings alongside button and hat
+  bindings.** `device-button-maps.json` written by earlier builds loads
+  unchanged; the new field is absent and reads as empty. The two
+  calibration passes merge into one map rather than overwriting each
+  other, so re-running one does not drop the other's work.
+
 ## v1.0.4
 
 ### Added
@@ -128,21 +205,6 @@ text must match the tag exactly — that is what the extraction keys on.
   encoder already writes distinct effect ids for all seven, so the detail
   was discarded for nothing. The effect kinds now mirror the mode set
   one-to-one.
-
-### Known limitations
-
-- **Battery, motion and touch cannot pass through a USB Sony output
-  profile.** They travel in a Sony report's extended section, and
-  HIDMaestro runs that section's codec on the input direction only for a
-  profile that arms it. Checked against the shipped catalogue:
-  `dualshock-4-v1-full` and `dualsense` set neither `armOn` nor
-  `alwaysArmed`, while `dualsense-bt` arms on a feature read. So the
-  battery byte is never written and whatever GameFlow submits goes
-  nowhere — the submit succeeds, the SDK accepts the field, and the value
-  simply does not reach the wire. Diagnosed by changing the submitted
-  charge from 3 to 25 and watching the reported value not move. GameFlow
-  now warns when such a profile is deployed and names the Bluetooth
-  alternative; it cannot work around it.
 
 - **The battery a virtual pad reported was a tenth of the real charge.**
   The SDK documents the underlying report field as "0..10 (Sony firmware
@@ -297,6 +359,21 @@ text must match the tag exactly — that is what the extraction keys on.
   anonymous handlers that could never be detached, so they and everything
   they held stayed alive for the life of the process and kept reacting to
   language changes after their panel was gone.
+
+### Known limitations
+
+- **Battery, motion and touch cannot pass through a USB Sony output
+  profile.** They travel in a Sony report's extended section, and
+  HIDMaestro runs that section's codec on the input direction only for a
+  profile that arms it. Checked against the shipped catalogue:
+  `dualshock-4-v1-full` and `dualsense` set neither `armOn` nor
+  `alwaysArmed`, while `dualsense-bt` arms on a feature read. So the
+  battery byte is never written and whatever GameFlow submits goes
+  nowhere — the submit succeeds, the SDK accepts the field, and the value
+  simply does not reach the wire. Diagnosed by changing the submitted
+  charge from 3 to 25 and watching the reported value not move. GameFlow
+  now warns when such a profile is deployed and names the Bluetooth
+  alternative; it cannot work around it.
 
 ### Changed
 

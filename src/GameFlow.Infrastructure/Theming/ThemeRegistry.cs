@@ -198,6 +198,11 @@ public sealed class ThemeRegistry
         lock (syncRoot)
         {
             themes = loaded;
+
+            // A rescan can add the very theme a style was standing in
+            // for, so the "using a stand-in" notice has to be sayable
+            // again after the set of installed themes changes.
+            loggedSubstitutions.Clear();
         }
     }
 
@@ -234,6 +239,111 @@ public sealed class ThemeRegistry
             return result;
         }
     }
+
+    /// <summary>
+    /// The style to actually draw for <paramref name="style"/>: itself
+    /// when any theme is installed for it, otherwise the closest family
+    /// member that has one, otherwise <paramref name="style"/> unchanged.
+    ///
+    /// <para>
+    /// This exists because two <see cref="ControllerVisualStyle"/> values
+    /// ship no theme pack at all, and a style with no pack renders an
+    /// empty panel:
+    /// <see cref="ControllerVisualStyle.PlayStation3"/>, which a
+    /// DualShock 3 resolves to — as does any PS2 pad behind a converter,
+    /// since those present the DualShock 3's VID/PID — and the legacy
+    /// generic <see cref="ControllerVisualStyle.Xbox"/>, which persisted
+    /// preferences from builds before the Xbox generations were split
+    /// still carry.
+    /// </para>
+    ///
+    /// <para>
+    /// Deliberately NOT folded into <see cref="GetThemesForStyle"/>,
+    /// whose exact-match contract is what keeps a skin named "Black"
+    /// unambiguous inside a model-specific picker. Substitution happens
+    /// once, here, and only when the alternative is drawing nothing:
+    /// a style that has its own themes never reaches a stand-in, so
+    /// uninstalling every DualShock 4 skin still surfaces the "install a
+    /// theme" message rather than quietly showing a DualSense.
+    /// </para>
+    /// </summary>
+    public ControllerVisualStyle ResolveRenderableStyle(ControllerVisualStyle style)
+    {
+        if (style is ControllerVisualStyle.None or ControllerVisualStyle.Auto)
+        {
+            return style;
+        }
+
+        if (HasAnyTheme(style))
+        {
+            return style;
+        }
+
+        foreach (var candidate in StandInStyles(style))
+        {
+            if (!HasAnyTheme(candidate))
+            {
+                continue;
+            }
+
+            // Once per style per scan: the substitution is invisible on
+            // screen (the panel simply shows a near-identical pad), so
+            // the log is the only place it can be discovered.
+            bool firstTime;
+            lock (syncRoot)
+            {
+                firstTime = loggedSubstitutions.Add(style);
+            }
+            if (firstTime)
+            {
+                Log.Information(
+                    "No theme installed for {Style}; drawing it with the {StandIn} layout instead. " +
+                    "Install a {Style} theme folder under the themes directory to replace it.",
+                    style, candidate);
+            }
+            return candidate;
+        }
+
+        return style;
+    }
+
+    /// <summary>
+    /// Stand-ins for a style with no pack, best first. Restricted to
+    /// controllers whose button complement is a superset of the original
+    /// so nothing the pad can do goes undrawn — a DualShock 4 has every
+    /// control a DualShock 3 has plus a touchpad, which simply never
+    /// lights up.
+    /// </summary>
+    internal static ControllerVisualStyle[] StandInStyles(ControllerVisualStyle style) => style switch
+    {
+        ControllerVisualStyle.PlayStation3 =>
+            [ControllerVisualStyle.PlayStation4, ControllerVisualStyle.PlayStation5],
+        ControllerVisualStyle.Xbox =>
+            [ControllerVisualStyle.XboxOne, ControllerVisualStyle.XboxSeries, ControllerVisualStyle.Xbox360],
+        _ => [],
+    };
+
+    private bool HasAnyTheme(ControllerVisualStyle style)
+    {
+        lock (syncRoot)
+        {
+            foreach (var theme in themes)
+            {
+                if (theme.PreferredStyle == style)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Styles already reported as substituted. Keeps
+    /// <see cref="ResolveRenderableStyle"/> — which runs on every theme
+    /// refresh — from writing the same line repeatedly.
+    /// </summary>
+    private readonly HashSet<ControllerVisualStyle> loggedSubstitutions = [];
 
     /// <summary>
     /// Resolves a theme by its registry id (the lower-cased,

@@ -169,20 +169,30 @@
 
             <!-- Calibration is the Devices page's own flow, driven from
                  here so the guide does not carry a second copy of it. -->
-            <StackPanel Spacing="8" IsVisible="{Binding !Devices.IsCalibrating}">
+            <StackPanel Spacing="8" IsVisible="{Binding !Devices.IsAnyCalibrating}">
               <Button Content="Buttons are wrong — calibrate them"
                       Command="{Binding Devices.StartCalibrationCommand}"
                       HorizontalAlignment="Left" Padding="12,6" />
+              <!-- Offered here and not only on the Devices page: a pad
+                   whose stick lands on the wrong axis is exactly the pad
+                   someone is setting up for the first time, and the
+                   surface above shows it as a dead stick that pulls a
+                   trigger. -->
+              <Button Content="Sticks or triggers are wrong — calibrate them"
+                      Command="{Binding Devices.StartAxisCalibrationCommand}"
+                      HorizontalAlignment="Left" Padding="12,6" />
             </StackPanel>
 
-            <Border Classes="inset" Padding="12" IsVisible="{Binding Devices.IsCalibrating}">
+            <Border Classes="inset" Padding="12" IsVisible="{Binding Devices.IsAnyCalibrating}">
               <StackPanel Spacing="8">
                 <TextBlock Text="{Binding Devices.CalibrationPrompt}" FontWeight="SemiBold"
                            Foreground="{DynamicResource AppForeground}" />
-                <TextBlock Classes="hint"
-                           Text="Press the button named above. Skip any your controller does not have." />
+                <TextBlock Classes="hint" TextWrapping="Wrap"
+                           Text="{Binding Devices.CalibrationHint}" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <Button Content="Skip this one" Command="{Binding Devices.SkipButtonCommand}" />
+                  <Button Content="Silence" Command="{Binding Devices.SilenceAxisCommand}"
+                          IsVisible="{Binding Devices.IsAxisCalibrating}" />
                   <Button Content="Cancel" Command="{Binding Devices.CancelCalibrationCommand}" />
                 </StackPanel>
               </StackPanel>

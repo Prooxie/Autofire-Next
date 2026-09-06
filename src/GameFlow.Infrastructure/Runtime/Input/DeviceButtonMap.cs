@@ -15,11 +15,12 @@ namespace GameFlow.Infrastructure.Runtime.Input;
 public readonly record struct HatDirectionBinding(int HatIndex, byte Direction);
 
 /// <summary>
-/// A per-physical-device button remap: maps a canonical
-/// <see cref="ButtonId"/> to the raw input that actually produces it on
-/// this device. Used to normalize controllers the OS/SDL recognizes with a
-/// different button order. Unmapped entries fall back to the default (SDL
-/// gamepad mapping or the tentative joystick order).
+/// A per-physical-device input remap: maps a canonical
+/// <see cref="ButtonId"/> — or a canonical <see cref="AnalogTarget"/> — to
+/// the raw input that actually produces it on this device. Used to
+/// normalize controllers the OS/SDL recognizes with a different button or
+/// axis order. Unmapped entries fall back to the default (SDL gamepad
+/// mapping or the tentative joystick order).
 /// </summary>
 public sealed class DeviceButtonMap
 {
@@ -42,14 +43,38 @@ public sealed class DeviceButtonMap
     /// </summary>
     public Dictionary<ButtonId, HatDirectionBinding> Hats { get; set; } = new();
 
+    /// <summary>
+    /// Canonical analog output → the raw axis or button that produces it.
+    ///
+    /// <para>
+    /// Separate from <see cref="Buttons"/> for the same reason
+    /// <see cref="Hats"/> is: an analog target is not a button and cannot
+    /// be stored as one. A stick needs TWO bindings, one per half-axis,
+    /// and each carries an orientation and a travel shape as well as an
+    /// index — see <see cref="AnalogBinding"/>. Without this, a pad whose
+    /// converter reports the right stick on the axes SDL believes are the
+    /// triggers cannot be corrected at all: the stick reads dead while
+    /// moving it pulls L2/R2, and no amount of button remapping touches
+    /// an axis.
+    /// </para>
+    ///
+    /// <para>
+    /// Absent from JSON written by builds before analog calibration
+    /// existed, which deserializes to an empty dictionary and behaves
+    /// exactly as before.
+    /// </para>
+    /// </summary>
+    public Dictionary<AnalogTarget, AnalogBinding> Axes { get; set; } = new();
+
     /// <summary>True when nothing has been captured for this device.</summary>
-    public bool IsEmpty => Buttons.Count == 0 && Hats.Count == 0;
+    public bool IsEmpty => Buttons.Count == 0 && Hats.Count == 0 && Axes.Count == 0;
 
     public DeviceButtonMap Clone() => new()
     {
         DeviceId = DeviceId,
         Buttons = new Dictionary<ButtonId, int>(Buttons),
         Hats = new Dictionary<ButtonId, HatDirectionBinding>(Hats),
+        Axes = new Dictionary<AnalogTarget, AnalogBinding>(Axes),
     };
 }
 

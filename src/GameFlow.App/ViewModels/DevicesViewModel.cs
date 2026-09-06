@@ -54,6 +54,78 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     private HashSet<int> lastPressedRaw = [];
     private List<byte> lastHats = [];
 
+    // Stick/trigger calibration wizard state. Separate index from the
+    // button wizard because the two run as separate passes: a pad whose
+    // buttons are fine but whose right stick lands on the trigger axes
+    // should not have to re-press fifteen buttons to fix four axes.
+    private int axisCalibrationIndex = -1;
+    private readonly Dictionary<AnalogTarget, AnalogBinding> capturedAxes = new();
+
+    /// <summary>
+    /// Where every axis sits when nothing is being touched, learned once
+    /// per run and used as the comparison point for every prompt.
+    ///
+    /// <para>
+    /// One reference for the whole pass, not a fresh sample per prompt.
+    /// A per-prompt baseline made letting go of the previous control read
+    /// as the answer to the next one: a released stick travels further
+    /// coming back to centre than it did being pushed, so each prompt was
+    /// answered before the user could reach for anything.
+    /// </para>
+    ///
+    /// <para>
+    /// It doubles as the travel-shape reference: an axis parked at an
+    /// extreme while at rest is a unipolar trigger, one parked near
+    /// centre is a stick half-axis, and only a resting sample can tell
+    /// them apart.
+    /// </para>
+    /// </summary>
+    private List<short> axisRest = [];
+    private bool axisRestLearned;
+
+    /// <summary>
+    /// False while a prompt is still waiting for the controls to be
+    /// released. Nothing is captured until this turns true.
+    /// </summary>
+    private bool axisArmed;
+
+    private List<short> lastAxisSample = [];
+    private DateTime axisQuietSince;
+
+    /// <summary>How long the pad must sit still before its resting position is recorded.</summary>
+    private static readonly TimeSpan RestSettleTime = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// How long a prompt waits for a release that never comes before it
+    /// treats wherever the controls are sitting as the new rest.
+    ///
+    /// <para>
+    /// The escape hatch for hardware whose resting position genuinely
+    /// changes mid-run — a PS2 converter toggled between analog and
+    /// digital mode moves its axes' idle values, and without this the
+    /// wizard would wait forever for a rest that no longer exists. Long
+    /// enough that holding a stick perfectly still for the whole window,
+    /// which would let the release answer the next prompt, is not
+    /// something a hand does by accident.
+    /// </para>
+    /// </summary>
+    private static readonly TimeSpan RestRelearnTime = TimeSpan.FromSeconds(4);
+
+    /// <summary>
+    /// A trigger button seen during an analog prompt, held back in case
+    /// an axis crosses too. An analog trigger reports a digital button
+    /// as well, and that button closes early in the pull, so committing
+    /// the instant it fires would silently reduce a pressure-sensitive
+    /// trigger to an on/off switch. If no axis moves before
+    /// <see cref="pendingTriggerDeadline"/>, the pad really is digital
+    /// and the button is committed.
+    /// </summary>
+    private AnalogBinding? pendingTriggerButton;
+    private DateTime pendingTriggerDeadline;
+
+    /// <summary>How long an analog prompt waits to see whether a moving axis follows a button press.</summary>
+    private static readonly TimeSpan TriggerButtonGrace = TimeSpan.FromMilliseconds(400);
+
     public DevicesViewModel(InputDeviceCatalog catalog, ILocalizationService localization, GameFlow.Infrastructure.Runtime.Templates.DeviceTemplateStore templateStore, GameFlow.Infrastructure.Runtime.Input.ButtonMapStore buttonMapStore, GameFlow.Infrastructure.Runtime.Input.IKeyboardStateSource keyboardStateSource, GameFlow.Infrastructure.Runtime.Input.IMouseStateSource mouseStateSource, GameFlow.Infrastructure.Runtime.HidMaestro.HidMaestroProfileCatalogService hidMaestroCatalog, DeviceCategoryOverrideStore categoryOverrides,
         GameFlow.Infrastructure.Runtime.DeviceSettingsStore deviceSettingsStore,
         GameFlow.Infrastructure.Runtime.Slots.SlotRegistry slotRegistry,
@@ -81,9 +153,11 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         keyboardPreviewTimer.Tick += OnInputPreviewTick;
 
         RefreshCommand = new RelayCommand(Rebuild);
-        StartCalibrationCommand = new RelayCommand(StartCalibration, () => SelectedDevice is not null && !IsCalibrating);
-        SkipButtonCommand = new RelayCommand(SkipButton, () => IsCalibrating);
-        CancelCalibrationCommand = new RelayCommand(CancelCalibration, () => IsCalibrating);
+        StartCalibrationCommand = new RelayCommand(StartCalibration, () => SelectedDevice is not null && !IsAnyCalibrating);
+        StartAxisCalibrationCommand = new RelayCommand(StartAxisCalibration, () => SelectedDevice is not null && !IsAnyCalibrating);
+        SkipButtonCommand = new RelayCommand(SkipStep, () => IsAnyCalibrating);
+        SilenceAxisCommand = new RelayCommand(SilenceAxis, () => IsAxisCalibrating);
+        CancelCalibrationCommand = new RelayCommand(CancelCalibration, () => IsAnyCalibrating);
         ClearButtonMapCommand = new RelayCommand(ClearButtonMap, () => HasButtonMap);
 
         this.catalog.Updated += OnCatalogUpdated;
@@ -98,12 +172,20 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
 
     public ICommand RefreshCommand { get; }
     public ICommand StartCalibrationCommand { get; }
+    public ICommand StartAxisCalibrationCommand { get; }
     public ICommand SkipButtonCommand { get; }
+    public ICommand SilenceAxisCommand { get; }
     public ICommand CancelCalibrationCommand { get; }
     public ICommand ClearButtonMapCommand { get; }
 
     /// <summary>True while the press-to-detect button calibration is running.</summary>
     public bool IsCalibrating => calibrationIndex >= 0;
+
+    /// <summary>True while the move-to-detect stick/trigger calibration is running.</summary>
+    public bool IsAxisCalibrating => axisCalibrationIndex >= 0;
+
+    /// <summary>True while either calibration pass is running.</summary>
+    public bool IsAnyCalibrating => IsCalibrating || IsAxisCalibrating;
 
     /// <summary>True when the selected device has a saved button remap.</summary>
     public bool HasButtonMap => SelectedDevice is not null && buttonMapStore.Has(SelectedDevice.Id);
@@ -289,11 +371,47 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         return true;
     }
 
-    /// <summary>Prompt shown during calibration (which button to press + progress).</summary>
-    public string CalibrationPrompt =>
-        IsCalibrating && calibrationIndex < CalibrationTargets.Length
-            ? $"Press: {CalibrationTargets[calibrationIndex].Label}   ({calibrationIndex + 1} / {CalibrationTargets.Length})"
-            : string.Empty;
+    /// <summary>Prompt shown during calibration (which control to work + progress).</summary>
+    public string CalibrationPrompt
+    {
+        get
+        {
+            if (IsCalibrating && calibrationIndex < CalibrationTargets.Length)
+            {
+                return $"Press: {CalibrationTargets[calibrationIndex].Label}   ({calibrationIndex + 1} / {CalibrationTargets.Length})";
+            }
+            if (IsAxisCalibrating && axisCalibrationIndex < AxisCalibrationTargets.Length)
+            {
+                return $"{AxisCalibrationTargets[axisCalibrationIndex].Label}   ({axisCalibrationIndex + 1} / {AxisCalibrationTargets.Length})";
+            }
+            return string.Empty;
+        }
+    }
+
+    /// <summary>The line under <see cref="CalibrationPrompt"/> explaining what the buttons below it do.</summary>
+    public string CalibrationHint
+    {
+        get
+        {
+            if (!IsAxisCalibrating)
+            {
+                return "Press that button on the controller, or Skip to leave it unmapped.";
+            }
+            // Saying so matters: until this clears, moving the control
+            // does nothing, and a prompt that silently ignores input
+            // reads as a broken controller rather than as a wizard
+            // waiting its turn.
+            return IsWaitingForRest
+                ? "Let go of the sticks and triggers — this step starts listening once everything is back at rest."
+                : "Hold it there until the prompt moves on. If this pad has no analog for it, press the button instead — it will be bound as an on/off trigger. Skip leaves it as-is; Silence forces it to zero.";
+        }
+    }
+
+    /// <summary>
+    /// True while an analog prompt is on screen but not yet listening,
+    /// because a control from the previous step has not been released.
+    /// </summary>
+    public bool IsWaitingForRest => IsAxisCalibrating && !axisArmed;
 
     /// <summary>Editor for the selected device's HidMaestro output template.</summary>
     public DeviceTemplateEditorViewModel TemplateEditor { get; }
@@ -474,7 +592,7 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
             TemplateEditor.LoadFor(value?.Id, value?.Category ?? DeviceCategory.Unknown);
             RefreshTuningSlots();
             LoadTuningForSelection();
-            if (IsCalibrating)
+            if (IsAnyCalibrating)
             {
                 CancelCalibration();
             }
@@ -689,6 +807,10 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         {
             CaptureCalibrationPress();
         }
+        else if (IsAxisCalibrating)
+        {
+            CaptureCalibrationMove();
+        }
     }
 
     // ─── Button calibration wizard ────────────────────────────────────
@@ -762,11 +884,20 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         Advance();
     }
 
-    private void SkipButton()
+    /// <summary>
+    /// Leaves the current prompt's target unbound and moves on. One
+    /// command drives both passes because only ever one of them runs,
+    /// and an unbound target keeps whatever SDL already produced for it.
+    /// </summary>
+    private void SkipStep()
     {
         if (IsCalibrating)
         {
             Advance();
+        }
+        else if (IsAxisCalibrating)
+        {
+            AdvanceAxis();
         }
     }
 
@@ -787,12 +918,15 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     {
         if (SelectedDevice is not null && (capturedMap.Count > 0 || capturedHats.Count > 0))
         {
-            buttonMapStore.Save(new GameFlow.Infrastructure.Runtime.Input.DeviceButtonMap
-            {
-                DeviceId = SelectedDevice.Id,
-                Buttons = new Dictionary<ButtonId, int>(capturedMap),
-                Hats = new Dictionary<ButtonId, GameFlow.Infrastructure.Runtime.Input.HatDirectionBinding>(capturedHats),
-            });
+            // Merge rather than replace: the analog pass writes to the
+            // same per-device map, and re-running the button pass must
+            // not silently drop a stick that was calibrated earlier.
+            var map = buttonMapStore.GetOrNull(SelectedDevice.Id)
+                      ?? new GameFlow.Infrastructure.Runtime.Input.DeviceButtonMap { DeviceId = SelectedDevice.Id };
+            map.DeviceId = SelectedDevice.Id;
+            map.Buttons = new Dictionary<ButtonId, int>(capturedMap);
+            map.Hats = new Dictionary<ButtonId, GameFlow.Infrastructure.Runtime.Input.HatDirectionBinding>(capturedHats);
+            buttonMapStore.Save(map);
         }
         calibrationIndex = -1;
         NotifyCalibrationState();
@@ -801,7 +935,11 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
     private void CancelCalibration()
     {
         calibrationIndex = -1;
+        axisCalibrationIndex = -1;
         capturedMap.Clear();
+        capturedHats.Clear();
+        capturedAxes.Clear();
+        pendingTriggerButton = null;
         NotifyCalibrationState();
     }
 
@@ -814,13 +952,201 @@ public sealed class DevicesViewModel : ViewModelBase, IDisposable
         NotifyCalibrationState();
     }
 
+    // ─── Stick / trigger calibration wizard ───────────────────────────
+
+    /// <summary>
+    /// The analog pass, in prompt order. Each stick takes TWO prompts
+    /// because a stick is two independent axes on the wire: a converter
+    /// that scrambles the axis order can land X and Y on completely
+    /// unrelated indices, so binding a stick as a single unit would
+    /// describe hardware that does not exist.
+    ///
+    /// <para>
+    /// Every prompt asks for the canonical POSITIVE direction — right,
+    /// or up, or pulled — so the sign of the travel is the orientation
+    /// and no separate "is it inverted?" question is needed.
+    /// </para>
+    /// </summary>
+    private static readonly (AnalogTarget Target, string Label, bool IsTrigger)[] AxisCalibrationTargets =
+    [
+        (AnalogTarget.LeftStickX, "Push the LEFT stick fully RIGHT", false),
+        (AnalogTarget.LeftStickY, "Push the LEFT stick fully UP", false),
+        (AnalogTarget.RightStickX, "Push the RIGHT stick fully RIGHT", false),
+        (AnalogTarget.RightStickY, "Push the RIGHT stick fully UP", false),
+        (AnalogTarget.LeftTrigger, "Pull L2 / LT all the way", true),
+        (AnalogTarget.RightTrigger, "Pull R2 / RT all the way", true),
+    ];
+
+    private void StartAxisCalibration()
+    {
+        if (SelectedDevice is null)
+        {
+            return;
+        }
+        capturedAxes.Clear();
+        pendingTriggerButton = null;
+        axisRest = [];
+        axisRestLearned = false;
+        axisArmed = false;
+        lastAxisSample = RawAxes.Select(a => a.Raw).ToList();
+        axisQuietSince = DateTime.UtcNow;
+        axisCalibrationIndex = 0;
+        NotifyCalibrationState();
+    }
+
+    private void CaptureCalibrationMove()
+    {
+        var axesNow = RawAxes.Select(a => a.Raw).ToList();
+        var now = DateTime.UtcNow;
+
+        // Any movement restarts the settle clock, so "quiet" always
+        // means quiet for the whole window rather than quiet right now.
+        if (!AxisCapture.IsQuiet(lastAxisSample, axesNow))
+        {
+            axisQuietSince = now;
+        }
+        lastAxisSample = axesNow;
+
+        if (!axisArmed && !TryArmAxisCapture(axesNow, now))
+        {
+            return;
+        }
+
+        var target = AxisCalibrationTargets[axisCalibrationIndex];
+
+        var captured = target.IsTrigger
+            ? AxisCapture.DetectTriggerAxis(axisRest, axesNow)
+            : AxisCapture.DetectStickAxis(axisRest, axesNow);
+
+        if (captured is null && target.IsTrigger)
+        {
+            // No axis moved. A digital L2/R2 — the PS2-through-converter
+            // case — answers with a button instead. Held briefly in case
+            // an analog axis is still on its way up; see the field docs.
+            var pressedNow = RawButtons.Where(b => b.IsPressed).Select(b => b.Index).ToHashSet();
+            var button = AxisCapture.DetectTriggerButton(lastPressedRaw, pressedNow);
+            if (button is { } pressed && pendingTriggerButton is null)
+            {
+                pendingTriggerButton = pressed;
+                pendingTriggerDeadline = DateTime.UtcNow + TriggerButtonGrace;
+            }
+
+            if (pendingTriggerButton is { } waiting && DateTime.UtcNow >= pendingTriggerDeadline)
+            {
+                captured = waiting;
+            }
+        }
+
+        if (captured is not { } binding)
+        {
+            return;
+        }
+
+        capturedAxes[target.Target] = binding;
+        AdvanceAxis();
+    }
+
+    /// <summary>
+    /// Binds the current analog target to a constant zero. The escape
+    /// hatch for the axis a remap orphans: once the right stick has been
+    /// moved onto the axes SDL believed were the triggers, SDL still
+    /// reports that same motion as L2/R2, and only an explicit silence
+    /// stops the stick from pulling a trigger it never touched.
+    /// </summary>
+    private void SilenceAxis()
+    {
+        if (!IsAxisCalibrating)
+        {
+            return;
+        }
+        capturedAxes[AxisCalibrationTargets[axisCalibrationIndex].Target] = AnalogBinding.Silenced;
+        AdvanceAxis();
+    }
+
+    /// <summary>
+    /// Starts listening once the controls are back where they rest, and
+    /// records that resting position the first time round. Returns false
+    /// while still waiting, which is what gives the user room to let go
+    /// of one control and reach for the next.
+    /// </summary>
+    private bool TryArmAxisCapture(List<short> axesNow, DateTime now)
+    {
+        if (!axisRestLearned)
+        {
+            // Nothing to compare against yet. The pad standing still for
+            // a moment after the wizard opens IS the resting position.
+            if (now - axisQuietSince < RestSettleTime)
+            {
+                return false;
+            }
+            axisRest = axesNow;
+            axisRestLearned = true;
+        }
+        else if (!AxisCapture.IsAtRest(axisRest, axesNow))
+        {
+            if (now - axisQuietSince < RestRelearnTime)
+            {
+                return false;
+            }
+            axisRest = axesNow;
+        }
+
+        // Buttons are baselined at the arming moment rather than against
+        // rest: a button still held from the previous prompt must not
+        // read as newly pressed, and a pad with a permanently stuck
+        // button must not make the trigger prompts unanswerable.
+        lastPressedRaw = RawButtons.Where(b => b.IsPressed).Select(b => b.Index).ToHashSet();
+        axisArmed = true;
+        OnPropertyChanged(nameof(CalibrationHint));
+        OnPropertyChanged(nameof(IsWaitingForRest));
+        return true;
+    }
+
+    private void AdvanceAxis()
+    {
+        pendingTriggerButton = null;
+        axisArmed = false;
+        axisQuietSince = DateTime.UtcNow;
+        axisCalibrationIndex++;
+        if (axisCalibrationIndex >= AxisCalibrationTargets.Length)
+        {
+            FinishAxisCalibration();
+        }
+        else
+        {
+            OnPropertyChanged(nameof(CalibrationPrompt));
+            OnPropertyChanged(nameof(CalibrationHint));
+            OnPropertyChanged(nameof(IsWaitingForRest));
+        }
+    }
+
+    private void FinishAxisCalibration()
+    {
+        if (SelectedDevice is not null && capturedAxes.Count > 0)
+        {
+            var map = buttonMapStore.GetOrNull(SelectedDevice.Id)
+                      ?? new GameFlow.Infrastructure.Runtime.Input.DeviceButtonMap { DeviceId = SelectedDevice.Id };
+            map.DeviceId = SelectedDevice.Id;
+            map.Axes = new Dictionary<AnalogTarget, AnalogBinding>(capturedAxes);
+            buttonMapStore.Save(map);
+        }
+        axisCalibrationIndex = -1;
+        NotifyCalibrationState();
+    }
+
     private void NotifyCalibrationState()
     {
         OnPropertyChanged(nameof(IsCalibrating));
+        OnPropertyChanged(nameof(IsAxisCalibrating));
+        OnPropertyChanged(nameof(IsAnyCalibrating));
         OnPropertyChanged(nameof(CalibrationPrompt));
+        OnPropertyChanged(nameof(CalibrationHint));
+        OnPropertyChanged(nameof(IsWaitingForRest));
         OnPropertyChanged(nameof(HasButtonMap));
         (StartCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (StartAxisCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (SkipButtonCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        (SilenceAxisCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (CancelCalibrationCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (ClearButtonMapCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }

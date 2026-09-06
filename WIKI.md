@@ -11,12 +11,13 @@ Deep reference for every system in GameFlow. For install/quick-start, see [READM
 5. [Gyro Aiming](#gyro-aiming)
 6. [Touchpad Mapping](#touchpad-mapping)
 7. [Per-Device Tuning](#per-device-tuning)
-8. [Cross-Platform Input & Output](#cross-platform-input--output)
-9. [Phone as a Controller](#phone-as-a-controller)
-10. [OBS Browser Overlay](#obs-browser-overlay)
-11. [Theme System](#theme-system)
-12. [Troubleshooting](#troubleshooting)
-13. [For Contributors](#for-contributors)
+8. [Device Calibration](#device-calibration)
+9. [Cross-Platform Input & Output](#cross-platform-input--output)
+10. [Phone as a Controller](#phone-as-a-controller)
+11. [OBS Browser Overlay](#obs-browser-overlay)
+12. [Theme System](#theme-system)
+13. [Troubleshooting](#troubleshooting)
+14. [For Contributors](#for-contributors)
 
 ---
 
@@ -183,6 +184,54 @@ Both links read the *overall* rumble level — the louder of the two motors — 
 
 ---
 
+## Device Calibration
+
+Tuning shapes values that already arrive in the right place. Calibration is for when they don't — when the pad's physical layout doesn't match what SDL believes the device is.
+
+The usual cause is an adapter borrowing someone else's identity. A PS2-to-USB or PS2-to-PS3 converter presents a DualShock 3's VID/PID (`054C:0268`), so SDL applies the DualShock 3 mapping, and any place the converter's wiring differs comes out scrambled — most often the right stick landing on the axes that mapping calls the triggers, so the stick reads dead while moving it pulls L2/R2.
+
+Both passes live on the **Devices** tab under BUTTON MAPPING, and both can be driven from inside the [Setup guide](README.md#how-to-use). They save per device into `device-button-maps.json`, merge into one map rather than overwriting each other, and **Clear mapping** drops the whole entry.
+
+### Where it applies
+
+In `SdlUnifiedInputSource`, on the snapshot, before it leaves the input source — so ahead of per-device tuning, rule passes, and the output sink. The corrected value is what the virtual controller emits *and* what the on-screen layout draws, because they read the same snapshot; the picture cannot agree with the artwork and disagree with the game.
+
+Both passes read through the **raw joystick handle**, never the gamepad API — the entire premise is that SDL's view of which physical control is which is wrong for this device. That also means axis and button indices match the LIVE STATE readout on the same page.
+
+### Buttons and hats
+
+Press-to-detect, fifteen prompts. Hats are watched as well as buttons: a D-pad is a hat on nearly every gamepad, so a pass that only watched buttons would sit on "Press: D-pad Up" forever, which reads as the D-pad not working rather than as the wizard not listening.
+
+### Sticks and triggers
+
+Move-to-detect, six prompts — two per stick, one per trigger. Each stick is two prompts because a stick is two independent axes on the wire, and a converter that scrambles the order rarely moves X and Y together.
+
+Every prompt asks for the canonical **positive** direction — right, up, or fully pulled — so the sign of the travel *is* the orientation and there is no separate "is it inverted?" question.
+
+A binding records where the value comes from and how its travel maps onto the target:
+
+| | |
+|---|---|
+| **Source** | A raw axis, a raw button, or `None` (silenced) |
+| **Range** | `Full` (rests centred, −1..+1 — a stick axis) · `Half` (rests at 0, travels one way) · `Unipolar` (rests at one extreme, spans its whole travel as 0..1) |
+| **Invert** | Negates the raw reading *before* the range is applied, which is what lets one `Half` cover an axis travelling either way, and one `Unipolar` cover a trigger resting at either end |
+
+Range is inferred from the resting position, not guessed from the live value — an axis parked at an extreme while nothing touches it is a unipolar trigger; one parked near centre is a stick half-axis. Only a resting sample can tell those apart.
+
+**Digital triggers.** If no axis moves during a trigger prompt, pressing a button binds it as an on/off trigger — full value pressed, zero released. Pads whose L2/R2 are plain switches (most PS2 converters) have no trigger axis to bind, and a game reading the analog axis would otherwise get nothing. An analog trigger also reports a digital button, and that button closes early in the pull, so a button press is held back ~400 ms to see whether an axis follows; the axis wins if it does. Without that, a pressure-sensitive L2 would quietly be reduced to a switch.
+
+**Silence.** Rebinding the right stick onto the trigger axes does not stop SDL reporting that same motion as L2/R2 — the stick keeps pulling a trigger nobody touched. `None` forces a target to zero. This is why an explicitly silenced target is distinct from an unbound one: unbound keeps whatever SDL produced.
+
+**Waiting for rest.** A prompt does not start listening until every axis is back within tolerance of its resting position, sampled once when the pass opens. Letting go of a stick is a full-scale movement — larger, usually, than the deliberate push that answered the previous prompt — so a prompt that armed the instant it appeared would be answered by the release of the control before it, in the wrong direction, leaving no room to reach for anything. The hint line says so while it waits, because a prompt that silently ignores input reads as a broken controller.
+
+If the controls sit completely still somewhere *other* than rest for four seconds, that position is accepted as the new rest. This is for hardware whose idle values genuinely move — a PS2 converter toggled between analog and digital mode does exactly that — and the window is long enough that a hand does not trigger it by accident.
+
+### What it does not do
+
+It does not hide the physical pad from games; see [Known Limitations](README.md#known-limitations). It also cannot help a control the device never reports at all — the LIVE STATE readout on the same page is the check for that: if nothing moves there, nothing reaches GameFlow.
+
+---
+
 ## Cross-Platform Input & Output
 
 | Capability | Windows | Linux | macOS |
@@ -250,6 +299,10 @@ Controller visuals use the [VSCView THEMEENGINE](https://github.com/Nielk1/VSCVi
 
 **Keyboard themes** bake keys and legends directly into the body image (matching how the bundled default theme works) — a theme with only geometry and no rendered artwork will show nothing. `keyboard-100-default` is a full ANSI-104 layout with all keys individually addressable via `key:<name>` symbols.
 
+**Stand-ins.** A controller style with no theme pack installed draws with the closest family member instead of drawing nothing: PlayStation 3 borrows the DualShock 4 layout, and the legacy generic Xbox style (which older persisted preferences still carry) borrows Xbox One. Both ship no pack of their own, so both previously rendered an empty panel — a DualShock 3, and anything presenting itself as one, had no artwork at all.
+
+Stand-ins are restricted to controllers whose button complement is a superset of the original, so nothing the pad can do goes undrawn; a DualShock 4 has every control a DualShock 3 has, plus a touchpad that simply never lights up. Substitution happens once, at style resolution, and **only** when the alternative is drawing nothing — a style that has its own themes never reaches a stand-in, so uninstalling every DualShock 4 skin still surfaces the "install a theme" message rather than quietly showing a DualSense. The skin picker keeps matching exactly, which is what keeps a skin named "Black" unambiguous. Each substitution is logged once per scan, since it is otherwise invisible. Dropping a real `dualshock-3` theme folder into the themes directory needs no code change: the folder name classifies itself, and its presence stops the substitution.
+
 **Known issue:** several bundled gamepad themes have imperfect button/stick placement — they were generated from an asset pack's individual sprite crops without authoritative layout coordinates. The correct fix is template-matching each sprite against its full-canvas base image to derive true pixel positions; this is scoped but not yet done.
 
 ---
@@ -268,6 +321,10 @@ netsh http add urlacl url=http://+:8080/ user=Everyone
 **The OBS Browser source is blank.** Keep GameFlow running, confirm the URL still uses this PC's current LAN address, and open **Settings → Stream overlay** to verify the selected slot and skin still exist. A bare `/overlay` needs at least one configured slot and an installed skin it can resolve.
 
 **Clicking a virtual panel does nothing.** That slot has no device assigned — there's nothing to tune. The status bar says so; assign a device first.
+
+**The wrong button lights up, or a stick is dead and moving it pulls a trigger.** The pad's physical layout doesn't match the identity SDL recognised — standard on PS2-to-USB and PS2-to-PS3 converters, which borrow a DualShock 3's VID/PID. Run both passes under [Device Calibration](#device-calibration). Check the LIVE STATE readout on the Devices page first: if the control moves nothing there, the device isn't reporting it at all and no remap can reach it.
+
+**The game responds to my input twice.** Both the physical and the virtual pad are visible to it. GameFlow does not hide devices from games and has no [HidHide](https://github.com/nefarius/HidHide) integration — that is a separate tool. If you use one, whitelist `GameFlow.App.exe` in it, or GameFlow loses the physical pad along with every other application.
 
 **HIDMaestro output isn't appearing.** Confirm `HIDMaestro.Core.dll` is next to `GameFlow.App.exe`. If it's genuinely missing, GameFlow says so explicitly in the log and the slot's display name — it will not silently fall back to a different backend without telling you.
 

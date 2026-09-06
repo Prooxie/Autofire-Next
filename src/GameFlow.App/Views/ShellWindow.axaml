@@ -993,26 +993,29 @@
                       <Border Classes="divider" />
                       <TextBlock Text="BUTTON MAPPING" Classes="sectionLabel" />
                       <TextBlock Classes="hint"
-                                 Text="If this controller's buttons are recognized in the wrong places, calibrate it — you'll be prompted to press each button in turn." />
+                                 Text="If this controller's buttons are recognized in the wrong places, calibrate it — you'll be prompted to press each button in turn. Calibrate the sticks and triggers separately when an analog lands on the wrong axis, which is common on PS2-to-USB and PS2-to-PS3 converters." />
                       <StackPanel Orientation="Horizontal" Spacing="8"
-                                  IsVisible="{Binding !IsCalibrating}">
+                                  IsVisible="{Binding !IsAnyCalibrating}">
                         <Button Content="Calibrate buttons" Command="{Binding StartCalibrationCommand}" />
+                        <Button Content="Calibrate sticks &amp; triggers" Command="{Binding StartAxisCalibrationCommand}" />
                         <Button Content="Clear mapping" Command="{Binding ClearButtonMapCommand}"
                                 IsVisible="{Binding HasButtonMap}" />
                         <TextBlock Text="✓ mapped" VerticalAlignment="Center" FontSize="11"
                                    Foreground="{DynamicResource AppAccent}"
                                    IsVisible="{Binding HasButtonMap}" />
                       </StackPanel>
-                      <Border IsVisible="{Binding IsCalibrating}"
+                      <Border IsVisible="{Binding IsAnyCalibrating}"
                               BorderBrush="{DynamicResource AppAccent}" BorderThickness="1"
                               CornerRadius="6" Padding="12">
                         <StackPanel Spacing="8">
                           <TextBlock Text="{Binding CalibrationPrompt}" FontWeight="SemiBold"
                                      TextWrapping="Wrap" />
-                          <TextBlock Text="Press that button on the controller, or Skip to leave it unmapped."
+                          <TextBlock Text="{Binding CalibrationHint}"
                                      Classes="fieldLabel" TextWrapping="Wrap" />
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <Button Content="Skip" Command="{Binding SkipButtonCommand}" />
+                            <Button Content="Silence" Command="{Binding SilenceAxisCommand}"
+                                    IsVisible="{Binding IsAxisCalibrating}" />
                             <Button Content="Cancel" Command="{Binding CancelCalibrationCommand}" />
                           </StackPanel>
                         </StackPanel>
